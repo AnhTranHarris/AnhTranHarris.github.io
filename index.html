@@ -1,263 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Harris's interactive portfolio covering applied AI, AI workflows and agents, and technical writing.">
-  <title>Harris | Applied AI & Technical Communication</title>
-  <style>
-    :root {
-      --bg: #061018;
-      --bg-2: #0a1821;
-      --panel: rgba(12, 27, 36, .82);
-      --panel-strong: rgba(16, 34, 45, .94);
-      --text: #edf6f8;
-      --muted: #a9c0c7;
-      --line: rgba(151, 204, 214, .18);
-      --cyan: #79d9e4;
-      --cyan-2: #2e93a3;
-      --gold: #d8b36a;
-      --shadow: 0 28px 80px rgba(0, 0, 0, .45);
-    }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      color: var(--text);
-      background: radial-gradient(circle at 50% 0%, #12303a 0%, var(--bg) 42%, #03080c 100%);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-    a { color: inherit; }
-    button { font: inherit; }
-    #ocean {
-      position: fixed;
-      inset: 0;
-      z-index: -3;
-      width: 100%;
-      height: 100%;
-      opacity: .72;
-    }
-    .mist {
-      position: fixed;
-      inset: 0;
-      z-index: -2;
-      pointer-events: none;
-      background: radial-gradient(circle at 50% 38%, transparent 0 18%, rgba(3, 9, 13, .18) 48%, rgba(2, 6, 9, .7) 100%);
-    }
-    .grain {
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      opacity: .045;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
-    }
-    .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
-    header { min-height: 100vh; display: grid; place-items: center; position: relative; padding: 90px 0 60px; }
-    .hero { width: min(900px, 100%); text-align: center; }
-    .eyebrow { color: var(--cyan); letter-spacing: .18em; text-transform: uppercase; font-size: .75rem; font-weight: 700; }
-    h1 { font-size: clamp(4rem, 12vw, 9rem); line-height: .88; margin: 22px 0 26px; letter-spacing: -.065em; }
-    .hero h1 span { color: transparent; -webkit-text-stroke: 1px rgba(237, 246, 248, .65); }
-    .lead { max-width: 760px; margin: 0 auto; font-size: clamp(1.05rem, 2vw, 1.3rem); color: var(--muted); }
-    .cta-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
-    .button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; background: rgba(7, 18, 24, .55); backdrop-filter: blur(12px); transition: transform .2s ease, border-color .2s ease, background .2s ease; }
-    .button:hover { transform: translateY(-2px); border-color: rgba(121, 217, 228, .55); background: rgba(18, 45, 55, .72); }
-    .button.primary { border-color: rgba(121, 217, 228, .45); color: #061018; background: var(--cyan); }
-    .scroll { position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; }
-    section { padding: 100px 0; }
-    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 30px; }
-    .section-head h2 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1; margin: 0; letter-spacing: -.04em; }
-    .section-head p { max-width: 520px; color: var(--muted); margin: 0; }
-
-    /* Vertical rotating barrel */
-    .barrel-wrap { perspective: 1400px; display: flex; justify-content: center; margin: 50px 0 30px; }
-    .barrel { width: min(760px, 92vw); height: 420px; position: relative; transform-style: preserve-3d; transition: transform .8s cubic-bezier(.2,.8,.2,1); }
-    .barrel-card { position: absolute; inset: 0; padding: 46px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid rgba(121, 217, 228, .2); border-radius: 24px; background: linear-gradient(145deg, rgba(17, 39, 50, .94), rgba(6, 17, 23, .92)); box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.05); backface-visibility: hidden; overflow: hidden; }
-    .barrel-card::after { content: attr(data-number); position: absolute; right: 26px; top: 15px; font-size: 6rem; line-height: 1; font-weight: 800; color: rgba(121, 217, 228, .045); }
-    .barrel-card:nth-child(1) { transform: rotateX(0deg) translateZ(250px); }
-    .barrel-card:nth-child(2) { transform: rotateX(120deg) translateZ(250px); }
-    .barrel-card:nth-child(3) { transform: rotateX(240deg) translateZ(250px); }
-    .barrel-kicker { color: var(--gold); font-size: .76rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
-    .barrel-card h3 { margin: 8px 0 12px; font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: -.045em; }
-    .barrel-card p { max-width: 570px; color: var(--muted); font-size: 1.04rem; }
-    .card-link { align-self: flex-start; text-decoration: none; color: var(--cyan); border-bottom: 1px solid rgba(121,217,228,.35); padding-bottom: 4px; }
-    .controls { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 25px; }
-    .control { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); color: var(--text); background: rgba(8, 20, 27, .8); cursor: pointer; }
-    .control:hover { border-color: var(--cyan); }
-    .dots { display: flex; gap: 7px; }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(169,192,199,.3); transition: .25s; }
-    .dot.active { width: 22px; border-radius: 9px; background: var(--cyan); }
-
-    .about-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 22px; }
-    .panel { border: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(16px); border-radius: 18px; padding: 30px; box-shadow: 0 18px 50px rgba(0,0,0,.18); }
-    .panel h3 { margin-top: 0; }
-    .panel p { color: var(--muted); }
-    .roadmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
-    .roadmap article { padding: 20px; border-top: 2px solid var(--cyan-2); background: rgba(7,18,24,.48); }
-    .roadmap strong { display: block; margin-bottom: 8px; }
-    .roadmap p { margin: 0; font-size: .94rem; }
-    .ai-note { font-size: .88rem; border-left: 2px solid var(--gold); padding-left: 16px; }
-    footer { padding: 70px 0 90px; text-align: center; }
-    footer p { color: var(--muted); }
-    .footer-links { display: flex; justify-content: center; gap: 22px; flex-wrap: wrap; }
-    .footer-links a { color: var(--cyan); text-decoration: none; }
-    @media (max-width: 820px) {
-      .about-grid, .roadmap { grid-template-columns: 1fr; }
-      .barrel { height: 470px; }
-      .barrel-card { padding: 32px; }
-    }
-    @media (max-width: 560px) {
-      .shell { width: min(100% - 24px, 1180px); }
-      header { min-height: 92vh; }
-      .barrel { height: 500px; }
-      .barrel-card { padding: 27px; }
-      .barrel-card:nth-child(1), .barrel-card:nth-child(2), .barrel-card:nth-child(3) { transform-origin: center center; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Harris — applied AI, AI workflows and agents, and technical communication.">
+<title>Harris | AI + Technical Communication</title>
+<style>
+:root{--bg:#06151c;--ink:#edf7f8;--muted:#9fb7bc;--line:rgba(174,225,230,.16);--teal:#63d5d0;--gold:#d9b66f;--glass:rgba(8,27,35,.64)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+#ocean{position:fixed;inset:0;width:100%;height:100%;z-index:-3}.wash{position:fixed;inset:0;z-index:-2;background:radial-gradient(circle at 50% 35%,rgba(39,109,117,.16),transparent 38%),linear-gradient(180deg,rgba(2,13,18,.18),rgba(2,12,17,.82))}.grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.055;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E")}
+.shell{height:100vh;display:flex;flex-direction:column}.topbar{height:76px;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(22px,5vw,70px);border-bottom:1px solid var(--line);backdrop-filter:blur(12px);background:rgba(3,15,21,.32)}.brand{font-size:.82rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}.nav{display:flex;gap:24px}.nav button{border:0;background:none;color:var(--muted);font:inherit;cursor:pointer;padding:8px}.nav button:hover,.nav button.active{color:var(--ink)}
+.main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(280px,.75fr) minmax(430px,1.25fr);align-items:center;gap:clamp(20px,5vw,90px);padding:clamp(20px,4vh,48px) clamp(22px,6vw,90px)}.intro{max-width:540px}.eyebrow{font-size:.78rem;letter-spacing:.2em;text-transform:uppercase;color:var(--teal)}h1{font-size:clamp(3.5rem,8vw,7.5rem);line-height:.9;letter-spacing:-.055em;margin:15px 0 22px}h1 span{color:var(--teal)}.intro p{font-size:clamp(1rem,1.35vw,1.2rem);line-height:1.7;color:var(--muted);max-width:610px}.micro{font-size:.78rem!important;line-height:1.5!important;margin-top:22px;color:#718d93!important}.micro strong{color:#b8cdd0}.actions{display:flex;gap:12px;margin-top:25px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:rgba(8,31,39,.55);color:var(--ink);padding:11px 16px;border-radius:999px;text-decoration:none;font-size:.9rem;transition:.25s}.btn.primary{border-color:rgba(99,213,208,.5);background:rgba(48,133,135,.18)}.btn:hover{transform:translateY(-2px);border-color:rgba(99,213,208,.8)}
+.deck{height:min(70vh,600px);min-height:420px;position:relative;perspective:1400px;display:flex;align-items:center;justify-content:center}.carousel{position:relative;width:min(520px,92%);height:410px;transform-style:preserve-3d;transition:transform .8s cubic-bezier(.2,.8,.2,1)}.card{position:absolute;inset:0;padding:34px;border-radius:22px;border:1px solid var(--line);background:linear-gradient(145deg,rgba(13,42,51,.84),rgba(4,20,27,.76));box-shadow:0 25px 80px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.06);backdrop-filter:blur(18px);transform-style:preserve-3d;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}.card:before{content:"";position:absolute;width:220px;height:220px;right:-90px;top:-100px;border-radius:50%;background:radial-gradient(circle,rgba(99,213,208,.18),transparent 65%)}.num{font-size:.72rem;letter-spacing:.2em;color:var(--gold)}.card h2{font-size:clamp(2rem,4vw,3.3rem);line-height:1;margin:12px 0}.card p{color:var(--muted);max-width:400px;line-height:1.65}.card .repo{color:var(--teal);font-weight:600;text-decoration:none}.card .tag{font-size:.75rem;color:#78979d;letter-spacing:.04em}.card:nth-child(1){transform:rotateY(0deg) translateZ(0)}.card:nth-child(2){transform:rotateY(120deg) translateZ(0)}.card:nth-child(3){transform:rotateY(240deg) translateZ(0)}
+.barrel{position:absolute;inset:0;transform-style:preserve-3d}.carousel.turn-left{transform:rotateY(-120deg)}.carousel.turn-right{transform:rotateY(120deg)}.controls{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px}.control{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:rgba(5,22,29,.7);color:var(--ink);cursor:pointer;font-size:1.2rem;backdrop-filter:blur(8px)}.control:hover{border-color:var(--teal);color:var(--teal)}.dots{display:flex;gap:7px}.dot{width:6px;height:6px;border-radius:50%;background:#58767c;transition:.25s}.dot.on{background:var(--teal);box-shadow:0 0 12px rgba(99,213,208,.7)}
+.about{position:fixed;inset:0;background:rgba(2,12,17,.84);backdrop-filter:blur(18px);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:.35s;z-index:20}.about.open{opacity:1;pointer-events:auto}.about-card{width:min(760px,100%);max-height:88vh;overflow:auto;padding:42px;border:1px solid var(--line);border-radius:24px;background:rgba(7,27,35,.92);box-shadow:0 30px 100px rgba(0,0,0,.55)}.about-card h2{font-size:2.4rem;margin:0 0 12px}.about-card p{color:var(--muted);line-height:1.75}.close{float:right;border:1px solid var(--line);background:none;color:var(--muted);border-radius:50%;width:38px;height:38px;cursor:pointer}.close:hover{color:var(--ink);border-color:var(--teal)}.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:28px}.about-grid div{border-top:1px solid var(--line);padding-top:16px}.about-grid h3{font-size:.82rem;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);margin:0 0 7px}.about-grid p{margin:0;font-size:.95rem}
+.hint{position:absolute;right:0;bottom:0;color:#6e8a90;font-size:.72rem;letter-spacing:.05em}.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:900px){html,body{overflow:auto}.shell{min-height:100vh;height:auto}.main{grid-template-columns:1fr;padding-top:45px}.deck{height:500px}.intro{max-width:none}.hint{display:none}}@media(max-width:560px){.topbar{height:64px}.nav{gap:4px}.main{padding:30px 18px}.carousel{height:390px}.card{padding:27px}.about-grid{grid-template-columns:1fr}.about-card{padding:28px}.actions{margin-top:18px}}
+</style>
 </head>
 <body>
-  <canvas id="ocean" aria-hidden="true"></canvas>
-  <div class="mist" aria-hidden="true"></div>
-  <div class="grain" aria-hidden="true"></div>
-
-  <header>
-    <div class="shell hero">
-      <div class="eyebrow">AI · Technical Communication · Practical Problem Solving</div>
-      <h1>Harris<br><span>builds with AI.</span></h1>
-      <p class="lead">I'm building practical skills at the intersection of AI and technical communication. I use AI as a tool to explore ideas, build useful things, test workflows, and learn faster. This site is the front door to that work.</p>
-      <div class="cta-row">
-        <a class="button primary" href="#work">Explore the work ↓</a>
-        <a class="button" href="https://github.com/AnhTranHarris">GitHub ↗</a>
-        <a class="button" href="https://www.linkedin.com/in/anhtran-harris/">LinkedIn ↗</a>
-      </div>
-    </div>
-    <div class="scroll">Scroll to explore</div>
-  </header>
-
-  <main>
-    <section id="work">
-      <div class="shell">
-        <div class="section-head">
-          <h2>Three directions.<br>One portfolio.</h2>
-          <p>These areas are being built in parallel. The repositories hold the real work. This page is here to make that work easier to understand.</p>
-        </div>
-
-        <div class="barrel-wrap">
-          <div class="barrel" id="barrel">
-            <article class="barrel-card" data-number="01">
-              <div><div class="barrel-kicker">01 · Applied AI</div><h3>Learn it.<br>Build with it.</h3><p>Practical applications of generative AI, research, productivity, and problem solving. The focus is on useful work, not AI for its own sake.</p></div>
-              <a class="card-link" href="https://github.com/AnhTranHarris/Applied-AI-Portfolio">Open the repository →</a>
-            </article>
-            <article class="barrel-card" data-number="02">
-              <div><div class="barrel-kicker">02 · AI Workflows & Agents</div><h3>Experiment.<br>Test. Improve.</h3><p>Structured AI workflows, agents, evaluation, and human review. This is where I explore what happens when AI moves from a single prompt into a repeatable process.</p></div>
-              <a class="card-link" href="https://github.com/AnhTranHarris/AI-Workflows-And-Agents">Open the repository →</a>
-            </article>
-            <article class="barrel-card" data-number="03">
-              <div><div class="barrel-kicker">03 · Technical Writing</div><h3>Make complex<br>things clear.</h3><p>Documentation, technical communication, information architecture, and AI-assisted documentation. The goal is to make useful information easier to understand and use.</p></div>
-              <a class="card-link" href="https://github.com/AnhTranHarris/Technical-Writing-Portfolio">Open the repository →</a>
-            </article>
-          </div>
-        </div>
-        <div class="controls" aria-label="Portfolio sections">
-          <button class="control" id="prev" aria-label="Previous portfolio section">↑</button>
-          <div class="dots" id="dots" aria-hidden="true"><span class="dot active"></span><span class="dot"></span><span class="dot"></span></div>
-          <button class="control" id="next" aria-label="Next portfolio section">↓</button>
-        </div>
-      </div>
-    </section>
-
-    <section id="focus">
-      <div class="shell">
-        <div class="about-grid">
-          <div class="panel">
-            <h2>Where I am now</h2>
-            <p>I'm building a practical foundation in AI while developing a technical-writing portfolio. The plan is to learn something, build something with it, test the result, and document what I learned.</p>
-            <p>My current path starts with the Google AI Professional Certificate, followed by applied OpenAI work and a focused technical-writing credential.</p>
-          </div>
-          <div class="panel">
-            <h3>Why this site looks different</h3>
-            <p>I wanted the portfolio itself to be a project. AI is part of how I'm building it, and I'm being open about that.</p>
-            <p class="ai-note">This site is being vibe-coded with AI. I use AI to help design, write, code, and iterate. I still make the decisions, test the result, and take responsibility for what I publish.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="roadmap">
-      <div class="shell">
-        <div class="section-head">
-          <h2>Where this is going</h2>
-          <p>The roadmap is intentionally flexible. If a better opportunity appears, the plan can change.</p>
-        </div>
-        <div class="roadmap">
-          <article><strong>Now</strong><p>Build the AI and technical communication foundation while creating real portfolio work.</p></article>
-          <article><strong>Next</strong><p>Develop stronger AI workflows, documentation projects, and examples of human review and validation.</p></article>
-          <article><strong>Longer term</strong><p>Move toward roles where AI, technical communication, and practical process improvement overlap.</p></article>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="shell">
-      <h2>Keep exploring.</h2>
-      <p>The portfolio will grow as the work grows.</p>
-      <div class="footer-links">
-        <a href="https://github.com/AnhTranHarris">GitHub</a>
-        <a href="https://www.linkedin.com/in/anhtran-harris/">LinkedIn</a>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    // Subtle animated ocean: small layered waves, designed to stay in the background.
-    const canvas = document.getElementById('ocean');
-    const ctx = canvas.getContext('2d');
-    let w, h, t = 0;
-    function resize() { w = canvas.width = window.innerWidth * devicePixelRatio; h = canvas.height = window.innerHeight * devicePixelRatio; canvas.style.width = window.innerWidth + 'px'; canvas.style.height = window.innerHeight + 'px'; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
-    function wave(y, amp, length, speed, alpha, offset) {
-      ctx.beginPath();
-      for (let x = -20; x <= innerWidth + 20; x += 8) {
-        const yy = y + Math.sin((x / length) + t * speed + offset) * amp + Math.sin((x / (length * .43)) - t * speed * .45) * amp * .22;
-        if (x === -20) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
-      }
-      ctx.strokeStyle = `rgba(89, 188, 202, ${alpha})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-    function drawOcean() {
-      ctx.clearRect(0,0,innerWidth,innerHeight);
-      const base = innerHeight * .72;
-      wave(base, 8, 240, .38, .14, 0);
-      wave(base + 34, 13, 310, .27, .10, 2);
-      wave(base + 78, 17, 390, .21, .075, 4);
-      wave(base + 128, 23, 470, .16, .05, 1);
-      t += .012;
-      requestAnimationFrame(drawOcean);
-    }
-    window.addEventListener('resize', resize);
-    resize(); drawOcean();
-
-    // Vertical barrel navigation.
-    const barrel = document.getElementById('barrel');
-    const dots = [...document.querySelectorAll('.dot')];
-    let index = 0;
-    function render() {
-      barrel.style.transform = `rotateX(${-index * 120}deg)`;
-      dots.forEach((d, i) => d.classList.toggle('active', i === index));
-    }
-    function next() { index = (index + 1) % 3; render(); }
-    function prev() { index = (index + 2) % 3; render(); }
-    document.getElementById('next').addEventListener('click', next);
-    document.getElementById('prev').addEventListener('click', prev);
-    dots.forEach((dot, i) => dot.addEventListener('click', () => { index = i; render(); }));
-    document.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next(); if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') prev(); });
-  </script>
-</body>
-</html>
+<canvas id="ocean" aria-hidden="true"></canvas><div class="wash"></div><div class="grain"></div>
+<div class="shell">
+<header class="topbar"><div class="brand">Harris / Portfolio</div><nav class="nav"><button id="aboutBtn">About me</button><a class="btn" href="https://github.com/AnhTranHarris" target="_blank" rel="noreferrer">GitHub</a><a class="btn" href="https://www.linkedin.com/in/anhtran-harris/" target="_blank" rel="noreferrer">LinkedIn</a></nav></header>
+<main class="main">
+<section class="intro"><div class="eyebrow">AI · Technical Communication · Problem Solving</div><h1>Build.<br><span>Explore.</span><br>Improve.</h1><p>I'm building practical skills at the intersection of AI and technical communication. I use AI as a tool to learn faster, test ideas, and turn complicated problems into useful work.</p><div class="actions"><button class="btn primary" id="exploreBtn">Explore the work ↓</button></div><p class="micro"><strong>Built with AI:</strong> This portfolio is being vibe-coded with AI. I use AI to help design, write, code, and iterate. I still make the decisions, test the result, and take responsibility for what I publish.</p></section>
+<section class="deck" aria-label="Portfolio areas"><div class="carousel" id="carousel"><div class="barrel"><article class="card"><div><div class="num">01 / APPLIED AI</div><h2>Applied AI</h2><p>Practical experiments with generative AI, research, productivity, and problem solving.</p></div><div><div class="tag">GOOGLE AI · CURRENT FOCUS</div><a class="repo" href="https://github.com/AnhTranHarris/Applied-AI-Portfolio" target="_blank" rel="noreferrer">Open portfolio →</a></div></article><article class="card"><div><div class="num">02 / WORKFLOWS</div><h2>AI Workflows<br>&amp; Agents</h2><p>Structured workflows, agent experiments, evaluation, and the human review that keeps AI useful.</p></div><div><div class="tag">OPENAI · NEXT STAGE</div><a class="repo" href="https://github.com/AnhTranHarris/AI-Workflows-And-Agents" target="_blank" rel="noreferrer">Open portfolio →</a></div></article><article class="card"><div><div class="num">03 / COMMUNICATION</div><h2>Technical<br>Writing</h2><p>Documentation, information architecture, and clear technical communication supported by AI.</p></div><div><div class="tag">PORTFOLIO · BUILDING</div><a class="repo" href="https://github.com/AnhTranHarris/Technical-Writing-Portfolio" target="_blank" rel="noreferrer">Open portfolio →</a></div></article></div></div><div class="controls"><button class="control" id="prev" aria-label="Previous portfolio">←</button><div class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span></div><button class="control" id="next" aria-label="Next portfolio">→</button></div><div class="hint">USE ← → OR DRAG TO ROTATE</div></section>
+</main></div>
+<div class="about" id="about"><div class="about-card"><button class="close" id="closeAbout" aria-label="Close about page">×</button><div class="eyebrow">About me</div><h2>I'm building toward the intersection of AI and communication.</h2><p>I’m developing practical AI skills while building a technical-writing portfolio. My interest is less about AI for its own sake and more about what happens when good tools, clear thinking, and good communication are combined.</p><p>This site is part portfolio, part experiment. I’m using AI to help me build it, but I want the finished work to show my choices, not hide them.</p><div class="about-grid"><div><h3>Now</h3><p>Building an AI foundation, starting with the Google AI Professional Certificate and real projects alongside the coursework.</p></div><div><h3>Next</h3><p>Developing stronger AI workflows, OpenAI work, and a focused technical-writing credential.</p></div><div><h3>How I work</h3><p>Learn something, build something with it, test the result, and document what changed.</p></div><div><h3>Longer term</h3><p>Move toward work where AI, technical communication, and practical process improvement overlap.</p></div></div></div></div>
+<script>
+const canvas=document.getElementById('ocean'),ctx=canvas.getContext('2d');let w,h,t=0;function resize(){w=canvas.width=innerWidth*devicePixelRatio;h=canvas.height=innerHeight*devicePixelRatio;canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)}addEventListener('resize',resize);resize();
+function wave(base,amp,len,speed,alpha){ctx.beginPath();ctx.moveTo(0,innerHeight);for(let x=0;x<=innerWidth;x+=8){let y=base+Math.sin(x/len+t*speed)*amp+Math.sin(x/(len*.43)+t*speed*.63)*amp*.28;ctx.lineTo(x,y)}ctx.lineTo(innerWidth,innerHeight);ctx.closePath();ctx.fillStyle=`rgba(38,112,122,${alpha})`;ctx.fill();}function ocean(){ctx.clearRect(0,0,innerWidth,innerHeight);wave(innerHeight*.83,8,190,.55,.10);wave(innerHeight*.88,12,270,.42,.075);wave(innerHeight*.93,7,130,.72,.06);t+=.012;requestAnimationFrame(ocean)}ocean();
+const carousel=document.getElementById('carousel'),dots=[...document.querySelectorAll('.dot')];let index=0;function rotate(dir){index=(index+dir+3)%3;carousel.style.transform=`rotateY(${-index*120}deg)`;dots.forEach((d,i)=>d.classList.toggle('on',i===index))}document.getElementById('next').onclick=()=>rotate(1);document.getElementById('prev').onclick=()=>rotate(-1);document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')rotate(1);if(e.key==='ArrowLeft')rotate(-1);if(e.key==='Escape')closeAbout()});
+let downX=null;carousel.addEventListener('pointerdown',e=>{downX=e.clientX;carousel.setPointerCapture(e.pointerId)});carousel.addEventListener('pointerup',e=>{if(downX===null)return;let dx=e.clientX-downX;if(Math.abs(dx)>35)rotate(dx<0?1:-1);downX=null});
+const about=document.getElementById('about');function openAbout(){about.classList.add('open');aboutBtn.focus()}function closeAbout(){about.classList.remove('open')}const aboutBtn=document.getElementById('aboutBtn');aboutBtn.onclick=openAbout;document.getElementById('closeAbout').onclick=closeAbout;about.addEventListener('click',e=>{if(e.target===about)closeAbout()});document.getElementById('exploreBtn').onclick=()=>document.getElementById('carousel').scrollIntoView({behavior:'smooth',block:'center'});
+</script>
+</body></html>
