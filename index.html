@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Harris's portfolio: applied AI, AI workflows and agents, and technical writing.">
+  <title>Harris | AI, Technical Communication & Practical Problem Solving</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --muted: #52606d;
+      --line: #d9e2ec;
+      --paper: #fbfaf7;
+      --card: #ffffff;
+      --accent: #315c72;
+      --accent-light: #e8f0f3;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.65;
+    }
+    a { color: var(--accent); }
+    .wrap { width: min(1080px, calc(100% - 40px)); margin: 0 auto; }
+    header { padding: 72px 0 48px; border-bottom: 1px solid var(--line); }
+    .eyebrow { font-size: .82rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); line-height: 1.05; margin: 12px 0 18px; font-weight: 700; }
+    .lead { max-width: 760px; font-size: 1.2rem; color: var(--muted); }
+    nav { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 18px; }
+    nav a { text-decoration: none; font-weight: 600; }
+    section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+    h2 { font-size: 1.8rem; margin: 0 0 12px; }
+    h3 { margin: 0 0 8px; font-size: 1.25rem; }
+    .intro { max-width: 760px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px; }
+    .card p { color: var(--muted); margin-bottom: 18px; }
+    .status { background: var(--accent-light); border-radius: 10px; padding: 24px; margin-top: 24px; }
+    .status p { margin: 6px 0; }
+    .roadmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 26px; }
+    .roadmap div { padding-top: 16px; border-top: 3px solid var(--accent); }
+    footer { padding: 40px 0 60px; color: var(--muted); }
+    .links { display: flex; flex-wrap: wrap; gap: 18px; }
+    @media (max-width: 760px) {
+      .grid, .roadmap { grid-template-columns: 1fr; }
+      header { padding-top: 48px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="eyebrow">AI · Technical Communication · Practical Problem Solving</div>
+      <h1>Harris</h1>
+      <p class="lead">I'm building practical skills at the intersection of AI and technical communication. I'm interested in how AI can help people work through complicated information, improve workflows, and communicate more clearly.</p>
+      <nav aria-label="Main navigation">
+        <a href="#work">Selected work</a>
+        <a href="#focus">Current focus</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#contact">Links</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="work">
+      <div class="wrap">
+        <h2>Selected work</h2>
+        <p class="intro">This portfolio will grow as I complete projects and learn new skills. The repositories below hold the actual work, notes, and experiments.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>Applied AI</h3>
+            <p>Practical applications of generative AI, research, productivity, and problem solving.</p>
+            <a href="https://github.com/AnhTranHarris/Applied-AI-Portfolio">View repository →</a>
+          </article>
+          <article class="card">
+            <h3>AI Workflows &amp; Agents</h3>
+            <p>Experiments with structured AI workflows, agents, evaluation, and human review.</p>
+            <a href="https://github.com/AnhTranHarris/AI-Workflows-And-Agents">View repository →</a>
+          </article>
+          <article class="card">
+            <h3>Technical Writing</h3>
+            <p>Documentation, technical communication, information architecture, and AI-assisted documentation.</p>
+            <a href="https://github.com/AnhTranHarris/Technical-Writing-Portfolio">View repository →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="focus">
+      <div class="wrap">
+        <h2>Currently</h2>
+        <div class="status">
+          <p><strong>Primary focus:</strong> Building a practical foundation in AI while developing a technical-writing portfolio.</p>
+          <p><strong>Next:</strong> Google AI Professional Certificate, followed by applied OpenAI work and a focused technical-writing credential.</p>
+          <p><strong>Approach:</strong> Learn something, build something with it, test the result, and document what I learned.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <div class="wrap">
+        <h2>Where I'm going</h2>
+        <p class="intro">The goal is to build useful skills at the intersection of AI, technical communication, and workflow improvement. The plan can change as better opportunities or better information come up.</p>
+        <div class="roadmap">
+          <div><h3>Now</h3><p>Build the AI and technical communication foundation while creating real portfolio work.</p></div>
+          <div><h3>Next</h3><p>Develop stronger AI workflows, documentation projects, and examples of human review and validation.</p></div>
+          <div><h3>Longer term</h3><p>Move toward roles where AI, technical communication, and practical process improvement overlap.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="contact">
+    <div class="wrap">
+      <h2>Find me</h2>
+      <div class="links">
+        <a href="https://github.com/AnhTranHarris">GitHub</a>
+        <a href="https://www.linkedin.com/in/anhtran-harris/">LinkedIn</a>
+      </div>
+      <p>Last updated as the portfolio develops.</p>
+    </div>
+  </footer>
+</body>
+</html>
