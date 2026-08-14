@@ -1,0 +1,38 @@
+name: Fix mobile swipe v2
+on:
+  push:
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Fix repeated mobile carousel swipes'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch repeated gesture lifecycle
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          pattern=r"barrel\.addEventListener\('pointerdown',.*?barrel\.addEventListener\('lostpointercapture',.*?\);"
+          replacement="""let activePointerId=null;\n          barrel.addEventListener('pointerdown',e=>{if(e.target.closest('a'))return;stopMotion();activePointerId=e.pointerId;horizontalGesture=false;dragging=false;startX=e.clientX;startY=e.clientY;startAngle=angle;lastX=e.clientX;lastTime=performance.now();velocity=0;barrel.classList.remove('js-motion');});\n          barrel.addEventListener('pointermove',e=>{if(activePointerId!==e.pointerId)return;const dx=e.clientX-startX,dy=e.clientY-startY;if(!horizontalGesture){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;if(Math.abs(dy)>Math.abs(dx)){return}horizontalGesture=true;dragging=true;barrel.classList.add('dragging','moving');try{barrel.setPointerCapture(e.pointerId)}catch(_){}e.preventDefault();}if(!dragging)return;const now=performance.now(),moveX=e.clientX-lastX,dt=Math.max(8,now-lastTime),sampleVelocity=(moveX/dt)*.42;velocity=velocity*.72+sampleVelocity*.28;angle=startAngle+(e.clientX-startX)*.42;paint();lastX=e.clientX;lastTime=now;});\n          function release(e){if(activePointerId!==e.pointerId)return;const wasDragging=dragging;activePointerId=null;dragging=false;horizontalGesture=false;barrel.classList.remove('dragging');try{if(barrel.hasPointerCapture?.(e.pointerId))barrel.releasePointerCapture(e.pointerId)}catch(_){}if(wasDragging)settleFromVelocity();else velocity=0;}\n          barrel.addEventListener('pointerup',release);\n          barrel.addEventListener('pointercancel',release);\n          barrel.addEventListener('lostpointercapture',e=>{if(activePointerId!==e.pointerId)return;const wasDragging=dragging;activePointerId=null;dragging=false;horizontalGesture=false;barrel.classList.remove('dragging');if(wasDragging)settleFromVelocity();else velocity=0;});"""
+          s2,n=re.subn(pattern,replacement,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('Gesture lifecycle block not found; refusing to modify site.')
+          s=s2
+          s=s.replace('touch-action:pan-y;cursor:grab','touch-action:pan-y;overscroll-behavior-x:none;cursor:grab',1)
+          p.write_text(s,encoding='utf-8')
+      - name: Verify
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          for x in ['activePointerId=null','setPointerCapture','releasePointerCapture','pointercancel','lostpointercapture','touch-action:pan-y','Swipe left or right Below']:
+              assert x in s, x
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix repeated mobile carousel swipes'
+          git push
