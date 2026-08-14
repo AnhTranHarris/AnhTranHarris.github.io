@@ -1,0 +1,61 @@
+name: Fix mobile swipe navigation
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-mobile-swipe:
+    if: github.event.head_commit.message != 'Fix mobile swipe navigation behavior'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch mobile gesture handling and swipe label
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          old = '<div class="swipe-guide" aria-hidden="true"><span>←</span><span>Swipe left or right</span><span>→</span></div>'
+          new = '<div class="swipe-guide" aria-hidden="true"><span>←</span><span>Swipe left or right Below</span><span>→</span></div>'
+          if old not in s:
+              raise SystemExit('Swipe guide marker not found; refusing to modify site.')
+          s = s.replace(old, new, 1)
+
+          old_css = '.barrel{position:relative;width:min(610px,94%);height:430px;transform-style:preserve-3d;transform-origin:50% 50% 0;transition:transform 1.02s cubic-bezier(.16,.76,.18,1);touch-action:none;'
+          new_css = '.barrel{position:relative;width:min(610px,94%);height:430px;transform-style:preserve-3d;transform-origin:50% 50% 0;transition:transform 1.02s cubic-bezier(.16,.76,.18,1);touch-action:pan-y;'
+          if old_css not in s:
+              raise SystemExit('Carousel touch-action CSS marker not found; refusing to modify site.')
+          s = s.replace(old_css, new_css, 1)
+
+          old_block = '''barrel.addEventListener('pointerdown',e=>{if(e.target.closest('a'))return;stopMotion();horizontalGesture=false;dragging=false;startX=e.clientX;startY=e.clientY;startAngle=angle;lastX=e.clientX;lastTime=performance.now();velocity=0});barrel.addEventListener('pointermove',e=>{const dx=e.clientX-startX,dy=e.clientY-startY;if(!horizontalGesture){if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>8)return;if(Math.abs(dx)>8){horizontalGesture=true;dragging=true;barrel.classList.add('dragging','moving');barrel.setPointerCapture(e.pointerId)}}if(!dragging)return;const now=performance.now(),moveX=e.clientX-lastX,dt=Math.max(8,now-lastTime),sampleVelocity=(moveX/dt)*.42;velocity=velocity*.72+sampleVelocity*.28;angle=startAngle+(e.clientX-startX)*.42;paint();lastX=e.clientX;lastTime=now});function release(){if(!dragging){horizontalGesture=false;return}dragging=false;horizontalGesture=false;barrel.classList.remove('dragging');settleFromVelocity()}barrel.addEventListener('pointerup',release);barrel.addEventListener('pointercancel',release);'''
+          new_block = '''barrel.addEventListener('pointerdown',e=>{if(e.target.closest('a'))return;stopMotion();if(barrel.hasPointerCapture?.(e.pointerId))barrel.releasePointerCapture(e.pointerId);horizontalGesture=false;dragging=false;startX=e.clientX;startY=e.clientY;startAngle=angle;lastX=e.clientX;lastTime=performance.now();velocity=0});barrel.addEventListener('pointermove',e=>{const dx=e.clientX-startX,dy=e.clientY-startY;if(!horizontalGesture){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;if(Math.abs(dy)>Math.abs(dx)){return}horizontalGesture=true;dragging=true;barrel.classList.add('dragging','moving');barrel.setPointerCapture(e.pointerId);e.preventDefault()}if(!dragging)return;const now=performance.now(),moveX=e.clientX-lastX,dt=Math.max(8,now-lastTime),sampleVelocity=(moveX/dt)*.42;velocity=velocity*.72+sampleVelocity*.28;angle=startAngle+(e.clientX-startX)*.42;paint();lastX=e.clientX;lastTime=now});function release(e){if(barrel.hasPointerCapture?.(e.pointerId))barrel.releasePointerCapture(e.pointerId);if(!dragging){horizontalGesture=false;velocity=0;return}dragging=false;horizontalGesture=false;barrel.classList.remove('dragging');settleFromVelocity()}barrel.addEventListener('pointerup',release);barrel.addEventListener('pointercancel',release);barrel.addEventListener('lostpointercapture',()=>{if(dragging){dragging=false;horizontalGesture=false;barrel.classList.remove('dragging');settleFromVelocity()}});'''
+          if old_block not in s:
+              raise SystemExit('Pointer gesture block not found; refusing to modify site.')
+          s = s.replace(old_block, new_block, 1)
+
+          p.write_text(s, encoding='utf-8')
+      - name: Verify
+        shell: python
+        run: |
+          from pathlib import Path
+          s = Path('index.html').read_text(encoding='utf-8')
+          checks = [
+              'Swipe left or right Below' in s,
+              'touch-action:pan-y' in s,
+              "lostpointercapture" in s,
+              "releasePointerCapture" in s,
+              "e.preventDefault()" in s,
+          ]
+          if not all(checks):
+              raise SystemExit(f'Verification failed: {checks}')
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix mobile swipe navigation behavior'
+          git push
