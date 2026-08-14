@@ -2,8 +2,6 @@ name: Fix four-card carousel snapping
 
 on:
   push:
-    paths:
-      - '.github/workflows/fix-carousel-four-card-snap.yml'
 
 permissions:
   contents: write
@@ -19,7 +17,6 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import re
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
           parts = s.rsplit('</script>', 1)
@@ -38,5 +35,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'Fix four-card carousel snap alignment'
+          git commit -m 'Fix four-card carousel snap alignment' || exit 0
           git push
