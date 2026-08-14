@@ -1,0 +1,248 @@
+name: Rebuild carousel interactions
+on:
+  push:
+    paths:
+      - '.github/workflows/rebuild-carousel.yml'
+permissions:
+  contents: write
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Replace carousel controller
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          script = r'''<script>
+          (() => {
+            const barrel = document.getElementById('barrel');
+            const dots = [...document.querySelectorAll('.dot')];
+            const ambient = document.querySelector('.ambient');
+            const about = document.getElementById('about');
+            const aboutBtn = document.getElementById('aboutBtn');
+            const closeAboutBtn = document.getElementById('closeAbout');
+            if (!barrel) return;
+
+            /* Ambient spotlight system */
+            const START_ZONES = [
+              {x:8,y:10},{x:50,y:10},{x:92,y:10},{x:8,y:50},
+              {x:50,y:50},{x:92,y:50},{x:8,y:90},{x:50,y:90},
+              {x:92,y:90},{x:28,y:28},{x:72,y:28},{x:72,y:72}
+            ];
+            const rand = (min,max) => Math.random()*(max-min)+min;
+            function randomizeAmbient(){
+              if (!ambient) return;
+              const cycle = rand(30000,900000);
+              const zones = [...START_ZONES].sort(() => Math.random()-.5).slice(0,4);
+              const longCycle = cycle > 100000;
+              document.documentElement.style.setProperty('--ambient-cycle', `${cycle}ms`);
+              ambient.style.filter = `blur(28px) brightness(${longCycle ? '1.25' : '1'})`;
+              zones.forEach((z,i) => {
+                const k = String.fromCharCode(97+i);
+                document.documentElement.style.setProperty(`--spot-${k}-x`, `${z.x}%`);
+                document.documentElement.style.setProperty(`--spot-${k}-y`, `${z.y}%`);
+              });
+              ambient.style.animation = 'none';
+              void ambient.offsetWidth;
+              ambient.style.animation = '';
+              setTimeout(randomizeAmbient, cycle);
+            }
+            randomizeAmbient();
+
+            /* About modal */
+            function openAbout(){ about?.classList.add('open'); }
+            function closeAbout(){ about?.classList.remove('open'); }
+            aboutBtn?.addEventListener('click', openAbout);
+            closeAboutBtn?.addEventListener('click', closeAbout);
+            about?.addEventListener('click', e => { if (e.target === about) closeAbout(); });
+
+            /* Fresh carousel controller: one gesture state machine, native vertical scroll, custom horizontal drag. */
+            barrel.style.touchAction = 'pan-y';
+            barrel.style.overscrollBehaviorX = 'contain';
+            barrel.style.webkitUserSelect = 'none';
+
+            let angle = 0;
+            let motionFrame = 0;
+            let pointerId = null;
+            let mode = 'idle';
+            let startX = 0;
+            let startY = 0;
+            let startAngle = 0;
+            let lastX = 0;
+            let lastTime = 0;
+            let velocity = 0;
+            let dragged = false;
+            const ANGLE_PER_PIXEL = 0.52;
+            const DIRECTION_THRESHOLD = 8;
+
+            function paint(){
+              barrel.style.transform = `rotateY(${angle}deg)`;
+              const active = ((Math.round(-angle/90) % 4) + 4) % 4;
+              dots.forEach((dot,i) => dot.classList.toggle('on', i === active));
+            }
+            function stopMotion(){
+              if (motionFrame){ cancelAnimationFrame(motionFrame); motionFrame = 0; }
+            }
+            function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+            function releaseCapture(){
+              if (pointerId === null) return;
+              try { if (barrel.hasPointerCapture(pointerId)) barrel.releasePointerCapture(pointerId); } catch (_) {}
+            }
+            function resetGesture(){
+              releaseCapture();
+              pointerId = null;
+              mode = 'idle';
+              velocity = 0;
+              barrel.classList.remove('dragging');
+            }
+            function snapToNearest(){
+              stopMotion();
+              const target = Math.round(angle/90)*90;
+              const from = angle;
+              const diff = target-from;
+              const start = performance.now();
+              barrel.classList.add('js-motion','moving');
+              function frame(now){
+                const p = Math.min(1,(now-start)/620);
+                angle = from + diff*easeOutCubic(p);
+                paint();
+                if (p < 1) motionFrame=requestAnimationFrame(frame);
+                else { angle=target; paint(); barrel.classList.remove('js-motion','moving'); motionFrame=0; }
+              }
+              motionFrame=requestAnimationFrame(frame);
+            }
+            function coast(){
+              stopMotion();
+              const friction = 0.955;
+              const minimum = 0.018;
+              let previous = performance.now();
+              barrel.classList.add('js-motion','moving');
+              function frame(now){
+                const dt = Math.min(32,Math.max(8,now-previous));
+                previous = now;
+                velocity *= Math.pow(friction, dt/16.667);
+                angle += velocity*dt;
+                paint();
+                if (Math.abs(velocity) > minimum){ motionFrame=requestAnimationFrame(frame); return; }
+                snapToNearest();
+              }
+              motionFrame=requestAnimationFrame(frame);
+            }
+            function animateStep(direction){
+              if (mode !== 'idle') return;
+              stopMotion();
+              const from=angle, target=from + direction*90, start=performance.now();
+              barrel.classList.add('js-motion','moving');
+              function frame(now){
+                const p=Math.min(1,(now-start)/760);
+                angle=from+(target-from)*easeOutCubic(p);
+                paint();
+                if(p<1) motionFrame=requestAnimationFrame(frame);
+                else { angle=target; paint(); barrel.classList.remove('js-motion','moving'); motionFrame=0; }
+              }
+              motionFrame=requestAnimationFrame(frame);
+            }
+
+            barrel.addEventListener('pointerdown', e => {
+              if (e.pointerType === 'mouse' && e.button !== 0) return;
+              stopMotion();
+              pointerId = e.pointerId;
+              mode = 'pending';
+              startX = lastX = e.clientX;
+              startY = e.clientY;
+              startAngle = angle;
+              lastTime = performance.now();
+              velocity = 0;
+              dragged = false;
+              barrel.classList.remove('js-motion','moving');
+            }, {passive:true});
+
+            barrel.addEventListener('pointermove', e => {
+              if (e.pointerId !== pointerId) return;
+              const dx=e.clientX-startX;
+              const dy=e.clientY-startY;
+              if (mode === 'pending'){
+                if (Math.abs(dx)<DIRECTION_THRESHOLD && Math.abs(dy)<DIRECTION_THRESHOLD) return;
+                if (Math.abs(dy) > Math.abs(dx)){
+                  resetGesture();
+                  return;
+                }
+                mode='horizontal';
+                dragged=true;
+                try { barrel.setPointerCapture(pointerId); } catch (_) {}
+                barrel.classList.add('dragging','js-motion');
+              }
+              if (mode !== 'horizontal') return;
+              e.preventDefault();
+              const now=performance.now();
+              const dt=Math.max(8,now-lastTime);
+              const nextAngle=startAngle + dx*ANGLE_PER_PIXEL;
+              velocity=(nextAngle-angle)/dt;
+              angle=nextAngle;
+              lastX=e.clientX;
+              lastTime=now;
+              paint();
+            }, {passive:false});
+
+            function finish(e){
+              if (e.pointerId !== pointerId) return;
+              if (mode === 'horizontal'){
+                releaseCapture();
+                mode='idle';
+                pointerId=null;
+                barrel.classList.remove('dragging');
+                coast();
+              } else {
+                resetGesture();
+              }
+            }
+            barrel.addEventListener('pointerup',finish,{passive:true});
+            barrel.addEventListener('pointercancel',finish,{passive:true});
+            barrel.addEventListener('lostpointercapture',e=>{
+              if (e.pointerId !== pointerId) return;
+              if (mode === 'horizontal'){
+                mode='idle'; pointerId=null; barrel.classList.remove('dragging'); coast();
+              } else resetGesture();
+            });
+            document.addEventListener('click', e => {
+              if (dragged){ e.preventDefault(); e.stopPropagation(); dragged=false; }
+            }, true);
+
+            document.getElementById('next')?.addEventListener('click',()=>animateStep(-1));
+            document.getElementById('prev')?.addEventListener('click',()=>animateStep(1));
+            document.addEventListener('keydown', e => {
+              if(e.key==='ArrowRight') animateStep(-1);
+              if(e.key==='ArrowLeft') animateStep(1);
+              if(e.key==='Escape') closeAbout();
+            });
+            paint();
+          })();
+          </script>'''
+          pattern = r'<script>const barrel=.*?</script>'
+          s2, n = re.subn(pattern, script, s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'Expected exactly one main controller script, found {n}')
+          p.write_text(s2, encoding='utf-8')
+          PY
+      - name: Verify rebuild
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          required=['touchAction = \'pan-y\'','mode = \'pending\'','mode=\'horizontal\'','snapToNearest','coast','Swipe left or right Below']
+          missing=[x for x in required if x not in s]
+          if missing: raise SystemExit('Missing rebuilt interaction markers: '+repr(missing))
+          print('Carousel rebuild verification passed')
+          PY
+      - name: Commit rebuild
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Rebuild mobile carousel and page scrolling interactions'
+          git push
