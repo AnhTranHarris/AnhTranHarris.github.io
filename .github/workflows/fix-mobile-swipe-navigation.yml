@@ -1,0 +1,149 @@
+name: Fix mobile carousel swipe navigation
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-mobile-swipe:
+    if: github.event.head_commit.message != 'Fix mobile carousel swipe navigation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Patch mobile gesture handling
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          if 'Swipe left or right Below' not in s:
+              marker = 'Swipe left or right'
+              if marker not in s:
+                  raise SystemExit('Swipe guide text marker not found; refusing to modify the site.')
+              s = s.replace(marker, 'Swipe left or right Below', 1)
+
+          css_marker = '.barrel.js-motion{transition:none!important}'
+          css_add = css_marker + '.barrel{overscroll-behavior-x:contain}'
+          if '.barrel{overscroll-behavior-x:contain}' not in s:
+              if css_marker not in s:
+                  raise SystemExit('Carousel motion CSS marker not found; refusing to modify the site.')
+              s = s.replace(css_marker, css_add, 1)
+
+          parts = s.rsplit('<script>', 1)
+          if len(parts) != 2:
+              raise SystemExit('Final script marker not found; refusing to modify the site.')
+          head, tail = parts
+          script, closing_tail = tail.rsplit('</script>', 1)
+
+          if 'mobileSwipeCoordinatorV2' not in script:
+              patch = r'''
+
+/* mobileSwipeCoordinatorV2: horizontal carousel gestures and vertical page scrolling share the same gesture surface. */
+(function(){
+  const swipeState={active:false,axis:null,pointerId:null,startX:0,startY:0,lastX:0,lastTime:0,velocity:0,frame:0};
+  const STEP=90,THRESHOLD=8;
+  function cancelSwipeMotion(){
+    if(swipeState.frame){cancelAnimationFrame(swipeState.frame);swipeState.frame=0;}
+  }
+  function begin(e){
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    cancelSwipeMotion();
+    swipeState.active=true;swipeState.axis=null;swipeState.pointerId=e.pointerId;
+    swipeState.startX=swipeState.lastX=e.clientX;swipeState.startY=e.clientY;swipeState.lastTime=performance.now();swipeState.velocity=0;
+  }
+  function move(e){
+    if(!swipeState.active||e.pointerId!==swipeState.pointerId)return;
+    const dx=e.clientX-swipeState.startX,dy=e.clientY-swipeState.startY;
+    if(!swipeState.axis){
+      if(Math.abs(dx)<THRESHOLD&&Math.abs(dy)<THRESHOLD)return;
+      swipeState.axis=Math.abs(dx)>Math.abs(dy)?'x':'y';
+    }
+    if(swipeState.axis!=='x')return;
+    e.preventDefault();e.stopImmediatePropagation();
+    if(!barrel.hasPointerCapture(e.pointerId))barrel.setPointerCapture(e.pointerId);
+    const now=performance.now(),dt=Math.max(8,now-swipeState.lastTime),stepDx=e.clientX-swipeState.lastX;
+    stopMotion();barrel.classList.add('js-motion');barrel.classList.add('moving');
+    angle += stepDx*0.62;
+    paint();
+    swipeState.velocity=(stepDx*0.62/dt)*0.72+swipeState.velocity*0.28;
+    swipeState.lastX=e.clientX;swipeState.lastTime=now;
+  }
+  function finish(e,cancelled){
+    if(!swipeState.active||e.pointerId!==swipeState.pointerId)return;
+    if(swipeState.axis==='x'){
+      e.preventDefault();e.stopImmediatePropagation();
+      if(barrel.hasPointerCapture(e.pointerId))barrel.releasePointerCapture(e.pointerId);
+      const v=swipeState.velocity;
+      swipeState.active=false;swipeState.axis=null;swipeState.pointerId=null;
+      if(cancelled||Math.abs(v)<0.012){
+        settleSwipe();
+      }else{
+        coastSwipe(v);
+      }
+    }else{
+      swipeState.active=false;swipeState.axis=null;swipeState.pointerId=null;swipeState.velocity=0;
+    }
+  }
+  function settleSwipe(){
+    cancelSwipeMotion();barrel.classList.add('js-motion');
+    const target=Math.round(angle/STEP)*STEP;
+    const start=angle,diff=((target-start+540)%360)-180,duration=520,t0=performance.now();
+    function tick(now){
+      const p=Math.min(1,(now-t0)/duration),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+      angle=start+diff*e;paint();
+      if(p<1)swipeState.frame=requestAnimationFrame(tick);else{angle=target;paint();barrel.classList.remove('moving');barrel.classList.remove('js-motion');swipeState.frame=0;}
+    }
+    swipeState.frame=requestAnimationFrame(tick);
+  }
+  function coastSwipe(v){
+    cancelSwipeMotion();barrel.classList.add('js-motion');barrel.classList.add('moving');
+    let velocity=v,last=performance.now();
+    function tick(now){
+      const dt=Math.min(32,Math.max(8,now-last));last=now;
+      angle+=velocity*dt;paint();
+      velocity*=Math.pow(0.93,dt/16);
+      if(Math.abs(velocity)<0.008){settleSwipe();return;}
+      swipeState.frame=requestAnimationFrame(tick);
+    }
+    swipeState.frame=requestAnimationFrame(tick);
+  }
+  barrel.addEventListener('pointerdown',begin,true);
+  barrel.addEventListener('pointermove',move,true);
+  barrel.addEventListener('pointerup',e=>finish(e,false),true);
+  barrel.addEventListener('pointercancel',e=>finish(e,true),true);
+  barrel.addEventListener('lostpointercapture',()=>{if(swipeState.active&&swipeState.axis==='x'){swipeState.active=false;swipeState.axis=null;swipeState.pointerId=null;settleSwipe();}},true);
+})();
+'''
+              script += patch
+
+          p.write_text(head+'<script>'+script+'</script>'+closing_tail,encoding='utf-8')
+
+      - name: Verify navigation patch
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          checks=[
+            'Swipe left or right Below' in s,
+            '.barrel{overscroll-behavior-x:contain}' in s,
+            'mobileSwipeCoordinatorV2' in s,
+            "barrel.addEventListener('pointerdown',begin,true)" in s,
+            "barrel.addEventListener('pointercancel'" in s,
+            'Math.round(angle/STEP)*STEP' in s,
+          ]
+          if not all(checks):
+            raise SystemExit(f'Verification failed: {checks}')
+
+      - name: Commit mobile navigation fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix mobile carousel swipe navigation'
+          git push
