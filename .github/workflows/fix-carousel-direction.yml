@@ -1,0 +1,35 @@
+name: Fix carousel gesture direction
+on:
+  push:
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Fix carousel gesture direction'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Relax horizontal gesture threshold
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          old="if(Math.abs(dy)>=Math.abs(dx)){endGesture();return;}horizontalGesture=true;"
+          new="if(Math.abs(dy)>Math.abs(dx)*1.35){return;}horizontalGesture=true;"
+          if old not in s: raise SystemExit('Gesture direction guard not found; refusing to modify site.')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+      - name: Verify
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert 'Math.abs(dy)>Math.abs(dx)*1.35' in s
+          assert 'pointerdown' in s and 'pointermove' in s and 'pointerup' in s
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix carousel gesture direction'
+          git push
