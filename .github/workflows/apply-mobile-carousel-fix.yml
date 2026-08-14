@@ -1,0 +1,88 @@
+name: Apply mobile carousel swipe and scroll fix
+on: push
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Patch carousel navigation
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          if 'Swipe left or right Below' not in s:
+            if 'Swipe left or right' not in s: raise SystemExit('swipe text marker missing')
+            s=s.replace('Swipe left or right','Swipe left or right Below',1)
+          if 'overscroll-behavior-x:contain' not in s:
+            marker='.barrel.js-motion{transition:none!important}'
+            if marker not in s: raise SystemExit('motion css marker missing')
+            s=s.replace(marker,marker+'.barrel{overscroll-behavior-x:contain}',1)
+          parts=s.rsplit('<script>',1)
+          if len(parts)!=2: raise SystemExit('script marker missing')
+          head,tail=parts
+          script,rest=tail.rsplit('</script>',1)
+          if 'mobileSwipeCoordinatorV3' not in script:
+            script += r'''
+/* mobileSwipeCoordinatorV3: keep vertical scrolling native while making horizontal carousel swipes repeatable. */
+(function(){
+  const S={active:false,axis:null,id:null,x:0,y:0,lastX:0,lastT:0,v:0,raf:0};
+  const STEP=90,THRESH=8;
+  function stop(){if(S.raf){cancelAnimationFrame(S.raf);S.raf=0;}}
+  function down(e){if(e.pointerType==='mouse'&&e.button!==0)return;stop();S.active=true;S.axis=null;S.id=e.pointerId;S.x=S.lastX=e.clientX;S.y=e.clientY;S.lastT=performance.now();S.v=0;}
+  function move(e){
+    if(!S.active||e.pointerId!==S.id)return;
+    const dx=e.clientX-S.x,dy=e.clientY-S.y;
+    if(!S.axis){if(Math.abs(dx)<THRESH&&Math.abs(dy)<THRESH)return;S.axis=Math.abs(dx)>Math.abs(dy)?'x':'y';}
+    if(S.axis!=='x')return;
+    e.preventDefault();e.stopImmediatePropagation();
+    if(!barrel.hasPointerCapture(e.pointerId))barrel.setPointerCapture(e.pointerId);
+    const now=performance.now(),dt=Math.max(8,now-S.lastT),dd=e.clientX-S.lastX;
+    stopMotion();barrel.classList.add('js-motion','moving');angle+=dd*.62;paint();S.v=(dd*.62/dt)*.72+S.v*.28;S.lastX=e.clientX;S.lastT=now;
+  }
+  function end(e,cancelled){
+    if(!S.active||e.pointerId!==S.id)return;
+    if(S.axis==='x'){
+      e.preventDefault();e.stopImmediatePropagation();
+      if(barrel.hasPointerCapture(e.pointerId))barrel.releasePointerCapture(e.pointerId);
+      const v=S.v;S.active=false;S.axis=null;S.id=null;S.v=0;
+      if(cancelled||Math.abs(v)<.012)settle();else coast(v);
+    }else{S.active=false;S.axis=null;S.id=null;S.v=0;}
+  }
+  function settle(){
+    stop();barrel.classList.add('js-motion','moving');
+    const target=Math.round(angle/STEP)*STEP,start=angle,diff=((target-start+540)%360)-180,dur=520,t0=performance.now();
+    function tick(now){const p=Math.min(1,(now-t0)/dur),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;angle=start+diff*e;paint();if(p<1)S.raf=requestAnimationFrame(tick);else{angle=target;paint();barrel.classList.remove('moving','js-motion');S.raf=0;}}
+    S.raf=requestAnimationFrame(tick);
+  }
+  function coast(v){
+    stop();barrel.classList.add('js-motion','moving');let last=performance.now(),vel=v;
+    function tick(now){const dt=Math.min(32,Math.max(8,now-last));last=now;angle+=vel*dt;paint();vel*=Math.pow(.93,dt/16);if(Math.abs(vel)<.008){settle();return;}S.raf=requestAnimationFrame(tick);}
+    S.raf=requestAnimationFrame(tick);
+  }
+  barrel.addEventListener('pointerdown',down,true);
+  barrel.addEventListener('pointermove',move,true);
+  barrel.addEventListener('pointerup',e=>end(e,false),true);
+  barrel.addEventListener('pointercancel',e=>end(e,true),true);
+})();
+'''
+          p.write_text(head+'<script>'+script+'</script>'+rest,encoding='utf-8')
+      - name: Verify
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          for x in ['Swipe left or right Below','overscroll-behavior-x:contain','mobileSwipeCoordinatorV3',"barrel.addEventListener('pointerdown',down,true)",'Math.round(angle/STEP)*STEP']:
+            if x not in s: raise SystemExit('verification failed: '+x)
+      - name: Commit and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/apply-mobile-carousel-fix.yml
+          git add index.html
+          git commit -m 'Fix repeat mobile carousel swipe navigation'
+          git push
