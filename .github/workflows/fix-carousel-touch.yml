@@ -6,29 +6,24 @@ permissions:
   contents: write
 jobs:
   patch:
-    if: contains(github.event.head_commit.message, '[patch-carousel]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Patch carousel gesture handling
-        shell: python {0}
         run: |
+          python3 - <<'PY'
           from pathlib import Path
-          p = Path('index.html')
-          s = p.read_text()
-          s = s.replace('touch-action:pan-y;overscroll-behavior-x:none;', 'touch-action:pan-y pinch-zoom;overscroll-behavior-x:contain;')
-          s = s.replace('touch-action:pan-y}', 'touch-action:pan-y pinch-zoom}')
-          start = s.index("let activePointerId=null,gestureMode='idle';")
-          end_marker = "settleFromVelocity()}});const about="
-          end = s.index(end_marker, start)
-          new_js = r'''let activePointerId=null,gestureMode='idle',releaseDx=0;
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('touch-action:pan-y;overscroll-behavior-x:none;','touch-action:pan-y pinch-zoom;overscroll-behavior-x:contain;')
+          s=s.replace('touch-action:pan-y}','touch-action:pan-y pinch-zoom}')
+          start=s.index("let activePointerId=null,gestureMode='idle';")
+          end=s.index("settleFromVelocity()}});const about=",start)
+          new_js=r'''let activePointerId=null,gestureMode='idle',releaseDx=0;
 barrel.addEventListener('pointerdown',e=>{
   if(e.target.closest('a')) return;
-  stopMotion();
-  activePointerId=e.pointerId;
-  gestureMode='pending';
-  startX=e.clientX; startY=e.clientY; startAngle=angle;
-  lastX=e.clientX; lastTime=performance.now(); velocity=0; releaseDx=0;
+  stopMotion(); activePointerId=e.pointerId; gestureMode='pending';
+  startX=e.clientX; startY=e.clientY; startAngle=angle; lastX=e.clientX; lastTime=performance.now(); velocity=0; releaseDx=0;
   barrel.classList.remove('js-motion');
 });
 barrel.addEventListener('pointermove',e=>{
@@ -36,12 +31,7 @@ barrel.addEventListener('pointermove',e=>{
   const dx=e.clientX-startX,dy=e.clientY-startY;
   if(gestureMode==='pending'){
     if(Math.abs(dx)<8&&Math.abs(dy)<8) return;
-    if(Math.abs(dy)>Math.abs(dx)){
-      gestureMode='vertical';
-      activePointerId=null;
-      velocity=0;
-      return;
-    }
+    if(Math.abs(dy)>Math.abs(dx)){gestureMode='vertical';activePointerId=null;velocity=0;return;}
     gestureMode='horizontal';
     if(barrel.setPointerCapture) barrel.setPointerCapture(e.pointerId);
     barrel.classList.add('dragging','moving','js-motion');
@@ -51,9 +41,7 @@ barrel.addEventListener('pointermove',e=>{
   const now=performance.now(),moveX=e.clientX-lastX,dt=Math.max(8,now-lastTime);
   const sampleVelocity=(moveX/dt)*0.42;
   velocity=velocity*0.72+sampleVelocity*0.28;
-  angle=startAngle+(e.clientX-startX)*0.42;
-  releaseDx=e.clientX-startX;
-  paint();
+  angle=startAngle+(e.clientX-startX)*0.42; releaseDx=e.clientX-startX; paint();
   lastX=e.clientX; lastTime=now;
 },{passive:false});
 function finishPointer(e){
@@ -63,40 +51,34 @@ function finishPointer(e){
   if(barrel.hasPointerCapture&&barrel.hasPointerCapture(e.pointerId)) barrel.releasePointerCapture(e.pointerId);
   barrel.classList.remove('dragging');
   if(wasHorizontal){
-    const direction=dx<0?1:-1;
-    const speed=Math.abs(velocity);
+    const direction=dx<0?1:-1, speed=Math.abs(velocity);
     if(Math.abs(dx)>18){
       const extra=Math.min(2,Math.max(1,Math.round(speed*0.9)));
       animateTo(Math.round((startAngle+direction*90*extra)/90)*90,Math.max(560,900-extra*120));
-    }else{
-      settleFromVelocity();
-    }
+    }else settleFromVelocity();
   }else velocity=0;
 }
 barrel.addEventListener('pointerup',finishPointer);
 barrel.addEventListener('pointercancel',finishPointer);
-barrel.addEventListener('lostpointercapture',e=>{
-  if(activePointerId===e.pointerId){activePointerId=null;gestureMode='idle';velocity=0;barrel.classList.remove('dragging');}
-});
-window.addEventListener('blur',()=>{
-  activePointerId=null; gestureMode='idle'; velocity=0; releaseDx=0; barrel.classList.remove('dragging');
-});'''
-          s = s[:start] + new_js + s[end+len('settleFromVelocity()'):]
+barrel.addEventListener('lostpointercapture',e=>{if(activePointerId===e.pointerId){activePointerId=null;gestureMode='idle';velocity=0;barrel.classList.remove('dragging');}});
+window.addEventListener('blur',()=>{activePointerId=null;gestureMode='idle';velocity=0;releaseDx=0;barrel.classList.remove('dragging');});'''
+          s=s[:start]+new_js+s[end+len('settleFromVelocity()'):]
           p.write_text(s)
-      - name: Verify carousel patch
+          PY
+      - name: Verify
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           s=Path('index.html').read_text()
-          required=['touch-action:pan-y pinch-zoom','setPointerCapture','releasePointerCapture','gestureMode===\'horizontal\'','Swipe left or right Below']
-          missing=[x for x in required if x not in s]
-          if missing: raise SystemExit('Missing: '+', '.join(missing))
-          print('Carousel touch patch verified')
+          for x in ['touch-action:pan-y pinch-zoom','setPointerCapture','releasePointerCapture','gestureMode===\'horizontal\'','Swipe left or right Below']:
+            assert x in s, x
+          print('carousel patch verified')
           PY
-      - name: Commit patch
+      - name: Commit and remove repair workflow
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'Fix repeated mobile carousel swipes [carousel-fix]' || exit 0
+          git rm .github/workflows/fix-carousel-touch.yml
+          git commit -m 'Fix mobile carousel swiping and preserve page scrolling'
           git push
