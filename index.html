@@ -43,4 +43,58 @@ document.addEventListener('pointerup',finishPointer);
 document.addEventListener('pointercancel',finishPointer);
 window.addEventListener('blur',()=>{
   if(activePointerId!==null){activePointerId=null;gestureMode='idle';velocity=0;barrel.classList.remove('dragging');}
-});settleFromVelocity()}});const about=document.getElementById('about');function closeAbout(){about.classList.remove('open')}document.getElementById('aboutBtn').onclick=()=>about.classList.add('open');document.getElementById('closeAbout').onclick=closeAbout;about.addEventListener('click',e=>{if(e.target===about)closeAbout()});paint();randomizeAmbient();</script></body></html>
+});settleFromVelocity()}});const about=document.getElementById('about');function closeAbout(){about.classList.remove('open')}document.getElementById('aboutBtn').onclick=()=>about.classList.add('open');document.getElementById('closeAbout').onclick=closeAbout;about.addEventListener('click',e=>{if(e.target===about)closeAbout()});paint();randomizeAmbient();</script><script>
+/* Harris mobile gesture controller v2 */
+(() => {
+  const b = document.getElementById('barrel');
+  if (!b) return;
+  b.style.touchAction = 'pan-y';
+  b.style.overscrollBehaviorX = 'contain';
+  let active = false, pending = false, id = null;
+  let sx = 0, sy = 0, sa = 0, lt = 0, vel = 0;
+  const friction = 0.965, pxToDeg = 0.52, threshold = 8;
+  function cancelOwnMotion(){
+    if (typeof stopMotion === 'function') stopMotion();
+    if (typeof motionFrame !== 'undefined' && motionFrame) { cancelAnimationFrame(motionFrame); motionFrame = 0; }
+  }
+  function reset(){ active=false; pending=false; id=null; vel=0; b.classList.remove('dragging','js-motion'); }
+  function release(){ try { if (id !== null && b.hasPointerCapture(id)) b.releasePointerCapture(id); } catch (_) {} }
+  function settle(){
+    b.classList.add('js-motion','moving'); let last=performance.now();
+    function coast(now){
+      const dt=Math.min(32,Math.max(8,now-last)); last=now;
+      vel*=Math.pow(friction,dt/16.667); angle+=vel*dt; paint();
+      if(Math.abs(vel)>0.018){ motionFrame=requestAnimationFrame(coast); return; }
+      const target=Math.round(angle/90)*90, from=angle, diff=target-from, start=performance.now();
+      function snap(t){ const q=Math.min(1,(t-start)/720), e=1-Math.pow(1-q,3); angle=from+diff*e; paint(); if(q<1) motionFrame=requestAnimationFrame(snap); else { angle=target; vel=0; paint(); b.classList.remove('moving','js-motion'); motionFrame=0; } }
+      motionFrame=requestAnimationFrame(snap);
+    }
+    motionFrame=requestAnimationFrame(coast);
+  }
+  b.addEventListener('pointerdown',e=>{
+    if(e.target.closest('a')) return;
+    e.stopImmediatePropagation(); cancelOwnMotion();
+    id=e.pointerId; sx=e.clientX; sy=e.clientY; sa=angle; lt=performance.now(); vel=0; pending=true; active=false;
+  },true);
+  b.addEventListener('pointermove',e=>{
+    if(e.pointerId!==id) return;
+    e.stopImmediatePropagation(); const dx=e.clientX-sx, dy=e.clientY-sy;
+    if(pending){
+      if(Math.abs(dx)<threshold && Math.abs(dy)<threshold) return;
+      if(Math.abs(dy)>Math.abs(dx)){ reset(); return; }
+      pending=false; active=true; try{b.setPointerCapture(id)}catch(_){ } b.classList.add('dragging','js-motion');
+    }
+    if(!active) return;
+    e.preventDefault(); const now=performance.now(), dt=Math.max(8,now-lt), current=sa+dx*pxToDeg;
+    vel=(current-angle)/dt; angle=current; paint(); lt=now;
+  },true);
+  const finish=e=>{
+    if(e.pointerId!==id) return;
+    e.stopImmediatePropagation();
+    if(active){ release(); b.classList.remove('dragging'); settle(); } else reset();
+  };
+  b.addEventListener('pointerup',finish,true);
+  b.addEventListener('pointercancel',finish,true);
+  b.addEventListener('lostpointercapture',e=>{ if(e.pointerId!==id) return; if(active){b.classList.remove('dragging'); settle();} else reset(); },true);
+})();
+</script></body></html>
