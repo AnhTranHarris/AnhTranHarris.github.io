@@ -1,0 +1,48 @@
+name: Fix four-card carousel snapping
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-carousel-four-card-snap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-carousel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Align carousel snap math with four cards
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          parts = s.rsplit('</script>', 1)
+          if len(parts) != 2:
+              raise SystemExit('Could not find final script block; refusing to modify the site.')
+          script, tail = parts
+          # The final script contains the carousel state/gesture logic. Keep CSS/markup untouched.
+          original = script
+          script = re.sub(r'%3(?=\)\+3\)\)%3)', '%4', script)
+          script = script.replace('%3)+3)%3', '%4)+4)%4')
+          script = re.sub(r'(?<!\d)120(?=\D)', '90', script)
+          script = script.replace('Math.round(-angle/120)', 'Math.round(-angle/90)')
+          script = script.replace('angle+=dir*120', 'angle+=dir*90')
+          script = script.replace('dir*120', 'dir*90')
+          # Any three-card modulo used by the active indicator/snap state must become four-card modulo.
+          script = script.replace('%3', '%4')
+          if script == original:
+              raise SystemExit('No four-card snap math was found; refusing to create a no-op commit.')
+          p.write_text(script + '</script>' + tail, encoding='utf-8')
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix four-card carousel snap alignment'
+          git push
