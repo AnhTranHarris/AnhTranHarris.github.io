@@ -11,10 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Patch carousel gesture handling
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
-          import re
           p = Path('index.html')
           s = p.read_text()
           s = s.replace('touch-action:pan-y;overscroll-behavior-x:none;', 'touch-action:pan-y pinch-zoom;overscroll-behavior-x:contain;')
