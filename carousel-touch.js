@@ -1,5 +1,4 @@
-/* Harris Portfolio: stable 2D touch surface + 3D visual barrel.
-   Natural drag + inertial drift, then a soft settle to the nearest card. */
+/* Harris Portfolio: local horizontal carousel + native vertical page scrolling. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
@@ -10,12 +9,13 @@
   if (!stage || !barrel) return;
 
   const STEP = 90;
-  const DRAG_GAIN = 1.18;
-  const FRAME_MS = 16.67;
-  const FRICTION = 0.965;
-  const MIN_DRIFT = 0.035;
-  const SNAP_EASE = 0.105;
-  const SNAP_STOP = 0.045;
+  const DRAG_GAIN = 1.0;
+  const FRAME = 16.67;
+  const FRICTION = 0.982;
+  const MIN_VELOCITY = 0.025;
+  const SNAP_EASE = 0.085;
+  const SNAP_STOP = 0.035;
+  const DIRECTION_LOCK = 7;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -23,7 +23,7 @@
   Object.assign(zone.style, {
     position: 'absolute', left: '50%', top: '50%',
     transform: 'translate(-50%, -50%)', width: '90%', height: '430px',
-    zIndex: '12', touchAction: 'none', background: 'transparent',
+    zIndex: '12', touchAction: 'pan-y', background: 'transparent',
     cursor: 'grab', userSelect: 'none', WebkitUserSelect: 'none',
     pointerEvents: 'auto'
   });
@@ -32,11 +32,12 @@
   let angle = 0;
   let velocity = 0;
   let raf = 0;
-  let dragging = false;
+  let gesture = 'idle';
   let activePointer = null;
+  let startX = 0;
+  let startY = 0;
   let lastX = 0;
   let lastT = 0;
-  let moved = false;
   let generation = 0;
 
   barrel.style.transition = 'none';
@@ -52,27 +53,24 @@
     dots.forEach((dot, i) => dot.classList.toggle('on', i === index));
   };
 
-  function stop() {
+  function stopAnimation() {
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
   }
 
-  function reset() {
-    dragging = false;
-    activePointer = null;
-    velocity = 0;
-    moved = false;
-    zone.style.cursor = 'grab';
+  function invalidate() {
+    generation++;
+    stopAnimation();
   }
 
   function snap() {
-    stop();
-    const my = ++generation;
+    invalidate();
+    const my = generation;
     const target = Math.round(angle / STEP) * STEP;
     const tick = () => {
       if (my !== generation) return;
       const d = target - angle;
-      if (Math.abs(d) < SNAP_STOP) {
+      if (Math.abs(d) <= SNAP_STOP) {
         angle = target;
         render();
         raf = 0;
@@ -85,16 +83,16 @@
     raf = requestAnimationFrame(tick);
   }
 
-  function momentum(v) {
-    stop();
-    const my = ++generation;
-    velocity = v;
+  function drift(initialVelocity) {
+    invalidate();
+    const my = generation;
+    velocity = initialVelocity;
     const tick = () => {
       if (my !== generation) return;
       angle += velocity;
-      velocity *= FRICTION;
       render();
-      if (Math.abs(velocity) < MIN_DRIFT) {
+      velocity *= FRICTION;
+      if (Math.abs(velocity) <= MIN_VELOCITY) {
         velocity = 0;
         snap();
         return;
@@ -107,71 +105,94 @@
   function begin(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (controls && controls.contains(e.target)) return;
-    stop();
-    generation++;
-    dragging = true;
+    invalidate();
+    gesture = 'pending';
     activePointer = e.pointerId;
-    lastX = e.clientX;
+    startX = lastX = e.clientX;
+    startY = e.clientY;
     lastT = performance.now();
     velocity = 0;
-    moved = false;
     zone.style.cursor = 'grabbing';
-    e.preventDefault();
   }
 
   function move(e) {
-    if (!dragging || e.pointerId !== activePointer) return;
+    if (!activePointer || e.pointerId !== activePointer || gesture === 'idle') return;
+    const dxTotal = e.clientX - startX;
+    const dyTotal = e.clientY - startY;
+
+    if (gesture === 'pending') {
+      if (Math.hypot(dxTotal, dyTotal) < DIRECTION_LOCK) return;
+      if (Math.abs(dyTotal) > Math.abs(dxTotal)) {
+        // Give the vertical gesture back to the browser. The carousel never spins.
+        gesture = 'vertical';
+        activePointer = null;
+        zone.style.cursor = 'grab';
+        return;
+      }
+      gesture = 'horizontal';
+    }
+
+    if (gesture !== 'horizontal') return;
+    e.preventDefault();
     const now = performance.now();
     const dx = e.clientX - lastX;
     const dt = Math.max(8, now - lastT);
     lastX = e.clientX;
     lastT = now;
-    if (Math.abs(dx) > 0.35) moved = true;
     angle += dx * DRAG_GAIN;
-    velocity = (dx * DRAG_GAIN) / (dt / FRAME_MS);
+    velocity = (dx * DRAG_GAIN) / (dt / FRAME);
     render();
-    e.preventDefault();
   }
 
   function end(e) {
-    if (!dragging || e.pointerId !== activePointer) return;
+    if (!activePointer || e.pointerId !== activePointer) return;
+    const wasHorizontal = gesture === 'horizontal';
     const v = velocity;
-    reset();
-    if (moved && Math.abs(v) > 0.10) momentum(v); else snap();
+    activePointer = null;
+    gesture = 'idle';
+    velocity = 0;
+    zone.style.cursor = 'grab';
+    if (!wasHorizontal) return;
+    if (Math.abs(v) > MIN_VELOCITY) drift(v);
+    else snap();
   }
 
-  function cancel() {
-    if (!dragging) return;
-    reset();
+  function cancel(e) {
+    if (activePointer !== null && e?.pointerId !== undefined && e.pointerId !== activePointer) return;
+    activePointer = null;
+    gesture = 'idle';
+    velocity = 0;
+    zone.style.cursor = 'grab';
     snap();
   }
 
   function rotateBy(delta) {
-    reset();
-    stop();
-    const my = ++generation;
+    invalidate();
+    gesture = 'idle';
+    activePointer = null;
+    const my = generation;
     const target = Math.round(angle / STEP) * STEP + delta;
     const tick = () => {
       if (my !== generation) return;
       const d = target - angle;
-      if (Math.abs(d) < SNAP_STOP) {
+      if (Math.abs(d) <= SNAP_STOP) {
         angle = target;
         render();
         raf = 0;
         return;
       }
-      angle += d * 0.12;
+      angle += d * 0.105;
       render();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
   }
 
-  zone.addEventListener('pointerdown', begin, { passive: false });
+  zone.addEventListener('pointerdown', begin, { passive: true });
   window.addEventListener('pointermove', move, { passive: false });
-  window.addEventListener('pointerup', end, { passive: false });
-  window.addEventListener('pointercancel', cancel, { passive: false });
-  window.addEventListener('blur', cancel);
+  window.addEventListener('pointerup', end, { passive: true });
+  window.addEventListener('pointercancel', cancel, { passive: true });
+  window.addEventListener('blur', () => cancel());
   prev?.addEventListener('click', e => { e.preventDefault(); rotateBy(-STEP); });
   next?.addEventListener('click', e => { e.preventDefault(); rotateBy(STEP); });
 
