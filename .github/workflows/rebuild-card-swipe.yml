@@ -1,0 +1,61 @@
+name: Rebuild local card swipe only
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  rebuild:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply card-only swipe rebuild') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace only the card swipe controller
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          start='  /* Rebuilt local card gesture controller: touch gestures stay on the cards. */'
+          end='  paint();\n})();'
+          a=s.find(start)
+          b=s.find(end,a)
+          if a < 0 or b < 0:
+              raise SystemExit('card swipe controller boundaries not found')
+          b += len(end)
+          replacement=r'''  /* Card-only swipe controller: page scrolling is not modified. */
+  barrel.style.touchAction='pan-y pinch-zoom';
+  barrel.style.overscrollBehaviorX='contain';
+  let angle=0,motionFrame=0,swipeState='idle',startX=0,startY=0,startAngle=0,lastX=0,lastTime=0,velocity=0,activeId=null;
+  const PX_TO_DEG=0.95,SWIPE_THRESHOLD=5;
+  function paint(){barrel.style.transform=`rotateY(${angle}deg)`;const active=((Math.round(-angle/90)%4)+4)%4;dots.forEach((dot,i)=>dot.classList.toggle('on',i===active));}
+  function stopMotion(){if(motionFrame){cancelAnimationFrame(motionFrame);motionFrame=0;}}
+  function ease(t){return 1-Math.pow(1-t,3);}
+  function settle(){stopMotion();const from=angle,target=Math.round(angle/90)*90,diff=target-from,begin=performance.now();function f(now){const p=Math.min(1,(now-begin)/280);angle=from+diff*ease(p);paint();if(p<1)motionFrame=requestAnimationFrame(f);else{angle=target;paint();motionFrame=0;}}motionFrame=requestAnimationFrame(f);}
+  function glide(){stopMotion();let v=velocity,prev=performance.now();function f(now){const dt=Math.min(32,Math.max(8,now-prev));prev=now;v*=Math.pow(.90,dt/16.667);angle+=v*dt;paint();if(Math.abs(v)>.025){motionFrame=requestAnimationFrame(f);}else settle();}motionFrame=requestAnimationFrame(f);}
+  function begin(t){stopMotion();activeId=t.identifier;swipeState='pending';startX=lastX=t.clientX;startY=t.clientY;startAngle=angle;lastTime=performance.now();velocity=0;barrel.classList.remove('js-motion','moving');}
+  function move(t,e){if(activeId!==t.identifier)return;const dx=t.clientX-startX,dy=t.clientY-startY;if(swipeState==='pending'){if(Math.abs(dx)<SWIPE_THRESHOLD&&Math.abs(dy)<SWIPE_THRESHOLD)return;if(Math.abs(dy)>Math.abs(dx)){swipeState='vertical';return;}swipeState='horizontal';barrel.classList.add('dragging','js-motion');}if(swipeState!=='horizontal')return;e.preventDefault();const now=performance.now(),dt=Math.max(8,now-lastTime),next=startAngle+(t.clientX-startX)*PX_TO_DEG;velocity=(next-angle)/dt;angle=next;lastX=t.clientX;lastTime=now;paint();}
+  function end(id){if(activeId!==id)return;const wasHorizontal=swipeState==='horizontal';activeId=null;swipeState='idle';barrel.classList.remove('dragging');if(wasHorizontal)glide();}
+  barrel.addEventListener('touchstart',e=>{if(e.touches.length===1)begin(e.changedTouches[0]);},{passive:true});
+  barrel.addEventListener('touchmove',e=>{if(activeId===null)return;for(const t of e.changedTouches){if(t.identifier===activeId){move(t,e);break;}}},{passive:false});
+  barrel.addEventListener('touchend',e=>{for(const t of e.changedTouches)end(t.identifier);},{passive:true});
+  barrel.addEventListener('touchcancel',e=>{for(const t of e.changedTouches){if(t.identifier===activeId){activeId=null;swipeState='idle';barrel.classList.remove('dragging');}}},{passive:true});
+  document.getElementById('next')?.addEventListener('click',()=>animateStep(-1));
+  document.getElementById('prev')?.addEventListener('click',()=>animateStep(1));
+  document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')animateStep(-1);if(e.key==='ArrowLeft')animateStep(1);if(e.key==='Escape')closeAbout();});
+  paint();
+})();'''
+          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
+      - name: Verify
+        run: |
+          grep -q 'Card-only swipe controller' index.html
+          grep -q 'touchstart' index.html
+          grep -q 'PX_TO_DEG=0.95' index.html
+          ! grep -q 'pointerdown' index.html
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Apply card-only swipe rebuild' || exit 0
+          git push
