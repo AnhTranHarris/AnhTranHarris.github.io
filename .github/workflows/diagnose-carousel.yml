@@ -1,0 +1,26 @@
+name: Diagnose carousel
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: ${{ !contains(github.event.head_commit.message, 'Diagnose carousel') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect carousel interaction code
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          import re
+          for m in re.finditer(r'<script[^>]*>(.*?)</script>', s, re.S|re.I):
+              body=m.group(1)
+              if any(x in body for x in ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','requestAnimationFrame']):
+                  print('---SCRIPT---')
+                  print(body[:30000])
+          print('---TRANSFORMS---')
+          for line in re.findall(r'.{0,180}barrel.{0,260}', s, re.I):
+              print(line)
