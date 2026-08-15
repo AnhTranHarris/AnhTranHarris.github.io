@@ -6,7 +6,6 @@ permissions:
   contents: write
 jobs:
   inspect:
-    if: ${{ !contains(github.event.head_commit.message, 'Apply card-only swipe') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,12 +15,13 @@ jobs:
           from pathlib import Path
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
+          if 'Card-only swipe controller' in s:
+              print('Controller already applied')
+              raise SystemExit(0)
           start='  /* Fresh carousel controller: one gesture state machine, native vertical scroll, custom horizontal drag. */'
           end='  paint();\n})();'
-          a=s.find(start)
-          b=s.find(end,a)
-          if a<0 or b<0:
-              raise SystemExit('controller boundaries not found')
+          a=s.find(start); b=s.find(end,a)
+          if a<0 or b<0: raise SystemExit('controller boundaries not found')
           b += len(end)
           replacement=r'''  /* Card-only swipe controller: deliberately ignores page scrolling. */
   let angle=0,motionFrame=0,dragging=false,startX=0,startAngle=0,lastTime=0,velocity=0;
@@ -34,8 +34,8 @@ jobs:
   function move(x){if(!dragging)return;const now=performance.now(),dt=Math.max(8,now-lastTime),dx=x-startX,next=startAngle+dx*CARD_DEGREES_PER_PIXEL;velocity=(next-angle)/dt;angle=next;lastTime=now;paint();}
   function up(){if(!dragging)return;dragging=false;barrel.classList.remove('dragging');coast();}
   barrel.style.touchAction='none';
-  barrel.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;down(e.touches[0].clientX);e.stopPropagation();},{passive:true});
-  barrel.addEventListener('touchmove',e=>{if(!dragging)return;move(e.touches[0].clientX);e.preventDefault();e.stopPropagation();},{passive:false});
+  barrel.addEventListener('touchstart',e=>{if(e.touches.length===1){down(e.touches[0].clientX);e.stopPropagation();}},{passive:true});
+  barrel.addEventListener('touchmove',e=>{if(dragging){move(e.touches[0].clientX);e.preventDefault();e.stopPropagation();}},{passive:false});
   barrel.addEventListener('touchend',e=>{if(dragging){up();e.stopPropagation();}},{passive:true});
   barrel.addEventListener('touchcancel',e=>{if(dragging){dragging=false;barrel.classList.remove('dragging');snap();e.stopPropagation();}},{passive:true});
   barrel.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||(e.pointerType==='mouse'&&e.button!==0))return;down(e.clientX);barrel.setPointerCapture(e.pointerId);e.stopPropagation();},{passive:true});
@@ -48,15 +48,17 @@ jobs:
   paint();
 })();'''
           p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
-      - name: Verify card-only controller
+      - name: Verify
         run: |
           grep -q 'Card-only swipe controller' index.html
           grep -q "barrel.style.touchAction='none'" index.html
           grep -q 'CARD_DEGREES_PER_PIXEL=0.95' index.html
       - name: Commit rebuilt controller
+        shell: bash
         run: |
+          if grep -q 'Card-only swipe controller' index.html && git diff --quiet -- index.html; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'Apply card-only swipe' || exit 0
+          git commit -m 'Apply card-only swipe'
           git push
