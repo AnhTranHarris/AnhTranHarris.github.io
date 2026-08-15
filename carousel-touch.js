@@ -16,6 +16,7 @@
   const SNAP_EASE = 0.085;
   const SNAP_STOP = 0.035;
   const DIRECTION_LOCK = 7;
+  const SNAP_ZONE = 0.30;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -123,7 +124,6 @@
     if (gesture === 'pending') {
       if (Math.hypot(dxTotal, dyTotal) < DIRECTION_LOCK) return;
       if (Math.abs(dyTotal) > Math.abs(dxTotal)) {
-        // Give the vertical gesture back to the browser. The carousel never spins.
         gesture = 'vertical';
         activePointer = null;
         zone.style.cursor = 'grab';
