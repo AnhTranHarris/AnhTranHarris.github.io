@@ -1,66 +1,10 @@
-name: Rebuild card-only touch swipe
+name: Card swipe rebuild archive
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  rebuild:
-    if: ${{ !contains(github.event.head_commit.message, 'Apply card-only touch swipe') }}
+  note:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Replace carousel controller only
-        shell: python
-        run: |
-          from pathlib import Path
-          import re
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          marker='  /* Rebuilt local card gesture controller: touch gestures stay on the cards. */'
-          a=s.find(marker)
-          if a < 0:
-              marker='  /* Card-only swipe controller: page scrolling is not modified. */'
-              a=s.find(marker)
-          if a < 0: raise SystemExit('carousel controller marker not found')
-          b=s.find('  paint();\n})();',a)
-          if b < 0: raise SystemExit('carousel controller end not found')
-          b += len('  paint();\n})();')
-          replacement=r'''  /* Card-only touch swipe: scrolling outside the card is untouched. */
-  barrel.style.touchAction='pan-y pinch-zoom';
-  barrel.style.overscrollBehaviorX='contain';
-  barrel.style.userSelect='none';
-  barrel.style.webkitUserSelect='none';
-  let angle=0,raf=0,activeId=null,state='idle',startX=0,startY=0,startAngle=0,lastAngle=0,lastTime=0,velocity=0;
-  const PX_TO_DEG=1.05,THRESHOLD=4;
-  const paint=()=>{barrel.style.transform=`rotateY(${angle}deg)`;const active=((Math.round(-angle/90)%4)+4)%4;dots.forEach((d,i)=>d.classList.toggle('on',i===active));};
-  const stop=()=>{if(raf){cancelAnimationFrame(raf);raf=0;}};
-  const ease=t=>1-Math.pow(1-t,3);
-  const snap=()=>{stop();const from=angle,target=Math.round(angle/90)*90,diff=target-from,start=performance.now();barrel.classList.add('js-motion','moving');const f=now=>{const p=Math.min(1,(now-start)/300);angle=from+diff*ease(p);paint();if(p<1)raf=requestAnimationFrame(f);else{angle=target;paint();barrel.classList.remove('js-motion','moving');raf=0;}};raf=requestAnimationFrame(f);};
-  const coast=()=>{stop();let v=velocity,prev=performance.now();barrel.classList.add('js-motion','moving');const f=now=>{const dt=Math.min(32,Math.max(8,now-prev));prev=now;v*=Math.pow(.90,dt/16.667);angle+=v*dt;paint();if(Math.abs(v)>.02)raf=requestAnimationFrame(f);else snap();};raf=requestAnimationFrame(f);};
-  const reset=()=>{activeId=null;state='idle';barrel.classList.remove('dragging');};
-  barrel.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;stop();const t=e.touches[0];activeId=t.identifier;state='pending';startX=t.clientX;startY=t.clientY;startAngle=angle;lastAngle=angle;lastTime=performance.now();velocity=0;barrel.classList.remove('js-motion','moving');},{passive:true});
-  barrel.addEventListener('touchmove',e=>{if(activeId===null)return;const t=[...e.touches].find(x=>x.identifier===activeId);if(!t)return;const dx=t.clientX-startX,dy=t.clientY-startY;if(state==='pending'){if(Math.abs(dx)<THRESHOLD&&Math.abs(dy)<THRESHOLD)return;if(Math.abs(dy)>Math.abs(dx)){reset();return;}state='horizontal';barrel.classList.add('dragging','js-motion');}if(state!=='horizontal')return;e.preventDefault();const now=performance.now(),dt=Math.max(8,now-lastTime);const next=startAngle+dx*PX_TO_DEG;velocity=(next-lastAngle)/dt;angle=next;lastAngle=next;lastTime=now;paint();},{passive:false});
-  const finish=e=>{if(activeId===null)return;const id=activeId;if(e.changedTouches&&![...e.changedTouches].some(t=>t.identifier===id))return;const horizontal=state==='horizontal';reset();if(horizontal)coast();};
-  barrel.addEventListener('touchend',finish,{passive:true});
-  barrel.addEventListener('touchcancel',finish,{passive:true});
-  document.getElementById('next')?.addEventListener('click',()=>{stop();angle-=90;snap();});
-  document.getElementById('prev')?.addEventListener('click',()=>{stop();angle+=90;snap();});
-  document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){stop();angle-=90;snap();}if(e.key==='ArrowLeft'){stop();angle+=90;snap();}if(e.key==='Escape')closeAbout();});
-  paint();
-})();'''
-          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
-      - name: Verify
-        shell: python
-        run: |
-          from pathlib import Path
-          s=Path('index.html').read_text(encoding='utf-8')
-          for x in ['Card-only touch swipe','touchstart','touchmove','touchend','PX_TO_DEG=1.05','Math.round(angle/90)*90']:
-              assert x in s, x
-      - name: Commit and push
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html
-          git commit -m 'Apply card-only touch swipe' || exit 0
-          git push
+      - run: echo "Card swipe rebuild is maintained directly in index.html."
