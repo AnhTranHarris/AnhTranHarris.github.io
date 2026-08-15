@@ -1,7 +1,6 @@
-/* Harris Portfolio: card-local carousel controller.
-   The stage is used only as a stable hit-test surface because CSS 3D faces can
-   become unreliable pointer targets at exact quarter-turns. The gesture is
-   accepted only when it begins inside the currently visible card. */
+/* Harris Portfolio: stable 2D touch surface + 3D visual barrel.
+   The touch target never rotates with the 3D faces. It is positioned over the
+   visible card, which avoids quarter-turn CSS 3D hit-testing differences. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
@@ -10,12 +9,24 @@
   const controls = document.querySelector('.controls');
   const pages = [...document.querySelectorAll('.page')];
   const dots = [...document.querySelectorAll('.dot')];
-  if (!stage || !barrel) return;
+  if (!stage || !barrel || pages.length !== 4) return;
 
   const STEP = 90;
-  const DRAG_GAIN = 1.08;
-  const FRICTION = 0.94;
-  const HIT_PADDING = 14;
+  const DRAG_GAIN = 1.18;
+  const FRICTION = 0.93;
+  const SNAP_EASE = 0.18;
+  const zone = document.createElement('div');
+  zone.className = 'carousel-touch-zone';
+  zone.setAttribute('aria-hidden', 'true');
+  Object.assign(zone.style, {
+    position: 'absolute', left: '50%', top: '50%',
+    transform: 'translate(-50%, -50%)', width: '90%', height: '430px',
+    zIndex: '12', touchAction: 'none', background: 'transparent',
+    cursor: 'grab', userSelect: 'none', WebkitUserSelect: 'none',
+    pointerEvents: 'auto'
+  });
+  stage.appendChild(zone);
+
   let angle = 0;
   let velocity = 0;
   let raf = 0;
@@ -23,63 +34,41 @@
   let activePointer = null;
   let lastX = 0;
   let lastT = 0;
-  let generation = 0;
   let moved = false;
+  let generation = 0;
 
   barrel.style.transition = 'none';
-  barrel.style.touchAction = 'none';
+  barrel.style.pointerEvents = 'none';
   barrel.style.userSelect = 'none';
   barrel.style.webkitUserSelect = 'none';
-  barrel.style.cursor = 'grab';
+  zone.style.height = window.innerWidth <= 560 ? '390px' : '430px';
 
-  const normalizeIndex = n => ((n % 4) + 4) % 4;
-  const frontIndex = () => normalizeIndex(-Math.round(angle / STEP));
-
-  function pointInside(rect, x, y) {
-    return x >= rect.left - HIT_PADDING && x <= rect.right + HIT_PADDING &&
-           y >= rect.top - HIT_PADDING && y <= rect.bottom + HIT_PADDING;
-  }
-
-  function beganOnVisibleCard(e) {
-    if (controls && controls.contains(e.target)) return false;
-    if (e.target.closest?.('a,button,input,textarea,select')) return false;
-
-    const front = pages[frontIndex()];
-    if (front) {
-      const rect = front.getBoundingClientRect();
-      if (rect.width > 8 && rect.height > 8 && pointInside(rect, e.clientX, e.clientY)) return true;
-    }
-
-    // During the few frames between 3D positions, accept a touch on any page
-    // that the browser successfully hit-tests. This keeps the interaction local.
-    return !!e.target.closest?.('.page');
-  }
-
+  const normalize = n => ((n % 4) + 4) % 4;
   const render = () => {
     barrel.style.transform = `rotateY(${angle}deg)`;
-    const index = normalizeIndex(Math.round(angle / STEP));
+    const index = normalize(Math.round(angle / STEP));
     dots.forEach((dot, i) => dot.classList.toggle('on', i === index));
   };
 
-  const stopAnimation = () => {
+  function stop() {
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
-  };
+  }
 
-  function resetGesture() {
+  function reset() {
     dragging = false;
     activePointer = null;
     velocity = 0;
     moved = false;
-    barrel.style.cursor = 'grab';
+    zone.style.cursor = 'grab';
   }
 
   function snap() {
-    stopAnimation();
-    const myGeneration = ++generation;
+    stop();
+    const my = ++generation;
     const target = Math.round(angle / STEP) * STEP;
     const tick = () => {
-      if (myGeneration !== generation) return;
+      if (my !== generation) return;
       const d = target - angle;
       if (Math.abs(d) < 0.06) {
         angle = target;
@@ -87,19 +76,19 @@
         raf = 0;
         return;
       }
-      angle += d * 0.18;
+      angle += d * SNAP_EASE;
       render();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
   }
 
-  function momentum(initialVelocity) {
-    stopAnimation();
-    const myGeneration = ++generation;
-    velocity = initialVelocity;
+  function momentum(v) {
+    stop();
+    const my = ++generation;
+    velocity = v;
     const tick = () => {
-      if (myGeneration !== generation) return;
+      if (my !== generation) return;
       angle += velocity;
       velocity *= FRICTION;
       render();
@@ -115,17 +104,17 @@
 
   function begin(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (!beganOnVisibleCard(e)) return;
-
+    if (controls && controls.contains(e.target)) return;
+    stop();
     generation++;
-    stopAnimation();
     dragging = true;
     activePointer = e.pointerId;
     lastX = e.clientX;
     lastT = performance.now();
     velocity = 0;
     moved = false;
-    barrel.style.cursor = 'grabbing';
+    zone.style.cursor = 'grabbing';
+    e.preventDefault();
   }
 
   function move(e) {
@@ -135,35 +124,33 @@
     const dt = Math.max(8, now - lastT);
     lastX = e.clientX;
     lastT = now;
-
-    if (Math.abs(dx) > 0.5) moved = true;
+    if (Math.abs(dx) > 0.35) moved = true;
     angle += dx * DRAG_GAIN;
     velocity = (dx * DRAG_GAIN) / (dt / 16.67);
     render();
     e.preventDefault();
   }
 
-  function finish(e) {
+  function end(e) {
     if (!dragging || e.pointerId !== activePointer) return;
-    const releaseVelocity = velocity;
-    resetGesture();
-    if (moved && Math.abs(releaseVelocity) > 0.12) momentum(releaseVelocity);
-    else snap();
+    const v = velocity;
+    reset();
+    if (moved && Math.abs(v) > 0.10) momentum(v); else snap();
   }
 
   function cancel() {
     if (!dragging) return;
-    resetGesture();
+    reset();
     snap();
   }
 
   function rotateBy(delta) {
-    resetGesture();
-    stopAnimation();
-    const myGeneration = ++generation;
+    reset();
+    stop();
+    const my = ++generation;
     const target = Math.round(angle / STEP) * STEP + delta;
     const tick = () => {
-      if (myGeneration !== generation) return;
+      if (my !== generation) return;
       const d = target - angle;
       if (Math.abs(d) < 0.06) {
         angle = target;
@@ -178,16 +165,15 @@
     raf = requestAnimationFrame(tick);
   }
 
-  // Stable, untransformed stage receives the initial hit test. Movement and
-  // release are global so the gesture survives the barrel moving underneath it.
-  stage.addEventListener('pointerdown', begin, { passive: true });
+  zone.addEventListener('pointerdown', begin, { passive: false });
   window.addEventListener('pointermove', move, { passive: false });
-  window.addEventListener('pointerup', finish, { passive: false });
+  window.addEventListener('pointerup', end, { passive: false });
   window.addEventListener('pointercancel', cancel, { passive: false });
   window.addEventListener('blur', cancel);
-
   prev?.addEventListener('click', e => { e.preventDefault(); rotateBy(-STEP); });
   next?.addEventListener('click', e => { e.preventDefault(); rotateBy(STEP); });
 
+  const resize = () => { zone.style.height = window.innerWidth <= 560 ? '390px' : '430px'; };
+  window.addEventListener('resize', resize);
   render();
 })();
