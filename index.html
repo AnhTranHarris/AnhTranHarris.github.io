@@ -7,200 +7,31 @@
   const aboutBtn = document.getElementById('aboutBtn');
   const closeAboutBtn = document.getElementById('closeAbout');
   if (!barrel) return;
-
-  /* Ambient spotlight system */
-  const START_ZONES = [
-    {x:8,y:10},{x:50,y:10},{x:92,y:10},{x:8,y:50},
-    {x:50,y:50},{x:92,y:50},{x:8,y:90},{x:50,y:90},
-    {x:92,y:90},{x:28,y:28},{x:72,y:28},{x:72,y:72}
-  ];
-  const rand = (min,max) => Math.random()*(max-min)+min;
-  function randomizeAmbient(){
-    if (!ambient) return;
-    const cycle = rand(30000,900000);
-    const zones = [...START_ZONES].sort(() => Math.random()-.5).slice(0,4);
-    const longCycle = cycle > 100000;
-    document.documentElement.style.setProperty('--ambient-cycle', `${cycle}ms`);
-    ambient.style.filter = `blur(28px) brightness(${longCycle ? '1.25' : '1'})`;
-    zones.forEach((z,i) => {
-      const k = String.fromCharCode(97+i);
-      document.documentElement.style.setProperty(`--spot-${k}-x`, `${z.x}%`);
-      document.documentElement.style.setProperty(`--spot-${k}-y`, `${z.y}%`);
-    });
-    ambient.style.animation = 'none';
-    void ambient.offsetWidth;
-    ambient.style.animation = '';
-    setTimeout(randomizeAmbient, cycle);
-  }
+  const START_ZONES=[{x:8,y:10},{x:50,y:10},{x:92,y:10},{x:8,y:50},{x:50,y:50},{x:92,y:50},{x:8,y:90},{x:50,y:90},{x:92,y:90},{x:28,y:28},{x:72,y:28},{x:72,y:72}];
+  const rand=(min,max)=>Math.random()*(max-min)+min;
+  function randomizeAmbient(){if(!ambient)return;const cycle=rand(30000,900000);const zones=[...START_ZONES].sort(()=>Math.random()-.5).slice(0,4);document.documentElement.style.setProperty('--ambient-cycle',`${cycle}ms`);ambient.style.filter=`blur(28px) brightness(${cycle>100000?'1.25':'1'})`;zones.forEach((z,i)=>{const k=String.fromCharCode(97+i);document.documentElement.style.setProperty(`--spot-${k}-x`,`${z.x}%`);document.documentElement.style.setProperty(`--spot-${k}-y`,`${z.y}%`);});ambient.style.animation='none';void ambient.offsetWidth;ambient.style.animation='';setTimeout(randomizeAmbient,cycle)}
   randomizeAmbient();
+  function openAbout(){about?.classList.add('open')}function closeAbout(){about?.classList.remove('open')}aboutBtn?.addEventListener('click',openAbout);closeAboutBtn?.addEventListener('click',closeAbout);about?.addEventListener('click',e=>{if(e.target===about)closeAbout()});
 
-  /* About modal */
-  function openAbout(){ about?.classList.add('open'); }
-  function closeAbout(){ about?.classList.remove('open'); }
-  aboutBtn?.addEventListener('click', openAbout);
-  closeAboutBtn?.addEventListener('click', closeAbout);
-  about?.addEventListener('click', e => { if (e.target === about) closeAbout(); });
-
-  /* Fresh carousel controller: one gesture state machine, native vertical scroll, custom horizontal drag. */
-  barrel.style.touchAction = 'pan-y';
-  barrel.style.overscrollBehaviorX = 'contain';
-  barrel.style.overscrollBehaviorX = 'contain';
-  barrel.style.webkitUserSelect = 'none';
-
-  let angle = 0;
-  let motionFrame = 0;
-  let pointerId = null;
-  let mode = 'idle';
-  let startX = 0;
-  let startY = 0;
-  let startAngle = 0;
-  let lastX = 0;
-  let lastTime = 0;
-  let velocity = 0;
-  let dragged = false;
-  const ANGLE_PER_PIXEL = 0.52;
-  const DIRECTION_THRESHOLD = 8;
-
-  function paint(){
-    barrel.style.transform = `rotateY(${angle}deg)`;
-    const active = ((Math.round(-angle/90) % 4) + 4) % 4;
-    dots.forEach((dot,i) => dot.classList.toggle('on', i === active));
-  }
-  function stopMotion(){
-    if (motionFrame){ cancelAnimationFrame(motionFrame); motionFrame = 0; }
-  }
-  function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
-  function releaseCapture(){
-    if (pointerId === null) return;
-    try { if (barrel.hasPointerCapture(pointerId)) barrel.releasePointerCapture(pointerId); } catch (_) {}
-  }
-  function resetGesture(){
-    releaseCapture();
-    pointerId = null;
-    mode = 'idle';
-    velocity = 0;
-    barrel.classList.remove('dragging');
-  }
-  function snapToNearest(){
-    stopMotion();
-    const target = Math.round(angle/90)*90;
-    const from = angle;
-    const diff = target-from;
-    const start = performance.now();
-    barrel.classList.add('js-motion','moving');
-    function frame(now){
-      const p = Math.min(1,(now-start)/620);
-      angle = from + diff*easeOutCubic(p);
-      paint();
-      if (p < 1) motionFrame=requestAnimationFrame(frame);
-      else { angle=target; paint(); barrel.classList.remove('js-motion','moving'); motionFrame=0; }
-    }
-    motionFrame=requestAnimationFrame(frame);
-  }
-  function coast(){
-    stopMotion();
-    const friction = 0.955;
-    const minimum = 0.018;
-    let previous = performance.now();
-    barrel.classList.add('js-motion','moving');
-    function frame(now){
-      const dt = Math.min(32,Math.max(8,now-previous));
-      previous = now;
-      velocity *= Math.pow(friction, dt/16.667);
-      angle += velocity*dt;
-      paint();
-      if (Math.abs(velocity) > minimum){ motionFrame=requestAnimationFrame(frame); return; }
-      snapToNearest();
-    }
-    motionFrame=requestAnimationFrame(frame);
-  }
-  function animateStep(direction){
-    if (mode !== 'idle') return;
-    stopMotion();
-    const from=angle, target=from + direction*90, start=performance.now();
-    barrel.classList.add('js-motion','moving');
-    function frame(now){
-      const p=Math.min(1,(now-start)/760);
-      angle=from+(target-from)*easeOutCubic(p);
-      paint();
-      if(p<1) motionFrame=requestAnimationFrame(frame);
-      else { angle=target; paint(); barrel.classList.remove('js-motion','moving'); motionFrame=0; }
-    }
-    motionFrame=requestAnimationFrame(frame);
-  }
-
-  barrel.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    stopMotion();
-    pointerId = e.pointerId;
-    mode = 'pending';
-    startX = lastX = e.clientX;
-    startY = e.clientY;
-    startAngle = angle;
-    lastTime = performance.now();
-    velocity = 0;
-    dragged = false;
-    barrel.classList.remove('js-motion','moving');
-  }, {passive:true});
-
-  barrel.addEventListener('pointermove', e => {
-    if (e.pointerId !== pointerId) return;
-    const dx=e.clientX-startX;
-    const dy=e.clientY-startY;
-    if (mode === 'pending'){
-      if (Math.abs(dx)<DIRECTION_THRESHOLD && Math.abs(dy)<DIRECTION_THRESHOLD) return;
-      if (Math.abs(dy) > Math.abs(dx)){
-        resetGesture();
-        return;
-      }
-      mode='horizontal';
-      dragged=true;
-      try { barrel.setPointerCapture(pointerId); } catch (_) {}
-      barrel.classList.add('dragging','js-motion');
-    }
-    if (mode !== 'horizontal') return;
-    e.preventDefault();
-    const now=performance.now();
-    const dt=Math.max(8,now-lastTime);
-    const nextAngle=startAngle + dx*ANGLE_PER_PIXEL;
-    velocity=(nextAngle-angle)/dt;
-    angle=nextAngle;
-    lastX=e.clientX;
-    lastTime=now;
-    paint();
-  }, {passive:false});
-
-  function finish(e){
-    if (e.pointerId !== pointerId) return;
-    if (mode === 'horizontal'){
-      releaseCapture();
-      mode='idle';
-      pointerId=null;
-      barrel.classList.remove('dragging');
-      coast();
-    } else {
-      resetGesture();
-    }
-  }
-  barrel.addEventListener('pointerup',finish,{passive:true});
-  barrel.addEventListener('pointercancel',finish,{passive:true});
-  barrel.addEventListener('lostpointercapture',e=>{
-    if (e.pointerId !== pointerId) return;
-    if (mode === 'horizontal'){
-      mode='idle'; pointerId=null; barrel.classList.remove('dragging'); coast();
-    } else resetGesture();
-  });
-  document.addEventListener('click', e => {
-    if (dragged){ e.preventDefault(); e.stopPropagation(); dragged=false; }
-  }, true);
-
-  document.getElementById('next')?.addEventListener('click',()=>animateStep(-1));
-  document.getElementById('prev')?.addEventListener('click',()=>animateStep(1));
-  document.addEventListener('keydown', e => {
-    if(e.key==='ArrowRight') animateStep(-1);
-    if(e.key==='ArrowLeft') animateStep(1);
-    if(e.key==='Escape') closeAbout();
-  });
+  /* Card-only touch swipe controller. The page scroll system is not modified. */
+  barrel.style.touchAction='pan-y pinch-zoom';
+  barrel.style.overscrollBehaviorX='contain';
+  barrel.style.userSelect='none';
+  barrel.style.webkitUserSelect='none';
+  let angle=0,raf=0,activeId=null,state='idle',startX=0,startY=0,startAngle=0,lastAngle=0,lastTime=0,velocity=0;
+  const PX_TO_DEG=1.05,THRESHOLD=4;
+  const paint=()=>{barrel.style.transform=`rotateY(${angle}deg)`;const active=((Math.round(-angle/90)%4)+4)%4;dots.forEach((d,i)=>d.classList.toggle('on',i===active))};
+  const stop=()=>{if(raf){cancelAnimationFrame(raf);raf=0}};
+  const ease=t=>1-Math.pow(1-t,3);
+  const snap=()=>{stop();const from=angle,target=Math.round(angle/90)*90,diff=target-from,start=performance.now();barrel.classList.add('js-motion','moving');const f=now=>{const p=Math.min(1,(now-start)/300);angle=from+diff*ease(p);paint();if(p<1)raf=requestAnimationFrame(f);else{angle=target;paint();barrel.classList.remove('js-motion','moving');raf=0}};raf=requestAnimationFrame(f)};
+  const coast=()=>{stop();let v=velocity,prev=performance.now();barrel.classList.add('js-motion','moving');const f=now=>{const dt=Math.min(32,Math.max(8,now-prev));prev=now;v*=Math.pow(.90,dt/16.667);angle+=v*dt;paint();if(Math.abs(v)>.02)raf=requestAnimationFrame(f);else snap()};raf=requestAnimationFrame(f)};
+  const reset=()=>{activeId=null;state='idle';barrel.classList.remove('dragging')};
+  barrel.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;stop();const t=e.touches[0];activeId=t.identifier;state='pending';startX=t.clientX;startY=t.clientY;startAngle=angle;lastAngle=angle;lastTime=performance.now();velocity=0;barrel.classList.remove('js-motion','moving')},{passive:true});
+  barrel.addEventListener('touchmove',e=>{if(activeId===null)return;const t=[...e.touches].find(x=>x.identifier===activeId);if(!t)return;const dx=t.clientX-startX,dy=t.clientY-startY;if(state==='pending'){if(Math.abs(dx)<THRESHOLD&&Math.abs(dy)<THRESHOLD)return;if(Math.abs(dy)>Math.abs(dx)){reset();return}state='horizontal';barrel.classList.add('dragging','js-motion')}if(state!=='horizontal')return;e.preventDefault();const now=performance.now(),dt=Math.max(8,now-lastTime),next=startAngle+dx*PX_TO_DEG;velocity=(next-lastAngle)/dt;angle=next;lastAngle=next;lastTime=now;paint()},{passive:false});
+  const finish=e=>{if(activeId===null)return;const id=activeId;if(e.changedTouches&&![...e.changedTouches].some(t=>t.identifier===id))return;const horizontal=state==='horizontal';reset();if(horizontal)coast()};
+  barrel.addEventListener('touchend',finish,{passive:true});barrel.addEventListener('touchcancel',finish,{passive:true});
+  const step=dir=>{stop();angle+=dir*90;snap()};
+  document.getElementById('next')?.addEventListener('click',()=>step(-1));document.getElementById('prev')?.addEventListener('click',()=>step(1));document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')step(-1);if(e.key==='ArrowLeft')step(1);if(e.key==='Escape')closeAbout()});
   paint();
 })();
 </script></body></html>
