@@ -3,62 +3,22 @@ on:
   push:
     branches: [main]
 permissions:
-  contents: write
+  contents: read
 jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rebuild card-only swipe controller
+      - name: Print interaction code
         shell: python
         run: |
           from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          if 'Card-only swipe controller' in s:
-              print('Controller already applied')
-              raise SystemExit(0)
-          start='  /* Fresh carousel controller: one gesture state machine, native vertical scroll, custom horizontal drag. */'
-          end='  paint();\n})();'
-          a=s.find(start); b=s.find(end,a)
-          if a<0 or b<0: raise SystemExit('controller boundaries not found')
-          b += len(end)
-          replacement=r'''  /* Card-only swipe controller: deliberately ignores page scrolling. */
-  let angle=0,motionFrame=0,dragging=false,startX=0,startAngle=0,lastTime=0,velocity=0;
-  const CARD_DEGREES_PER_PIXEL=0.95;
-  function paint(){barrel.style.transform=`rotateY(${angle}deg)`;const active=((Math.round(-angle/90)%4)+4)%4;dots.forEach((dot,i)=>dot.classList.toggle('on',i===active));}
-  function stopMotion(){if(motionFrame){cancelAnimationFrame(motionFrame);motionFrame=0;}}
-  function snap(){stopMotion();const target=Math.round(angle/90)*90,from=angle,diff=target-from,t0=performance.now();barrel.classList.add('js-motion','moving');function f(now){const t=Math.min(1,(now-t0)/360),e=1-Math.pow(1-t,3);angle=from+diff*e;paint();if(t<1)motionFrame=requestAnimationFrame(f);else{angle=target;paint();barrel.classList.remove('js-motion','moving');motionFrame=0;}}motionFrame=requestAnimationFrame(f);}
-  function coast(){stopMotion();let v=velocity,prev=performance.now();barrel.classList.add('js-motion','moving');function f(now){const dt=Math.min(32,Math.max(8,now-prev));prev=now;v*=Math.pow(.88,dt/16.667);angle+=v*dt;paint();if(Math.abs(v)>.015)motionFrame=requestAnimationFrame(f);else snap();}motionFrame=requestAnimationFrame(f);}
-  function down(x){stopMotion();dragging=true;startX=x;startAngle=angle;lastTime=performance.now();velocity=0;barrel.classList.add('dragging','js-motion');}
-  function move(x){if(!dragging)return;const now=performance.now(),dt=Math.max(8,now-lastTime),dx=x-startX,next=startAngle+dx*CARD_DEGREES_PER_PIXEL;velocity=(next-angle)/dt;angle=next;lastTime=now;paint();}
-  function up(){if(!dragging)return;dragging=false;barrel.classList.remove('dragging');coast();}
-  barrel.style.touchAction='none';
-  barrel.addEventListener('touchstart',e=>{if(e.touches.length===1){down(e.touches[0].clientX);e.stopPropagation();}},{passive:true});
-  barrel.addEventListener('touchmove',e=>{if(dragging){move(e.touches[0].clientX);e.preventDefault();e.stopPropagation();}},{passive:false});
-  barrel.addEventListener('touchend',e=>{if(dragging){up();e.stopPropagation();}},{passive:true});
-  barrel.addEventListener('touchcancel',e=>{if(dragging){dragging=false;barrel.classList.remove('dragging');snap();e.stopPropagation();}},{passive:true});
-  barrel.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||(e.pointerType==='mouse'&&e.button!==0))return;down(e.clientX);barrel.setPointerCapture(e.pointerId);e.stopPropagation();},{passive:true});
-  barrel.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&dragging){move(e.clientX);e.preventDefault();e.stopPropagation();}},{passive:false});
-  barrel.addEventListener('pointerup',e=>{if(e.pointerType==='mouse'&&dragging){up();try{barrel.releasePointerCapture(e.pointerId);}catch(_){ }e.stopPropagation();}});
-  barrel.addEventListener('pointercancel',e=>{if(dragging){dragging=false;barrel.classList.remove('dragging');snap();e.stopPropagation();}});
-  document.getElementById('next')?.addEventListener('click',()=>animateStep(-1));
-  document.getElementById('prev')?.addEventListener('click',()=>animateStep(1));
-  document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')animateStep(-1);if(e.key==='ArrowLeft')animateStep(1);if(e.key==='Escape')closeAbout();});
-  paint();
-})();'''
-          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
-      - name: Verify
-        run: |
-          grep -q 'Card-only swipe controller' index.html
-          grep -q "barrel.style.touchAction='none'" index.html
-          grep -q 'CARD_DEGREES_PER_PIXEL=0.95' index.html
-      - name: Commit rebuilt controller
-        shell: bash
-        run: |
-          if grep -q 'Card-only swipe controller' index.html && git diff --quiet -- index.html; then exit 0; fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html
-          git commit -m 'Apply card-only swipe'
-          git push
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          for m in re.finditer(r'<script[^>]*>(.*?)</script>', s, re.S|re.I):
+              body=m.group(1)
+              if any(x in body for x in ['pointerdown','pointermove','pointerup','touchstart','touchmove','touchend','requestAnimationFrame','rotateY']):
+                  print('---SCRIPT---')
+                  print(body[:50000])
+          print('---CSS/HTML BARREL CONTEXT---')
+          for m in re.finditer(r'.{0,500}(?:barrel|rotateY).{0,1200}', s, re.I|re.S): print(m.group(0))
