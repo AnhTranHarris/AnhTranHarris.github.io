@@ -1,20 +1,22 @@
 /* Harris Portfolio: stable 2D touch surface + 3D visual barrel.
-   The touch target never rotates with the 3D faces. It is positioned over the
-   visible card, which avoids quarter-turn CSS 3D hit-testing differences. */
+   Natural drag + inertial drift, then a soft settle to the nearest card. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
   const prev = document.querySelector('#prev');
   const next = document.querySelector('#next');
   const controls = document.querySelector('.controls');
-  const pages = [...document.querySelectorAll('.page')];
   const dots = [...document.querySelectorAll('.dot')];
-  if (!stage || !barrel || pages.length !== 4) return;
+  if (!stage || !barrel) return;
 
   const STEP = 90;
   const DRAG_GAIN = 1.18;
-  const FRICTION = 0.93;
-  const SNAP_EASE = 0.18;
+  const FRAME_MS = 16.67;
+  const FRICTION = 0.965;
+  const MIN_DRIFT = 0.035;
+  const SNAP_EASE = 0.105;
+  const SNAP_STOP = 0.045;
+
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
   zone.setAttribute('aria-hidden', 'true');
@@ -70,7 +72,7 @@
     const tick = () => {
       if (my !== generation) return;
       const d = target - angle;
-      if (Math.abs(d) < 0.06) {
+      if (Math.abs(d) < SNAP_STOP) {
         angle = target;
         render();
         raf = 0;
@@ -92,7 +94,7 @@
       angle += velocity;
       velocity *= FRICTION;
       render();
-      if (Math.abs(velocity) < 0.08) {
+      if (Math.abs(velocity) < MIN_DRIFT) {
         velocity = 0;
         snap();
         return;
@@ -126,7 +128,7 @@
     lastT = now;
     if (Math.abs(dx) > 0.35) moved = true;
     angle += dx * DRAG_GAIN;
-    velocity = (dx * DRAG_GAIN) / (dt / 16.67);
+    velocity = (dx * DRAG_GAIN) / (dt / FRAME_MS);
     render();
     e.preventDefault();
   }
@@ -152,13 +154,13 @@
     const tick = () => {
       if (my !== generation) return;
       const d = target - angle;
-      if (Math.abs(d) < 0.06) {
+      if (Math.abs(d) < SNAP_STOP) {
         angle = target;
         render();
         raf = 0;
         return;
       }
-      angle += d * 0.2;
+      angle += d * 0.12;
       render();
       raf = requestAnimationFrame(tick);
     };
