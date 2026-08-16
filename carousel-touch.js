@@ -11,10 +11,12 @@
   const STEP = 90;
   const DRAG_GAIN = 1.0;
   const FRAME = 16.67;
-  const BRAKE = 0.965;
-  const STOP_VELOCITY = 0.018;
-  const STOP_DISTANCE = 0.28;
+  const BRAKE = 0.93;
+  const STOP_VELOCITY = 0.012;
+  const STOP_DISTANCE = 0.08;
   const DIRECTION_LOCK = 7;
+  const ARRIVAL_GAIN = 0.035;
+  const MAX_BRAKE = 0.16;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -62,31 +64,39 @@
     stopAnimation();
   }
 
-  // Continuous braking stop: no snap animation. The barrel behaves like a tire
-  // with brakes being progressively applied, while a tiny final steering force
-  // lets it settle naturally on the nearest card.
+  // Braking is calculated from the remaining distance to the exact card center.
+  // There is no snap phase: velocity is continuously reduced while an arrival
+  // correction gently steers the remaining motion onto the card angle.
   function stopNaturally() {
     invalidate();
     const my = generation;
-    const nearest = Math.round(angle / STEP) * STEP;
+    const target = Math.round(angle / STEP) * STEP;
     let v = velocity;
 
     const tick = () => {
       if (my !== generation) return;
-      const distance = nearest - angle;
-      const proximity = Math.min(1, Math.abs(distance) / STEP);
-      const brake = BRAKE - (0.035 * (1 - proximity));
-      v *= brake;
+      const distance = target - angle;
+      const absDistance = Math.abs(distance);
 
-      if (Math.abs(v) < STOP_VELOCITY * 2 && Math.abs(distance) > STOP_DISTANCE) {
-        v += distance * 0.004;
+      // Estimate the braking needed to consume the remaining travel instead of
+      // stopping arbitrarily and then snapping from the wrong position.
+      const stoppingDistance = (v * v) / (2 * MAX_BRAKE);
+      const brakingNeeded = absDistance > 0 ? Math.min(1, stoppingDistance / absDistance) : 1;
+      const brakeFactor = BRAKE - (0.055 * brakingNeeded);
+      v *= Math.max(0.80, brakeFactor);
+
+      // As the tire approaches the exact card center, smoothly bias velocity
+      // toward the remaining distance. This produces a continuous brake-to-stop.
+      if (absDistance < STEP * 0.55) {
+        const desired = distance * ARRIVAL_GAIN;
+        v += (desired - v) * 0.12;
       }
 
       angle += v;
       render();
 
-      if (Math.abs(distance) <= STOP_DISTANCE && Math.abs(v) <= STOP_VELOCITY) {
-        angle = nearest;
+      if (absDistance <= STOP_DISTANCE && Math.abs(v) <= STOP_VELOCITY) {
+        angle = target;
         velocity = 0;
         render();
         raf = 0;
