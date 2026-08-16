@@ -9,17 +9,12 @@
   if (!stage || !barrel) return;
 
   const STEP = 90;
-  // Same interaction scale on mobile and desktop; intentionally half the
-  // previous direct swipe response so one gesture cannot whip past cards.
   const DRAG_GAIN = 0.41;
   const FRAME = 16.67;
+  const BRAKE = 0.90;
   const MIN_SPEED = 0.010;
-  const STOP_DISTANCE = 0.06;
+  const STOP_EPSILON = 0.05;
   const DIRECTION_LOCK = 7;
-  const APPROACH_WINDOW = 24;
-  const BRAKE_MIN = 0.84;
-  const BRAKE_MAX = 0.93;
-  const APPROACH_GAIN = 0.045;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -67,14 +62,11 @@
     stopAnimation();
   }
 
-  // One and only one post-release animation. It brakes toward a single
-  // computed card target and ends at exactly that target with zero velocity.
-  function brakeToCard(initialVelocity, explicitTarget = null) {
+  // One finite release animation. The destination is locked once and the
+  // velocity only decreases. There is no snap phase and no re-started spin.
+  function brakeToCard(initialVelocity, target) {
     invalidate();
     const my = generation;
-    const target = explicitTarget === null
-      ? Math.round(angle / STEP) * STEP
-      : explicitTarget;
     let v = initialVelocity;
     let lastTime = performance.now();
 
@@ -82,36 +74,28 @@
       if (my !== generation) return;
       const dt = Math.min(32, Math.max(8, now - lastTime));
       lastTime = now;
+      const frame = dt / FRAME;
       const distance = target - angle;
-      const absDistance = Math.abs(distance);
 
-      // Stronger braking near the destination, but never enough to reverse
-      // direction. The target is chosen once, so the carousel cannot jump to
-      // card 1 or card 4 because rounding changes during the animation.
-      const proximity = Math.min(1, absDistance / STEP);
-      const brake = BRAKE_MIN + (BRAKE_MAX - BRAKE_MIN) * proximity;
-      const frameFactor = dt / FRAME;
-      v *= Math.pow(brake, frameFactor);
+      // Monotonic braking toward the locked target.
+      v *= Math.pow(BRAKE, frame);
+      const step = v * frame;
 
-      // Final approach: continuously reduce velocity toward the exact remaining
-      // distance. This is braking guidance, not a second snap animation.
-      if (absDistance < APPROACH_WINDOW) {
-        const desired = distance * APPROACH_GAIN;
-        const blend = 1 - absDistance / APPROACH_WINDOW;
-        v += (desired - v) * (0.12 + blend * 0.16);
+      // Never cross the chosen card. The final frame simply completes the
+      // remaining rotational distance and kills velocity.
+      if (Math.abs(step) >= Math.abs(distance)) {
+        angle = target;
+        velocity = 0;
+        render();
+        raf = 0;
+        return;
       }
 
-      // Never let inertia carry the barrel through its chosen card target.
-      if (Math.abs(v * frameFactor) > absDistance && absDistance > STOP_DISTANCE) {
-        v = distance / frameFactor;
-      }
-
-      angle += v * frameFactor;
+      angle += step;
       velocity = v;
       render();
 
-      const remaining = target - angle;
-      if (Math.abs(remaining) <= STOP_DISTANCE || Math.abs(v) <= MIN_SPEED && absDistance < APPROACH_WINDOW) {
+      if (Math.abs(target - angle) <= STOP_EPSILON || Math.abs(v) <= MIN_SPEED) {
         angle = target;
         velocity = 0;
         render();
@@ -169,12 +153,31 @@
   function end(e) {
     if (!activePointer || e.pointerId !== activePointer) return;
     const wasHorizontal = gesture === 'horizontal';
-    const v = velocity;
+    const releaseVelocity = velocity;
     activePointer = null;
     gesture = 'idle';
     zone.style.cursor = 'grab';
     if (!wasHorizontal) return;
-    brakeToCard(v);
+
+    const currentIndex = Math.round(angle / STEP);
+    const offset = angle - currentIndex * STEP;
+    const direction = Math.sign(releaseVelocity);
+    let targetIndex = currentIndex;
+
+    // Release always commits to exactly one adjacent card when the swipe has
+    // meaningful velocity; otherwise it settles to the nearest card.
+    if (direction !== 0 && Math.abs(releaseVelocity) > 0.12) {
+      targetIndex = direction > 0
+        ? Math.ceil(angle / STEP)
+        : Math.floor(angle / STEP);
+    } else if (Math.abs(offset) >= STEP / 2) {
+      targetIndex += Math.sign(offset);
+    }
+
+    const target = targetIndex * STEP;
+    const directionToTarget = Math.sign(target - angle);
+    const speed = Math.min(1.4, Math.max(0.18, Math.abs(releaseVelocity)));
+    brakeToCard(directionToTarget * speed, target);
   }
 
   function cancel(e) {
@@ -182,33 +185,28 @@
     activePointer = null;
     gesture = 'idle';
     zone.style.cursor = 'grab';
-    if (Math.abs(velocity) > MIN_SPEED) brakeToCard(velocity);
-    else {
-      velocity = 0;
-      render();
-    }
+    velocity = 0;
+    render();
   }
 
-  // Buttons use the exact same continuous rotation model as a swipe, but with
-  // a fixed adjacent-card target. They no longer jump/snap the next card in.
+  // A button always performs exactly one full 90-degree barrel rotation.
+  // It uses the same finite brake-to-stop animation as a swipe.
   function rotateBy(delta) {
     invalidate();
     gesture = 'idle';
     activePointer = null;
-    const currentCard = Math.round(angle / STEP);
-    const target = (currentCard * STEP) + delta;
-    const direction = delta < 0 ? -1 : 1;
+    const currentIndex = Math.round(angle / STEP);
+    const target = (currentIndex + (delta > 0 ? 1 : -1)) * STEP;
     const distance = target - angle;
-    // Gentle initial button motion, then the same braking controller finishes it.
-    const initialVelocity = direction * Math.min(2.2, Math.max(0.8, Math.abs(distance) * 0.035));
-    brakeToCard(initialVelocity, target);
+    const speed = Math.min(1.2, Math.max(0.72, Math.abs(distance) * 0.028));
+    brakeToCard(Math.sign(distance) * speed, target);
   }
 
   zone.addEventListener('pointerdown', begin, { passive: true });
   window.addEventListener('pointermove', move, { passive: false });
   window.addEventListener('pointerup', end, { passive: true });
   window.addEventListener('pointercancel', cancel, { passive: true });
-  window.addEventListener('blur', () => cancel());
+  window.addEventListener('blur', cancel);
   prev?.addEventListener('click', e => { e.preventDefault(); rotateBy(-STEP); });
   next?.addEventListener('click', e => { e.preventDefault(); rotateBy(STEP); });
 
