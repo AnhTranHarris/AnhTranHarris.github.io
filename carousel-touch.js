@@ -11,11 +11,9 @@
   const STEP = 90;
   const DRAG_GAIN = 1.0;
   const FRAME = 16.67;
-  // Slightly stronger drag than before so the barrel gives up momentum sooner.
-  const FRICTION = 0.976;
-  const MIN_VELOCITY = 0.025;
-  const SNAP_STOP = 0.035;
-  const SNAP_DURATION = 520;
+  const BRAKE = 0.965;
+  const STOP_VELOCITY = 0.018;
+  const STOP_DISTANCE = 0.28;
   const DIRECTION_LOCK = 7;
 
   const zone = document.createElement('div');
@@ -64,55 +62,41 @@
     stopAnimation();
   }
 
-  // Use a time-based ease-out for the final settle. This creates a continuous
-  // handoff from the last bit of inertial drift instead of an abrupt snap.
-  function snap() {
+  // Continuous braking stop: no snap animation. The barrel behaves like a tire
+  // with brakes being progressively applied, while a tiny final steering force
+  // lets it settle naturally on the nearest card.
+  function stopNaturally() {
     invalidate();
     const my = generation;
-    const start = angle;
-    const target = Math.round(angle / STEP) * STEP;
-    const distance = target - start;
-    if (Math.abs(distance) <= SNAP_STOP) {
-      angle = target;
-      render();
-      return;
-    }
+    const nearest = Math.round(angle / STEP) * STEP;
+    let v = velocity;
 
-    const startedAt = performance.now();
-    const tick = now => {
+    const tick = () => {
       if (my !== generation) return;
-      const progress = Math.min(1, (now - startedAt) / SNAP_DURATION);
-      // Smoothstep-style ease-out: fast enough to feel natural, with no hard stop.
-      const eased = 1 - Math.pow(1 - progress, 3);
-      angle = start + distance * eased;
+      const distance = nearest - angle;
+      const proximity = Math.min(1, Math.abs(distance) / STEP);
+      const brake = BRAKE - (0.035 * (1 - proximity));
+      v *= brake;
+
+      if (Math.abs(v) < STOP_VELOCITY * 2 && Math.abs(distance) > STOP_DISTANCE) {
+        v += distance * 0.004;
+      }
+
+      angle += v;
       render();
-      if (progress >= 1 || Math.abs(target - angle) <= SNAP_STOP) {
-        angle = target;
+
+      if (Math.abs(distance) <= STOP_DISTANCE && Math.abs(v) <= STOP_VELOCITY) {
+        angle = nearest;
+        velocity = 0;
         render();
         raf = 0;
         return;
       }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-  }
 
-  function drift(initialVelocity) {
-    invalidate();
-    const my = generation;
-    velocity = initialVelocity;
-    const tick = () => {
-      if (my !== generation) return;
-      angle += velocity;
-      render();
-      velocity *= FRICTION;
-      if (Math.abs(velocity) <= MIN_VELOCITY) {
-        velocity = 0;
-        snap();
-        return;
-      }
+      velocity = v;
       raf = requestAnimationFrame(tick);
     };
+
     raf = requestAnimationFrame(tick);
   }
 
@@ -163,11 +147,10 @@
     const v = velocity;
     activePointer = null;
     gesture = 'idle';
-    velocity = 0;
     zone.style.cursor = 'grab';
     if (!wasHorizontal) return;
-    if (Math.abs(v) > MIN_VELOCITY) drift(v);
-    else snap();
+    velocity = v;
+    stopNaturally();
   }
 
   function cancel(e) {
@@ -176,7 +159,7 @@
     gesture = 'idle';
     velocity = 0;
     zone.style.cursor = 'grab';
-    snap();
+    stopNaturally();
   }
 
   function rotateBy(delta) {
@@ -184,18 +167,15 @@
     gesture = 'idle';
     activePointer = null;
     const my = generation;
-    const start = angle;
     const target = Math.round(angle / STEP) * STEP + delta;
-    const distance = target - start;
-    const startedAt = performance.now();
-    const duration = 420;
-    const tick = now => {
+    let v = (target - angle) * 0.08;
+    const tick = () => {
       if (my !== generation) return;
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      angle = start + distance * eased;
+      const d = target - angle;
+      v = v * 0.94 + d * 0.025;
+      angle += v;
       render();
-      if (progress >= 1) {
+      if (Math.abs(d) < STOP_DISTANCE && Math.abs(v) < STOP_VELOCITY) {
         angle = target;
         render();
         raf = 0;
