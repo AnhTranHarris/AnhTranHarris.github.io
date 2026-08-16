@@ -11,12 +11,12 @@
   const STEP = 90;
   const DRAG_GAIN = 1.0;
   const FRAME = 16.67;
-  const FRICTION = 0.982;
+  // Slightly stronger drag than before so the barrel gives up momentum sooner.
+  const FRICTION = 0.976;
   const MIN_VELOCITY = 0.025;
-  const SNAP_EASE = 0.085;
   const SNAP_STOP = 0.035;
+  const SNAP_DURATION = 520;
   const DIRECTION_LOCK = 7;
-  const SNAP_ZONE = 0.30;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -64,21 +64,34 @@
     stopAnimation();
   }
 
+  // Use a time-based ease-out for the final settle. This creates a continuous
+  // handoff from the last bit of inertial drift instead of an abrupt snap.
   function snap() {
     invalidate();
     const my = generation;
+    const start = angle;
     const target = Math.round(angle / STEP) * STEP;
-    const tick = () => {
+    const distance = target - start;
+    if (Math.abs(distance) <= SNAP_STOP) {
+      angle = target;
+      render();
+      return;
+    }
+
+    const startedAt = performance.now();
+    const tick = now => {
       if (my !== generation) return;
-      const d = target - angle;
-      if (Math.abs(d) <= SNAP_STOP) {
+      const progress = Math.min(1, (now - startedAt) / SNAP_DURATION);
+      // Smoothstep-style ease-out: fast enough to feel natural, with no hard stop.
+      const eased = 1 - Math.pow(1 - progress, 3);
+      angle = start + distance * eased;
+      render();
+      if (progress >= 1 || Math.abs(target - angle) <= SNAP_STOP) {
         angle = target;
         render();
         raf = 0;
         return;
       }
-      angle += d * SNAP_EASE;
-      render();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -171,18 +184,23 @@
     gesture = 'idle';
     activePointer = null;
     const my = generation;
+    const start = angle;
     const target = Math.round(angle / STEP) * STEP + delta;
-    const tick = () => {
+    const distance = target - start;
+    const startedAt = performance.now();
+    const duration = 420;
+    const tick = now => {
       if (my !== generation) return;
-      const d = target - angle;
-      if (Math.abs(d) <= SNAP_STOP) {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      angle = start + distance * eased;
+      render();
+      if (progress >= 1) {
         angle = target;
         render();
         raf = 0;
         return;
       }
-      angle += d * 0.105;
-      render();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
