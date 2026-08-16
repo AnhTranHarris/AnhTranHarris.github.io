@@ -11,12 +11,14 @@
   const STEP = 90;
   const DRAG_GAIN = 1.0;
   const FRAME = 16.67;
-  const BRAKE = 0.93;
-  const STOP_VELOCITY = 0.012;
-  const STOP_DISTANCE = 0.08;
+  const BRAKE = 0.91;
+  const STOP_VELOCITY = 0.018;
+  const STOP_DISTANCE = 0.12;
   const DIRECTION_LOCK = 7;
-  const ARRIVAL_GAIN = 0.035;
-  const MAX_BRAKE = 0.16;
+  const ARRIVAL_GAIN = 0.05;
+  const MAX_BRAKE = 0.22;
+  const SNAP_START = 12;
+  const SNAP_STRENGTH = 0.08;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -64,9 +66,9 @@
     stopAnimation();
   }
 
-  // Braking is calculated from the remaining distance to the exact card center.
-  // There is no snap phase: velocity is continuously reduced while an arrival
-  // correction gently steers the remaining motion onto the card angle.
+  // Brake toward the nearest card. Near the end, a restrained magnetic return
+  // is introduced so the barrel does not coast forever or stop between cards.
+  // This is intentionally a late-stage snap-back, not an abrupt snap animation.
   function stopNaturally() {
     invalidate();
     const my = generation;
@@ -78,18 +80,26 @@
       const distance = target - angle;
       const absDistance = Math.abs(distance);
 
-      // Estimate the braking needed to consume the remaining travel instead of
-      // stopping arbitrarily and then snapping from the wrong position.
+      // Braking increases as stopping distance consumes more of the remaining
+      // distance, causing the carousel to lose energy faster near the target.
       const stoppingDistance = (v * v) / (2 * MAX_BRAKE);
       const brakingNeeded = absDistance > 0 ? Math.min(1, stoppingDistance / absDistance) : 1;
       const brakeFactor = BRAKE - (0.055 * brakingNeeded);
-      v *= Math.max(0.80, brakeFactor);
+      v *= Math.max(0.72, brakeFactor);
 
-      // As the tire approaches the exact card center, smoothly bias velocity
-      // toward the remaining distance. This produces a continuous brake-to-stop.
+      // Broad overlap zone: the target influences motion before the barrel is
+      // nearly stopped, producing a long, natural brake-to-card transition.
       if (absDistance < STEP * 0.55) {
         const desired = distance * ARRIVAL_GAIN;
-        v += (desired - v) * 0.12;
+        v += (desired - v) * 0.14;
+      }
+
+      // Final late-stage snap-back: only the last 12 degrees are affected,
+      // and the strength ramps continuously from zero rather than jumping.
+      if (absDistance < SNAP_START) {
+        const progress = 1 - (absDistance / SNAP_START);
+        const eased = progress * progress * (3 - 2 * progress);
+        v += distance * SNAP_STRENGTH * eased;
       }
 
       angle += v;
