@@ -1,4 +1,4 @@
-/* Harris Portfolio: local horizontal carousel + native vertical page scrolling. */
+/* Harris Portfolio: unified carousel physics for desktop + mobile. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
@@ -11,13 +11,14 @@
   const STEP = 90;
   const DRAG_GAIN = 0.41;
   const FRAME = 16.67;
-  const INERTIA_LIMIT = 2.8;
-  const BRAKE_BASE = 0.965;
-  const BRAKE_END = 0.86;
-  const STOP_SPEED = 0.012;
-  const STOP_DISTANCE = 0.08;
+  const MIN_SPEED = 0.012;
+  const STOP_EPSILON = 0.04;
   const DIRECTION_LOCK = 7;
-  const BUTTON_SPEED = 2.4;
+  const RELEASE_BOOST = 1.15;
+  const BRAKE = 0.94;
+  const FINAL_BRAKE = 0.78;
+  const FINAL_WINDOW = 18;
+  const BUTTON_SPEED = 2.0;
 
   const zone = document.createElement('div');
   zone.className = 'carousel-touch-zone';
@@ -48,15 +49,13 @@
   function stopAnimation() { if (raf) cancelAnimationFrame(raf); raf = 0; }
   function invalidate() { generation++; stopAnimation(); }
 
-  // Real inertial carousel motion: release retains a small amount of momentum,
-  // then braking progressively increases as the locked card is approached.
-  // The final arrival is part of the same animation, not a separate snap.
-  function animateToCard(initialVelocity, target) {
+  // Single finite physics pass: retain release momentum, apply progressive
+  // braking, then gently damp into one exact card angle. No second snap pass.
+  function settleToCard(initialVelocity, target) {
     invalidate();
     const my = generation;
     let v = initialVelocity;
     let last = performance.now();
-
     const tick = now => {
       if (my !== generation) return;
       const dt = Math.min(32, Math.max(8, now - last));
@@ -64,39 +63,28 @@
       const frame = dt / FRAME;
       const distance = target - angle;
       const absDistance = Math.abs(distance);
+      if (absDistance <= STOP_EPSILON) {
+        angle = target; velocity = 0; render(); raf = 0; return;
+      }
 
-      // Increase braking smoothly over the last half-card.
-      const approach = Math.min(1, Math.max(0, 1 - absDistance / (STEP * 0.5)));
-      const brake = BRAKE_BASE + (BRAKE_END - BRAKE_BASE) * approach;
+      const finalProgress = Math.max(0, 1 - absDistance / FINAL_WINDOW);
+      const brake = BRAKE + (FINAL_BRAKE - BRAKE) * finalProgress;
       v *= Math.pow(brake, frame);
 
-      // As the card gets close, use the remaining distance to shape the
-      // deceleration. This creates a long, soft landing instead of a snap.
-      if (absDistance < 24) {
-        const desiredVelocity = distance * 0.055;
-        const blend = 1 - absDistance / 24;
-        v += (desiredVelocity - v) * (0.10 + blend * 0.18);
+      if (absDistance < FINAL_WINDOW) {
+        const desired = distance * 0.065;
+        v += (desired - v) * (0.10 + finalProgress * 0.20);
       }
 
-      const step = v * frame;
-      if (absDistance <= STOP_DISTANCE || Math.abs(step) >= absDistance) {
-        angle = target;
-        velocity = 0;
-        render();
-        raf = 0;
-        return;
-      }
-
+      let step = v * frame;
+      if (Math.abs(step) >= absDistance) step = distance;
       angle += step;
       velocity = v;
       render();
 
-      if (Math.abs(v) <= STOP_SPEED && absDistance < 24) {
-        angle = target;
-        velocity = 0;
-        render();
-        raf = 0;
-        return;
+      if (Math.abs(target - angle) <= STOP_EPSILON ||
+          (Math.abs(v) <= MIN_SPEED && absDistance < FINAL_WINDOW)) {
+        angle = target; velocity = 0; render(); raf = 0; return;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -108,8 +96,8 @@
     if (controls && controls.contains(e.target)) return;
     invalidate();
     gesture = 'pending'; activePointer = e.pointerId;
-    startX = lastX = e.clientX; startY = e.clientY; lastT = performance.now(); velocity = 0;
-    zone.style.cursor = 'grabbing';
+    startX = lastX = e.clientX; startY = e.clientY; lastT = performance.now();
+    velocity = 0; zone.style.cursor = 'grabbing';
   }
 
   function move(e) {
@@ -139,41 +127,35 @@
     activePointer = null; gesture = 'idle'; zone.style.cursor = 'grab';
     if (!horizontal) return;
 
-    const current = Math.round(angle / STEP);
-    const offset = angle - current * STEP;
     const direction = Math.sign(releaseVelocity);
-    let targetIndex;
+    const nearest = Math.round(angle / STEP);
+    const fraction = angle - nearest * STEP;
+    let targetIndex = nearest;
 
-    // A real swipe carries into the adjacent card. A very slow release settles
-    // to whichever card is actually nearest.
     if (direction && Math.abs(releaseVelocity) > 0.08) {
       targetIndex = direction > 0 ? Math.ceil(angle / STEP) : Math.floor(angle / STEP);
-    } else {
-      targetIndex = Math.round(angle / STEP);
+      if (targetIndex === nearest) targetIndex += direction;
+    } else if (Math.abs(fraction) > STEP / 2) {
+      targetIndex += Math.sign(fraction);
     }
-
-    // Never allow an already-nearby card target to become a zero-distance
-    // release while momentum is still present.
-    if (targetIndex === current && direction) targetIndex += direction;
 
     const target = targetIndex * STEP;
     const toTarget = Math.sign(target - angle);
-    const speed = Math.min(INERTIA_LIMIT, Math.max(0.22, Math.abs(releaseVelocity)));
-    animateToCard(toTarget * speed, target);
+    const momentum = Math.min(2.4, Math.max(0.35, Math.abs(releaseVelocity) * RELEASE_BOOST));
+    settleToCard(toTarget * momentum, target);
   }
 
   function cancel(e) {
     if (activePointer !== null && e?.pointerId !== undefined && e.pointerId !== activePointer) return;
-    activePointer = null; gesture = 'idle'; zone.style.cursor = 'grab'; velocity = 0; render();
+    activePointer = null; gesture = 'idle'; zone.style.cursor = 'grab';
+    velocity = 0; render();
   }
 
-  // Buttons are deliberately independent of current fractional angle. One
-  // click always means one complete adjacent-card rotation.
   function rotateBy(direction) {
     invalidate(); gesture = 'idle'; activePointer = null;
     const current = Math.round(angle / STEP);
     const target = (current + direction) * STEP;
-    animateToCard(direction * BUTTON_SPEED, target);
+    settleToCard(direction * BUTTON_SPEED, target);
   }
 
   zone.addEventListener('pointerdown', begin, { passive: true });
