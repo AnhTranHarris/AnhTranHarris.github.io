@@ -44,6 +44,7 @@
   document.head.appendChild(presentation);
   document.querySelector('.nav')?.remove();
   document.querySelector('.about')?.remove();
+  document.querySelectorAll('.hint').forEach(el=>el.remove());
 
   document.querySelector('.intro .micro')?.remove();
   const introLead=document.querySelector('.intro > p:not(.micro)');
