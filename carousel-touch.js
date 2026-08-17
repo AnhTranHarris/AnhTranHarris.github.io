@@ -40,6 +40,15 @@
   document.head.appendChild(presentation);
   document.querySelector('.nav')?.remove();
   document.querySelector('.about')?.remove();
+
+  // Content-only updates. These operate on the live DOM so the minified
+  // index.html and responsive layout remain untouched.
+  document.querySelector('.intro .micro')?.remove();
+  const introLead=document.querySelector('.intro > p:not(.micro)');
+  if(introLead){
+    introLead.textContent='I build AI-enabled workflows, technical documentation, and practical knowledge systems that help teams turn complex information into clear, reliable, and usable work. My focus spans AI operations, AI enablement, technical communication, workflow optimization, documentation strategy, and quality-focused implementation.';
+  }
+
   if(!document.querySelector('.site-disclaimer')){
     const footer=document.createElement('footer');
     footer.className='site-disclaimer';
