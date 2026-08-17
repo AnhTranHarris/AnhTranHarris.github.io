@@ -34,7 +34,7 @@
     .swipe-guide .carousel-guide-arrow,.desktop-swipe-guide .carousel-guide-arrow{pointer-events:auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:38px!important;height:38px!important;flex:0 0 38px!important;border:1px solid rgba(174,225,230,.28)!important;border-radius:50%!important;background:rgba(5,22,29,.72)!important;color:#edf7f8!important;font-size:1rem!important;line-height:1!important;cursor:pointer!important;transition:transform .2s,border-color .2s,color .2s!important}
     .swipe-guide .carousel-guide-arrow:hover,.desktop-swipe-guide .carousel-guide-arrow:hover{transform:scale(1.06)!important;border-color:#d8b86a!important;color:#fff0b0!important}
     .swipe-guide .carousel-guide-label,.desktop-swipe-guide .carousel-guide-label{flex:0 1 auto!important;text-align:center!important}
-    .controls{display:none!important}
+    .controls,.hint{display:none!important}
     .desktop-swipe-guide{position:absolute!important;left:50%!important;bottom:6px!important;transform:translateX(-50%)!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:14px!important;min-width:330px!important;min-height:52px!important;padding:0 18px!important;border:2px solid transparent!important;border-radius:16px!important;background:linear-gradient(rgba(6,21,28,.22),rgba(6,21,28,.22)) padding-box,linear-gradient(180deg,rgba(6,21,28,.18) 0%,rgba(10,45,35,.98) 100%) border-box!important;color:#9bb7ad!important;font-size:.69rem!important;letter-spacing:.16em!important;text-transform:uppercase!important;box-shadow:0 8px 22px rgba(0,0,0,.18)!important;z-index:30!important;visibility:visible!important;opacity:1!important}
     .site-disclaimer{display:block!important;position:relative!important;visibility:visible!important;width:min(1180px,calc(100% - 44px));margin:0 auto 22px;padding:16px 20px 17px;border-top:1px solid rgba(99,213,208,.25);border-bottom:1px solid rgba(174,225,230,.10);font-size:.70rem;line-height:1.65;letter-spacing:.025em;color:#789198;text-align:center;background:linear-gradient(90deg,transparent,rgba(7,27,35,.34),transparent)}
     .site-disclaimer strong{display:block;margin-bottom:5px;color:#9bb7bc;font-size:.64rem;letter-spacing:.18em;text-transform:uppercase}.site-disclaimer span{color:#a7bec2}
@@ -47,38 +47,9 @@
 
   document.querySelector('.intro .micro')?.remove();
   const introLead=document.querySelector('.intro > p:not(.micro)');
-  if(introLead){
-    introLead.textContent='I build AI-enabled workflows, technical documentation, and practical knowledge systems that help teams turn complex information into clear, reliable, and usable work. My focus spans AI operations, AI enablement, technical communication, workflow optimization, documentation strategy, and quality-focused implementation.';
-  }
+  if(introLead){introLead.textContent='I build AI-enabled workflows, technical documentation, and practical knowledge systems that help teams turn complex information into clear, reliable, and usable work. My focus spans AI operations, AI enablement, technical communication, workflow optimization, documentation strategy, and quality-focused implementation.';}
 
-  function wireGuide(guide){
-    const guideParts=[...guide.querySelectorAll('span')];
-    if(guideParts.length<3)return;
-    const left=guideParts[0],label=guideParts[1],right=guideParts[2];
-    left.classList.add('carousel-guide-arrow');right.classList.add('carousel-guide-arrow');label.classList.add('carousel-guide-label');
-    left.setAttribute('role','button');left.setAttribute('tabindex','0');left.setAttribute('aria-label','Previous portfolio card');
-    right.setAttribute('role','button');right.setAttribute('tabindex','0');right.setAttribute('aria-label','Next portfolio card');
-    const activate=(el,dir)=>{const run=e=>{e.preventDefault();e.stopPropagation();rotateBy(dir)};el.addEventListener('click',run);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){run(e)}})};
-    activate(left,-1);activate(right,1);
-  }
-
-  const mobileGuide=document.querySelector('.swipe-guide');
-  if(mobileGuide){
-    wireGuide(mobileGuide);
-    if(!document.querySelector('.desktop-swipe-guide')){
-      const desktopGuide=mobileGuide.cloneNode(true);
-      desktopGuide.className='desktop-swipe-guide';
-      desktopGuide.removeAttribute('aria-hidden');
-      stage.appendChild(desktopGuide);
-      wireGuide(desktopGuide);
-    }
-  }
-
-  if(!document.querySelector('.site-disclaimer')){
-    const footer=document.createElement('footer');
-    footer.className='site-disclaimer';
-    footer.setAttribute('role','note');
-    footer.innerHTML='<strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span>';
-    document.querySelector('.shell')?.appendChild(footer);
-  }
+  function wireGuide(guide){const guideParts=[...guide.querySelectorAll('span')];if(guideParts.length<3)return;const left=guideParts[0],label=guideParts[1],right=guideParts[2];left.classList.add('carousel-guide-arrow');right.classList.add('carousel-guide-arrow');label.classList.add('carousel-guide-label');left.setAttribute('role','button');left.setAttribute('tabindex','0');left.setAttribute('aria-label','Previous portfolio card');right.setAttribute('role','button');right.setAttribute('tabindex','0');right.setAttribute('aria-label','Next portfolio card');const activate=(el,dir)=>{const run=e=>{e.preventDefault();e.stopPropagation();rotateBy(dir)};el.addEventListener('click',run);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){run(e)}})};activate(left,-1);activate(right,1);}
+  const mobileGuide=document.querySelector('.swipe-guide');if(mobileGuide){wireGuide(mobileGuide);if(!document.querySelector('.desktop-swipe-guide')){const desktopGuide=mobileGuide.cloneNode(true);desktopGuide.className='desktop-swipe-guide';desktopGuide.removeAttribute('aria-hidden');stage.appendChild(desktopGuide);wireGuide(desktopGuide);}}
+  if(!document.querySelector('.site-disclaimer')){const footer=document.createElement('footer');footer.className='site-disclaimer';footer.setAttribute('role','note');footer.innerHTML='<strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span>';document.querySelector('.shell')?.appendChild(footer);}
 })();
