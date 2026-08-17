@@ -19,9 +19,9 @@
       <div class="page-top"><span class="num">01</span><span class="state">Profile</span></div>
       <div>
         <h2>About Me</h2>
-        <p>I’m an operations professional with 5+ years of experience in regulated, high-volume environments, now bringing that foundation in information integrity, documentation, and quality control into AI-enabled work. I built this portfolio to demonstrate that transition through practical projects—showing how I approach AI operations, documentation, quality assurance, and workflow design.</p>
+        <p>Harris brings 5+ years of operations experience in regulated, high-volume environments to AI-enabled work. Built around information integrity, documentation, and quality control, this portfolio shows how those skills translate into practical AI operations and workflow design.</p>
       </div>
-      <div class="page-bottom"><a class="repo about-linkedin-cta" href="https://www.linkedin.com/in/harrisdo" target="_blank" rel="noreferrer">View my LinkedIn profile</a><span class="small">AI · Documentation · Operations</span></div>`;
+      <div class="page-bottom"><a class="repo about-linkedin-cta" href="https://www.linkedin.com/in/anh-tran-technical-operations/" target="_blank" rel="noreferrer">View Harris on LinkedIn →</a><span class="small">AI · Documentation · Operations</span></div>`;
 
     // Desired five-card order:
     // 1 About Me, 2 Project 1, 3 Project 2, 4 Project 3, 5 Find Me Online.
