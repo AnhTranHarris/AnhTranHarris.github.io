@@ -21,8 +21,6 @@
   function rotateBy(dir){invalidate();gesture='idle';activePointer=null;const current=Math.round(angle/STEP),target=(current+dir)*STEP;settleToCard(dir*BUTTON_SPEED,target)}
   zone.addEventListener('pointerdown',begin,{passive:true});window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',end,{passive:true});window.addEventListener('pointercancel',cancel,{passive:true});window.addEventListener('blur',cancel);prev?.addEventListener('click',e=>{e.preventDefault();rotateBy(-1)});next?.addEventListener('click',e=>{e.preventDefault();rotateBy(1)});window.addEventListener('resize',()=>{zone.style.height=window.innerWidth<=560?'390px':'430px'});render();
 
-  // Portfolio presentation cleanup: professional, centered identity bar and
-  // one shared development disclosure for both desktop and mobile.
   const presentation=document.createElement('style');
   presentation.textContent=`
     html,body{overflow:auto!important}
@@ -33,41 +31,46 @@
     .nav{display:none!important}.main{padding-top:10px!important;padding-bottom:20px!important;gap:clamp(20px,4vw,60px)!important}
     .shell{height:auto!important;min-height:100vh!important;display:flex!important;flex-direction:column!important}
     .swipe-guide{justify-content:center!important;text-align:center!important;gap:14px!important}
-    .swipe-guide .carousel-guide-arrow{pointer-events:auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:38px!important;height:38px!important;flex:0 0 38px!important;border:1px solid rgba(174,225,230,.28)!important;border-radius:50%!important;background:rgba(5,22,29,.72)!important;color:#edf7f8!important;font-size:1rem!important;line-height:1!important;cursor:pointer!important;transition:transform .2s,border-color .2s,color .2s!important}
-    .swipe-guide .carousel-guide-arrow:hover{transform:scale(1.06)!important;border-color:#d8b86a!important;color:#fff0b0!important}
-    .swipe-guide .carousel-guide-label{flex:0 1 auto!important;text-align:center!important}
+    .swipe-guide .carousel-guide-arrow,.desktop-swipe-guide .carousel-guide-arrow{pointer-events:auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:38px!important;height:38px!important;flex:0 0 38px!important;border:1px solid rgba(174,225,230,.28)!important;border-radius:50%!important;background:rgba(5,22,29,.72)!important;color:#edf7f8!important;font-size:1rem!important;line-height:1!important;cursor:pointer!important;transition:transform .2s,border-color .2s,color .2s!important}
+    .swipe-guide .carousel-guide-arrow:hover,.desktop-swipe-guide .carousel-guide-arrow:hover{transform:scale(1.06)!important;border-color:#d8b86a!important;color:#fff0b0!important}
+    .swipe-guide .carousel-guide-label,.desktop-swipe-guide .carousel-guide-label{flex:0 1 auto!important;text-align:center!important}
     .controls{display:none!important}
+    .desktop-swipe-guide{position:absolute;left:50%;bottom:-58px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:14px;min-width:330px;min-height:52px;padding:0 18px;border:2px solid transparent;border-radius:16px;background:linear-gradient(rgba(6,21,28,.22),rgba(6,21,28,.22)) padding-box,linear-gradient(180deg,rgba(6,21,28,.18) 0%,rgba(10,45,35,.98) 100%) border-box;color:#9bb7ad;font-size:.69rem;letter-spacing:.16em;text-transform:uppercase;box-shadow:0 8px 22px rgba(0,0,0,.18);z-index:16}
     .site-disclaimer{display:block!important;position:relative!important;visibility:visible!important;width:min(1180px,calc(100% - 44px));margin:0 auto 22px;padding:16px 20px 17px;border-top:1px solid rgba(99,213,208,.25);border-bottom:1px solid rgba(174,225,230,.10);font-size:.70rem;line-height:1.65;letter-spacing:.025em;color:#789198;text-align:center;background:linear-gradient(90deg,transparent,rgba(7,27,35,.34),transparent)}
     .site-disclaimer strong{display:block;margin-bottom:5px;color:#9bb7bc;font-size:.64rem;letter-spacing:.18em;text-transform:uppercase}.site-disclaimer span{color:#a7bec2}
-    @media(max-width:900px){.main{padding-top:16px!important}.site-disclaimer{margin-top:0}}
+    @media(max-width:900px){.main{padding-top:16px!important}.site-disclaimer{margin-top:0}.desktop-swipe-guide{display:none!important}}
     @media(max-width:560px){.topbar{height:76px!important}.brand{font-size:.88rem!important;letter-spacing:.20em!important}.brand:before,.brand:after{width:26px}.main{padding-top:8px!important}.site-disclaimer{width:calc(100% - 32px);margin-bottom:14px;padding:14px 12px;font-size:.64rem}}
   `;
   document.head.appendChild(presentation);
   document.querySelector('.nav')?.remove();
   document.querySelector('.about')?.remove();
 
-  // Content-only updates. These operate on the live DOM so the minified
-  // index.html and responsive layout remain untouched.
   document.querySelector('.intro .micro')?.remove();
   const introLead=document.querySelector('.intro > p:not(.micro)');
   if(introLead){
     introLead.textContent='I build AI-enabled workflows, technical documentation, and practical knowledge systems that help teams turn complex information into clear, reliable, and usable work. My focus spans AI operations, AI enablement, technical communication, workflow optimization, documentation strategy, and quality-focused implementation.';
   }
 
-  // Reuse the existing swipe-guide arrows as the carousel controls. This is
-  // deliberately a DOM-only enhancement so index.html stays untouched.
-  const guide=document.querySelector('.swipe-guide');
-  if(guide){
+  function wireGuide(guide){
     const guideParts=[...guide.querySelectorAll('span')];
-    if(guideParts.length>=3){
-      const left=guideParts[0],label=guideParts[1],right=guideParts[2];
-      left.classList.add('carousel-guide-arrow');
-      right.classList.add('carousel-guide-arrow');
-      label.classList.add('carousel-guide-label');
-      left.setAttribute('role','button'); left.setAttribute('tabindex','0'); left.setAttribute('aria-label','Previous portfolio card');
-      right.setAttribute('role','button'); right.setAttribute('tabindex','0'); right.setAttribute('aria-label','Next portfolio card');
-      const activate=(el,dir)=>{const run=e=>{e.preventDefault();e.stopPropagation();rotateBy(dir)};el.addEventListener('click',run);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){run(e)}})};
-      activate(left,-1); activate(right,1);
+    if(guideParts.length<3)return;
+    const left=guideParts[0],label=guideParts[1],right=guideParts[2];
+    left.classList.add('carousel-guide-arrow');right.classList.add('carousel-guide-arrow');label.classList.add('carousel-guide-label');
+    left.setAttribute('role','button');left.setAttribute('tabindex','0');left.setAttribute('aria-label','Previous portfolio card');
+    right.setAttribute('role','button');right.setAttribute('tabindex','0');right.setAttribute('aria-label','Next portfolio card');
+    const activate=(el,dir)=>{const run=e=>{e.preventDefault();e.stopPropagation();rotateBy(dir)};el.addEventListener('click',run);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){run(e)}})};
+    activate(left,-1);activate(right,1);
+  }
+
+  const mobileGuide=document.querySelector('.swipe-guide');
+  if(mobileGuide){
+    wireGuide(mobileGuide);
+    if(!document.querySelector('.desktop-swipe-guide')){
+      const desktopGuide=mobileGuide.cloneNode(true);
+      desktopGuide.className='desktop-swipe-guide';
+      desktopGuide.removeAttribute('aria-hidden');
+      stage.appendChild(desktopGuide);
+      wireGuide(desktopGuide);
     }
   }
 
