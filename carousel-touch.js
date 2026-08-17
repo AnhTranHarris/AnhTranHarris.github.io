@@ -24,21 +24,19 @@
       <div class="page-bottom"><span class="repo">Professional Focus</span><span class="small">AI · Documentation · Operations</span></div>`;
 
     // Desired five-card order:
-    // 1 About Me, 2 Project 1, 3 Project 2, 4 Find Me Online, 5 Project 3.
-    barrel.replaceChildren(about, originalPages[0], originalPages[1], originalPages[3], originalPages[2]);
+    // 1 About Me, 2 Project 1, 3 Project 2, 4 Project 3, 5 Find Me Online.
+    barrel.replaceChildren(about, originalPages[0], originalPages[1], originalPages[2], originalPages[3]);
   }
 
   const pages = [...barrel.querySelectorAll('.page')];
   const CARD_COUNT = pages.length;
   const STEP = 360 / CARD_COUNT;
 
-  // Re-number the visible cards after the safe DOM reorder.
   pages.forEach((page, i) => {
     const num = page.querySelector('.num');
     if (num) num.textContent = String(i + 1).padStart(2, '0');
   });
 
-  // Keep the existing indicator structure synchronized with five cards.
   const dotHost = document.querySelector('.dots');
   if (dotHost) {
     dotHost.replaceChildren(...Array.from({length: CARD_COUNT}, (_, i) => {
