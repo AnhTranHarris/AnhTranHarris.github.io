@@ -22,15 +22,17 @@
   zone.addEventListener('pointerdown',begin,{passive:true});window.addEventListener('pointermove',move,{passive:false});window.addEventListener('pointerup',end,{passive:true});window.addEventListener('pointercancel',cancel,{passive:true});window.addEventListener('blur',cancel);prev?.addEventListener('click',e=>{e.preventDefault();rotateBy(-1)});next?.addEventListener('click',e=>{e.preventDefault();rotateBy(1)});window.addEventListener('resize',()=>{zone.style.height=window.innerWidth<=560?'390px':'430px'});render();
 
   // Portfolio presentation cleanup: professional, centered identity bar and
-  // an industry-style development disclosure without altering carousel input.
+  // one shared development disclosure for both desktop and mobile.
   const presentation=document.createElement('style');
   presentation.textContent=`
+    html,body{overflow:auto!important}
     .topbar{height:86px!important;justify-content:center!important;padding:0 24px!important;position:relative;border-bottom:1px solid rgba(174,225,230,.22)!important;background:linear-gradient(90deg,rgba(3,15,21,.78),rgba(8,31,39,.56),rgba(3,15,21,.78))!important;box-shadow:0 10px 34px rgba(0,0,0,.18),inset 0 -1px 0 rgba(99,213,208,.08)}
     .brand{font-size:1.08rem!important;letter-spacing:.28em!important;font-weight:750!important;color:#edf7f8!important;text-align:center;position:relative;padding:0 22px;text-shadow:0 0 20px rgba(99,213,208,.12)}
     .brand:before,.brand:after{content:'';position:absolute;top:50%;width:54px;height:1px;background:linear-gradient(90deg,transparent,rgba(99,213,208,.6));transform:translateY(-50%)}
     .brand:before{right:100%}.brand:after{left:100%;transform:translateY(-50%) rotate(180deg)}
     .nav{display:none!important}.main{padding-top:10px!important;padding-bottom:20px!important;gap:clamp(20px,4vw,60px)!important}
-    .shell{min-height:100vh}.site-disclaimer{width:min(1180px,calc(100% - 44px));margin:0 auto 22px;padding:16px 20px 17px;border-top:1px solid rgba(99,213,208,.25);border-bottom:1px solid rgba(174,225,230,.10);font-size:.70rem;line-height:1.65;letter-spacing:.025em;color:#789198;text-align:center;background:linear-gradient(90deg,transparent,rgba(7,27,35,.34),transparent)}
+    .shell{height:auto!important;min-height:100vh!important;display:flex!important;flex-direction:column!important}
+    .site-disclaimer{display:block!important;position:relative!important;visibility:visible!important;width:min(1180px,calc(100% - 44px));margin:0 auto 22px;padding:16px 20px 17px;border-top:1px solid rgba(99,213,208,.25);border-bottom:1px solid rgba(174,225,230,.10);font-size:.70rem;line-height:1.65;letter-spacing:.025em;color:#789198;text-align:center;background:linear-gradient(90deg,transparent,rgba(7,27,35,.34),transparent)}
     .site-disclaimer strong{display:block;margin-bottom:5px;color:#9bb7bc;font-size:.64rem;letter-spacing:.18em;text-transform:uppercase}.site-disclaimer span{color:#a7bec2}
     @media(max-width:900px){.main{padding-top:16px!important}.site-disclaimer{margin-top:0}}
     @media(max-width:560px){.topbar{height:76px!important}.brand{font-size:.88rem!important;letter-spacing:.20em!important}.brand:before,.brand:after{width:26px}.main{padding-top:8px!important}.site-disclaimer{width:calc(100% - 32px);margin-bottom:14px;padding:14px 12px;font-size:.64rem}}
@@ -38,6 +40,11 @@
   document.head.appendChild(presentation);
   document.querySelector('.nav')?.remove();
   document.querySelector('.about')?.remove();
-  const footer=document.createElement('footer'); footer.className='site-disclaimer'; footer.setAttribute('role','note'); footer.innerHTML='<strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span>';
-  document.querySelector('.shell')?.appendChild(footer);
+  if(!document.querySelector('.site-disclaimer')){
+    const footer=document.createElement('footer');
+    footer.className='site-disclaimer';
+    footer.setAttribute('role','note');
+    footer.innerHTML='<strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span>';
+    document.querySelector('.shell')?.appendChild(footer);
+  }
 })();
