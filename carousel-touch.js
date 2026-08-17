@@ -19,9 +19,9 @@
       <div class="page-top"><span class="num">01</span><span class="state">Profile</span></div>
       <div>
         <h2>About Me</h2>
-        <p>I focus on AI-enabled workflows, technical documentation, technical communication, workflow optimization, and practical knowledge systems. I use AI as an operational tool to learn quickly, test ideas, improve processes, and translate complex information into clear, useful work.</p>
+        <p>I’m an operations professional with 5+ years of experience in regulated, high-volume environments, now bringing that foundation in information integrity, documentation, and quality control into AI-enabled work. I built this portfolio to demonstrate that transition through practical projects—showing how I approach AI operations, documentation, quality assurance, and workflow design.</p>
       </div>
-      <div class="page-bottom"><span class="repo">Professional Focus</span><span class="small">AI · Documentation · Operations</span></div>`;
+      <div class="page-bottom"><a class="repo about-linkedin-cta" href="https://www.linkedin.com/in/harrisdo" target="_blank" rel="noreferrer">View my LinkedIn profile</a><span class="small">AI · Documentation · Operations</span></div>`;
 
     // Desired five-card order:
     // 1 About Me, 2 Project 1, 3 Project 2, 4 Project 3, 5 Find Me Online.
@@ -164,10 +164,11 @@
     .barrel>.page:nth-child(3){transform:rotateY(144deg) translateZ(var(--carousel-radius))!important}
     .barrel>.page:nth-child(4){transform:rotateY(216deg) translateZ(var(--carousel-radius))!important}
     .barrel>.page:nth-child(5){transform:rotateY(288deg) translateZ(var(--carousel-radius))!important}
+    .about-linkedin-cta{pointer-events:auto!important;text-decoration:none!important}
     .site-disclaimer{display:block!important;position:relative!important;visibility:visible!important;width:min(1180px,calc(100% - 44px));margin:0 auto 22px;padding:16px 20px 17px;border-top:1px solid rgba(99,213,208,.25);border-bottom:1px solid rgba(174,225,230,.10);font-size:.70rem;line-height:1.65;letter-spacing:.025em;color:#789198;text-align:center;background:linear-gradient(90deg,transparent,rgba(7,27,35,.34),transparent)}
     .site-disclaimer strong{display:block;margin-bottom:5px;color:#9bb7bc;font-size:.64rem;letter-spacing:.18em;text-transform:uppercase}.site-disclaimer span{color:#a7bec2}
     @media(max-width:900px){.main{padding-top:16px!important}.site-disclaimer{margin-top:0}.desktop-swipe-guide{display:none!important}}
-    @media(max-width:560px){.topbar{height:76px!important}.brand{font-size:.88rem!important;letter-spacing:.20em!important}.brand:before,.brand:after{width:26px}.main{padding-top:8px!important}.site-disclaimer{width:calc(100% - 32px);margin-bottom:14px;padding:14px 12px;font-size:.64rem}.barrel{--carousel-radius:62vw!important}}
+    @media(max-width:560px){.topbar{height:76px!important}.brand{font-size:.88rem!important;letter-spacing:.20em!important}.brand:before,.brand:after{width:26px}.main{padding-top:8px!important}.site-disclaimer{width:calc(100% - 32px);margin-bottom:14px;padding:14px 12px;font-size:.64rem}.barrel{--carousel-radius:62vw!important}.barrel>.page[data-card="about-me"] p{font-size:.82rem!important;line-height:1.45!important}}
   `;
   document.head.appendChild(presentation);
   document.querySelector('.nav')?.remove();
