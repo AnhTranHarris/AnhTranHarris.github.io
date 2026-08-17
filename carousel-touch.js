@@ -32,6 +32,11 @@
     .brand:before{right:100%}.brand:after{left:100%;transform:translateY(-50%) rotate(180deg)}
     .nav{display:none!important}.main{padding-top:10px!important;padding-bottom:20px!important;gap:clamp(20px,4vw,60px)!important}
     .shell{height:auto!important;min-height:100vh!important;display:flex!important;flex-direction:column!important}
+    .swipe-guide{justify-content:center!important;text-align:center!important;gap:14px!important}
+    .swipe-guide .carousel-guide-arrow{pointer-events:auto!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:38px!important;height:38px!important;flex:0 0 38px!important;border:1px solid rgba(174,225,230,.28)!important;border-radius:50%!important;background:rgba(5,22,29,.72)!important;color:#edf7f8!important;font-size:1rem!important;line-height:1!important;cursor:pointer!important;transition:transform .2s,border-color .2s,color .2s!important}
+    .swipe-guide .carousel-guide-arrow:hover{transform:scale(1.06)!important;border-color:#d8b86a!important;color:#fff0b0!important}
+    .swipe-guide .carousel-guide-label{flex:0 1 auto!important;text-align:center!important}
+    .controls{display:none!important}
     .site-disclaimer{display:block!important;position:relative!important;visibility:visible!important;width:min(1180px,calc(100% - 44px));margin:0 auto 22px;padding:16px 20px 17px;border-top:1px solid rgba(99,213,208,.25);border-bottom:1px solid rgba(174,225,230,.10);font-size:.70rem;line-height:1.65;letter-spacing:.025em;color:#789198;text-align:center;background:linear-gradient(90deg,transparent,rgba(7,27,35,.34),transparent)}
     .site-disclaimer strong{display:block;margin-bottom:5px;color:#9bb7bc;font-size:.64rem;letter-spacing:.18em;text-transform:uppercase}.site-disclaimer span{color:#a7bec2}
     @media(max-width:900px){.main{padding-top:16px!important}.site-disclaimer{margin-top:0}}
@@ -47,6 +52,23 @@
   const introLead=document.querySelector('.intro > p:not(.micro)');
   if(introLead){
     introLead.textContent='I build AI-enabled workflows, technical documentation, and practical knowledge systems that help teams turn complex information into clear, reliable, and usable work. My focus spans AI operations, AI enablement, technical communication, workflow optimization, documentation strategy, and quality-focused implementation.';
+  }
+
+  // Reuse the existing swipe-guide arrows as the carousel controls. This is
+  // deliberately a DOM-only enhancement so index.html stays untouched.
+  const guide=document.querySelector('.swipe-guide');
+  if(guide){
+    const guideParts=[...guide.querySelectorAll('span')];
+    if(guideParts.length>=3){
+      const left=guideParts[0],label=guideParts[1],right=guideParts[2];
+      left.classList.add('carousel-guide-arrow');
+      right.classList.add('carousel-guide-arrow');
+      label.classList.add('carousel-guide-label');
+      left.setAttribute('role','button'); left.setAttribute('tabindex','0'); left.setAttribute('aria-label','Previous portfolio card');
+      right.setAttribute('role','button'); right.setAttribute('tabindex','0'); right.setAttribute('aria-label','Next portfolio card');
+      const activate=(el,dir)=>{const run=e=>{e.preventDefault();e.stopPropagation();rotateBy(dir)};el.addEventListener('click',run);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){run(e)}})};
+      activate(left,-1); activate(right,1);
+    }
   }
 
   if(!document.querySelector('.site-disclaimer')){
