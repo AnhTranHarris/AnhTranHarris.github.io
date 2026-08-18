@@ -11,7 +11,7 @@
   const STEP = 360 / CARD_COUNT;
 
   const DRAG_GAIN=.41,DIRECTION_LOCK=7,MIN_RELEASE_SPEED=40,SPRING=7.5,DAMPING=4.8,BUTTON_SPEED=230,MAX_RELEASE_SPEED=300,MIN_SETTLE_TIME=.62,MAX_SETTLE_TIME=1.15;
-  const SPOTLIGHT_MIN_SECONDS=15,SPOTLIGHT_MAX_SECONDS=200,CARD_HEIGHT_SCALE=1.15;
+  const SPOTLIGHT_MIN_SECONDS=30,SPOTLIGHT_MAX_SECONDS=900,CARD_HEIGHT_SCALE=1.15;
   const supports3D=!!(window.CSS?.supports?.('transform-style','preserve-3d')&&window.CSS?.supports?.('perspective','1px'));
   const supportsPointers='PointerEvent' in window;
   const fallbackMode=!supports3D||!supportsPointers||!window.requestAnimationFrame;
@@ -25,39 +25,81 @@
 
   const SPOTLIGHT_STARTS=[[-38,-30],[0,-34],[38,-30],[-42,0],[0,0],[42,0],[-38,30],[0,34],[38,30],[-20,-15],[22,14],[-14,22]];
   const spotlightStates=spotlightElements.map((el,index)=>({el,index,animation:null,lastStart:-1,activeStart:-1}));
-  function randomSpotlightSeconds(){return SPOTLIGHT_MIN_SECONDS+Math.random()*(SPOTLIGHT_MAX_SECONDS-SPOTLIGHT_MIN_SECONDS)}
+
+  // Motion is distance-limited rather than time-randomized. Long journeys
+  // automatically receive long cycles, keeping every light ambient and slow.
+  function spotlightProfile(type){
+    if(type==='large')return{speed:.16,maxDx:30,maxDy:24,minScale:.95,maxScale:1.05};
+    if(type==='medium')return{speed:.19,maxDx:34,maxDy:28,minScale:.93,maxScale:1.07};
+    return{speed:.22,maxDx:38,maxDy:30,minScale:.91,maxScale:1.09};
+  }
   function chooseIndependentStart(state){
     const occupied=new Set(spotlightStates.filter(other=>other!==state&&other.activeStart>=0).map(other=>other.activeStart));
     const available=SPOTLIGHT_STARTS.map((_,index)=>index).filter(index=>index!==state.lastStart&&!occupied.has(index));
     const pool=available.length?available:SPOTLIGHT_STARTS.map((_,index)=>index).filter(index=>index!==state.lastStart);
     const next=pool[Math.floor(Math.random()*pool.length)]??0;state.lastStart=next;state.activeStart=next;return next;
   }
-  function spotlightScaleRange(type){if(type==='large')return[.92,1.12];if(type==='medium')return[.88,1.16];return[.84,1.20]}
+  function cycleDurationSeconds(distance,speed){
+    const travelSeconds=distance/Math.max(.01,speed);
+    return clamp(travelSeconds*(.90+Math.random()*.20),SPOTLIGHT_MIN_SECONDS,SPOTLIGHT_MAX_SECONDS);
+  }
   function startSpotlightCycle(state){
     const {el}=state;if(!el)return;
-    const type=el.dataset.spotlight||'large',startIndex=chooseIndependentStart(state),[sx,sy]=SPOTLIGHT_STARTS[startIndex],duration=randomSpotlightSeconds()*1000;
-    const ex=clamp(sx+(-46+Math.random()*92),-46,46),ey=clamp(sy+(-38+Math.random()*76),-38,38),mx=clamp((sx+ex)/2+(-18+Math.random()*36),-46,46),my=clamp((sy+ey)/2+(-14+Math.random()*28),-38,38);
-    const [minScale,maxScale]=spotlightScaleRange(type),s0=minScale+Math.random()*(maxScale-minScale),s1=minScale+Math.random()*(maxScale-minScale),s2=minScale+Math.random()*(maxScale-minScale);
-    const p1=.78+Math.random()*.10,p2=.92+Math.random()*.08,p3=.82+Math.random()*.12,p4=.94+Math.random()*.06,p5=.80+Math.random()*.12;
+    const type=el.dataset.spotlight||'large',profile=spotlightProfile(type),startIndex=chooseIndependentStart(state),[sx,sy]=SPOTLIGHT_STARTS[startIndex];
+    const ex=clamp(sx+(-profile.maxDx+Math.random()*profile.maxDx*2),-46,46),ey=clamp(sy+(-profile.maxDy+Math.random()*profile.maxDy*2),-38,38);
+    const distance=Math.hypot(ex-sx,ey-sy),duration=cycleDurationSeconds(distance,profile.speed)*1000;
+    const mx=clamp((sx+ex)/2+(-6+Math.random()*12),-46,46),my=clamp((sy+ey)/2+(-5+Math.random()*10),-38,38);
+    const randomScale=()=>profile.minScale+Math.random()*(profile.maxScale-profile.minScale),s0=randomScale(),s1=randomScale(),s2=randomScale();
+
+    // A restrained brightness envelope: ~24% fade-in, subtle breathing through
+    // the middle, then ~24% fade-out. Relative brightness remains defined by
+    // the large / medium / small gradient alpha values in CSS.
+    const p1=.86+Math.random()*.06;
+    const p2=Math.min(.99,p1+.03+Math.random()*.04);
+    const p3=clamp(p1-.02+Math.random()*.04,.84,.96);
+
     state.animation?.cancel();
+    el.style.willChange='transform, opacity';
+
     if(el.animate&&!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches){
       state.animation=el.animate([
         {transform:`translate(-50%,-50%) translate3d(${sx}vw,${sy}vh,0) scale(${s0})`,opacity:0,offset:0},
-        {transform:`translate(-50%,-50%) translate3d(${sx*.82+mx*.18}vw,${sy*.82+my*.18}vh,0) scale(${(s0*2+s1)/3})`,opacity:p1*.55,offset:.12},
-        {transform:`translate(-50%,-50%) translate3d(${sx*.60+mx*.40}vw,${sy*.60+my*.40}vh,0) scale(${(s0+s1)/2})`,opacity:p1,offset:.24},
-        {transform:`translate(-50%,-50%) translate3d(${mx}vw,${my}vh,0) scale(${s1})`,opacity:p2,offset:.43},
-        {transform:`translate(-50%,-50%) translate3d(${mx*.70+ex*.30}vw,${my*.70+ey*.30}vh,0) scale(${(s1*2+s2)/3})`,opacity:p3,offset:.58},
-        {transform:`translate(-50%,-50%) translate3d(${mx*.42+ex*.58}vw,${my*.42+ey*.58}vh,0) scale(${(s1+s2)/2})`,opacity:p4,offset:.72},
-        {transform:`translate(-50%,-50%) translate3d(${mx*.16+ex*.84}vw,${my*.16+ey*.84}vh,0) scale(${(s1+s2*2)/3})`,opacity:p5*.55,offset:.88},
+        {transform:`translate(-50%,-50%) translate3d(${sx*.84+mx*.16}vw,${sy*.84+my*.16}vh,0) scale(${s0*.72+s1*.28})`,opacity:p1*.38,offset:.12},
+        {transform:`translate(-50%,-50%) translate3d(${sx*.62+mx*.38}vw,${sy*.62+my*.38}vh,0) scale(${s0*.48+s1*.52})`,opacity:p1,offset:.24},
+        {transform:`translate(-50%,-50%) translate3d(${mx}vw,${my}vh,0) scale(${s1})`,opacity:p2,offset:.42},
+        {transform:`translate(-50%,-50%) translate3d(${mx*.66+ex*.34}vw,${my*.66+ey*.34}vh,0) scale(${s1*.72+s2*.28})`,opacity:p3,offset:.58},
+        {transform:`translate(-50%,-50%) translate3d(${mx*.38+ex*.62}vw,${my*.38+ey*.62}vh,0) scale(${s1*.42+s2*.58})`,opacity:p2*.98,offset:.72},
+        {transform:`translate(-50%,-50%) translate3d(${mx*.30+ex*.70}vw,${my*.30+ey*.70}vh,0) scale(${s1*.32+s2*.68})`,opacity:p1,offset:.76},
+        {transform:`translate(-50%,-50%) translate3d(${mx*.12+ex*.88}vw,${my*.12+ey*.88}vh,0) scale(${s1*.12+s2*.88})`,opacity:p1*.40,offset:.88},
         {transform:`translate(-50%,-50%) translate3d(${ex}vw,${ey}vh,0) scale(${s2})`,opacity:0,offset:1}
-      ],{duration,easing:'ease-in-out',fill:'forwards'});
-      state.animation.onfinish=()=>{state.animation=null;if(!document.hidden)startSpotlightCycle(state)};
-    }else{el.style.transform=`translate(-50%,-50%) translate3d(${sx}vw,${sy}vh,0) scale(${s0})`;el.style.opacity='.82'}
+      ],{duration,easing:'cubic-bezier(.45,0,.55,1)',fill:'forwards'});
+      state.animation.onfinish=()=>{
+        state.animation=null;
+        el.style.willChange='auto';
+        if(!document.hidden)requestAnimationFrame(()=>startSpotlightCycle(state));
+      };
+    }else{
+      el.style.transform=`translate(-50%,-50%) translate3d(${sx}vw,${sy}vh,0) scale(${s0})`;
+      el.style.opacity='.55';
+      el.style.willChange='auto';
+    }
   }
-  function syncSpotlightPlayback(){spotlightStates.forEach(state=>{if(!state.animation){if(!document.hidden)startSpotlightCycle(state);return}if(document.hidden)state.animation.pause();else state.animation.play()})}
+  function syncSpotlightPlayback(){
+    spotlightStates.forEach(state=>{
+      if(!state.animation){if(!document.hidden)startSpotlightCycle(state);return}
+      if(document.hidden){state.animation.pause();state.el.style.willChange='auto'}
+      else{state.el.style.willChange='transform, opacity';state.animation.play()}
+    })
+  }
   if(spotlightStates.length){
-    spotlightStates.forEach((state,index)=>{const delay=Math.random()*900+index*120;setTimeout(()=>{if(!document.hidden)startSpotlightCycle(state)},delay)});
-    document.addEventListener('visibilitychange',syncSpotlightPlayback,{passive:true});window.addEventListener('pageshow',syncSpotlightPlayback,{passive:true});window.addEventListener('pagehide',()=>spotlightStates.forEach(state=>state.animation?.pause()),{passive:true});
+    spotlightStates.forEach((state,index)=>{
+      state.el.style.willChange='auto';
+      const delay=Math.random()*1400+index*220;
+      setTimeout(()=>{if(!document.hidden)startSpotlightCycle(state)},delay)
+    });
+    document.addEventListener('visibilitychange',syncSpotlightPlayback,{passive:true});
+    window.addEventListener('pageshow',syncSpotlightPlayback,{passive:true});
+    window.addEventListener('pagehide',()=>spotlightStates.forEach(state=>{state.animation?.pause();state.el.style.willChange='auto'}),{passive:true});
   }
 
   function enableFallback(){
