@@ -6,6 +6,7 @@
 
   const pages = [...barrel.querySelectorAll('.page')];
   const dots = [...document.querySelectorAll('.dot')];
+  const ambient = document.querySelector('.ambient');
   const CARD_COUNT = pages.length;
   const STEP = 360 / CARD_COUNT;
 
@@ -42,6 +43,22 @@
   function setDot(index) {
     dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
   }
+
+  // Keep the visible spotlight motion intact, but stop compositor work while
+  // the page is backgrounded. Browsers can otherwise keep fixed blurred layers
+  // alive longer than necessary. Returning to the page resumes the same CSS
+  // animation immediately without rebuilding it.
+  function syncAmbientPlayback() {
+    if (!ambient) return;
+    ambient.style.animationPlayState = document.hidden ? 'paused' : 'running';
+  }
+
+  document.addEventListener('visibilitychange', syncAmbientPlayback, {passive:true});
+  window.addEventListener('pageshow', syncAmbientPlayback, {passive:true});
+  window.addEventListener('pagehide', () => {
+    if (ambient) ambient.style.animationPlayState = 'paused';
+  }, {passive:true});
+  syncAmbientPlayback();
 
   function enableFallback() {
     document.documentElement.classList.add('carousel-fallback');
