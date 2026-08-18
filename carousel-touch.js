@@ -49,6 +49,10 @@
     dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
   }
 
+  // Keep the expensive compositor hint only while the barrel is actually moving.
+  function promoteBarrel() { barrel.style.willChange = 'transform'; }
+  function releaseBarrel() { barrel.style.willChange = 'auto'; }
+
   const AMBIENT_STARTS = [
     [-14,-10], [0,-13], [14,-10],
     [-16,0],   [0,0],   [16,0],
@@ -70,7 +74,7 @@
   }
 
   function startAmbientCycle() {
-    if (!ambient || document.documentElement.matches?.(':has(body)') === false) return;
+    if (!ambient) return;
     const startIndex = chooseAmbientStart();
     const [sx, sy] = AMBIENT_STARTS[startIndex];
     const duration = randomAmbientSeconds() * 1000;
@@ -126,7 +130,7 @@
       minHeight:`${Math.round(350 * CARD_HEIGHT_SCALE)}px`, overflowX:'auto', overflowY:'hidden', transform:'none',
       transformStyle:'flat', scrollSnapType:'x mandatory', scrollBehavior:'smooth',
       WebkitOverflowScrolling:'touch', touchAction:'pan-x pan-y', overscrollBehaviorX:'contain',
-      pointerEvents:'auto', userSelect:'auto', WebkitUserSelect:'auto', scrollbarWidth:'none'
+      pointerEvents:'auto', userSelect:'auto', WebkitUserSelect:'auto', scrollbarWidth:'none', willChange:'auto'
     });
     pages.forEach(page => Object.assign(page.style, {
       position:'relative', inset:'auto', left:'auto', right:'auto', transform:'none',
@@ -202,11 +206,13 @@
 
   function settleToCard(initialVelocity, target) {
     invalidate();
+    promoteBarrel();
     const myGeneration = generation;
     let v = initialVelocity;
     let last = performance.now();
     const started = last;
     let stableFrames = 0;
+    const finish = () => { velocity = 0; render(); raf = 0; releaseBarrel(); };
     const tick = now => {
       if (myGeneration !== generation) return;
       const dt = Math.min(.032, Math.max(.008, (now - last) / 1000));
@@ -217,13 +223,13 @@
       v += ((distance * SPRING) - (v * DAMPING)) * dt;
       const step = v * dt;
       if (absDistance > 0 && Math.abs(step) >= absDistance) {
-        angle = target; velocity = 0; render(); raf = 0; return;
+        angle = target; finish(); return;
       }
       angle += step; velocity = v; render();
       if (Math.abs(target - angle) < .1 && Math.abs(v) < 1) stableFrames++;
       else stableFrames = 0;
       if ((stableFrames >= 3 && elapsed >= MIN_SETTLE_TIME) || elapsed >= MAX_SETTLE_TIME) {
-        angle = target; velocity = 0; render(); raf = 0; return;
+        angle = target; finish(); return;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -240,7 +246,7 @@
   }
   function begin(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    invalidate(); activePointer = e.pointerId; gesture = 'pending';
+    invalidate(); promoteBarrel(); activePointer = e.pointerId; gesture = 'pending';
     startX = lastX = e.clientX; startY = e.clientY; lastT = performance.now(); velocity = 0;
     zone.style.cursor = 'grabbing';
     try { zone.setPointerCapture?.(e.pointerId); } catch (_) {}
@@ -251,7 +257,7 @@
     if (gesture === 'pending') {
       if (Math.hypot(dxTotal, dyTotal) < DIRECTION_LOCK) return;
       if (Math.abs(dyTotal) > Math.abs(dxTotal)) {
-        gesture = 'vertical'; releasePointer(e.pointerId); activePointer = null; zone.style.cursor = 'grab'; return;
+        gesture = 'vertical'; releasePointer(e.pointerId); activePointer = null; zone.style.cursor = 'grab'; releaseBarrel(); return;
       }
       gesture = 'horizontal';
     }
@@ -280,11 +286,11 @@
     if (activePointer === null || e.pointerId !== activePointer) return;
     const wasHorizontal = gesture === 'horizontal', releaseVelocity = velocity;
     resetGesture(e.pointerId);
-    if (wasHorizontal) finishHorizontal(releaseVelocity);
+    if (wasHorizontal) finishHorizontal(releaseVelocity); else releaseBarrel();
   }
   function cancel(e) {
     if (activePointer !== null && e?.pointerId != null && e.pointerId !== activePointer) return;
-    resetGesture(e?.pointerId ?? activePointer); velocity = 0; render();
+    resetGesture(e?.pointerId ?? activePointer); velocity = 0; render(); releaseBarrel();
   }
   function rotateBy(direction) {
     if (fallbackMode) return rotateFallback(direction);
@@ -306,7 +312,7 @@
     });
     stage.appendChild(zone);
     barrel.style.transition = 'none'; barrel.style.pointerEvents = 'none';
-    barrel.style.userSelect = 'none'; barrel.style.webkitUserSelect = 'none';
+    barrel.style.userSelect = 'none'; barrel.style.webkitUserSelect = 'none'; releaseBarrel();
     zone.addEventListener('pointerdown', begin, {passive:true});
     zone.addEventListener('pointermove', move, {passive:false});
     zone.addEventListener('pointerup', end, {passive:true});
