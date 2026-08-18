@@ -57,8 +57,6 @@
       const viewportHeight = window.visualViewport?.height || window.innerHeight;
       const width = window.innerWidth;
 
-      // Height responds to the usable viewport instead of assuming every phone
-      // has a 390px card area. CSS remains the no-JS fallback.
       if (width <= 560) {
         const cardHeight = clamp(viewportHeight * .54, 350, 390);
         barrel.style.height = `${Math.round(cardHeight)}px`;
@@ -75,9 +73,6 @@
         stage.style.minHeight = '';
       }
 
-      // Build the five-sided barrel from the rendered card width. For a regular
-      // N-gon, radius = side / (2 * tan(pi/N)). This keeps every phone on the
-      // same true circular geometry instead of relying on a viewport-width guess.
       const cardWidth = pages[0]?.offsetWidth || barrel.offsetWidth;
       if (cardWidth > 0) {
         const radius = cardWidth / (2 * Math.tan(Math.PI / CARD_COUNT));
@@ -262,7 +257,7 @@
   window.addEventListener('resize', syncGeometry, {passive:true});
   window.addEventListener('orientationchange', syncGeometry, {passive:true});
   window.visualViewport?.addEventListener('resize', syncGeometry, {passive:true});
-  new ResizeObserver(syncGeometry).observe(barrel);
+  if ('ResizeObserver' in window) new ResizeObserver(syncGeometry).observe(barrel);
 
   syncGeometry();
   render();
