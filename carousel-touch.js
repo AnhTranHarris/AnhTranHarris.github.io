@@ -1,4 +1,4 @@
-/* Harris Portfolio: five-card carousel interaction + responsive geometry. */
+/* Harris Portfolio: five-card carousel interaction + responsive geometry + fallback. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
@@ -19,20 +19,9 @@
   const MIN_SETTLE_TIME = .62;
   const MAX_SETTLE_TIME = 1.15;
 
-  const zone = document.createElement('div');
-  zone.className = 'carousel-touch-zone';
-  zone.setAttribute('aria-hidden', 'true');
-  Object.assign(zone.style, {
-    position:'absolute', left:'50%', top:'50%', transform:'translate(-50%,-50%)',
-    zIndex:'12', touchAction:'pan-y', background:'transparent', cursor:'grab',
-    userSelect:'none', WebkitUserSelect:'none', pointerEvents:'auto'
-  });
-  stage.appendChild(zone);
-
-  barrel.style.transition = 'none';
-  barrel.style.pointerEvents = 'none';
-  barrel.style.userSelect = 'none';
-  barrel.style.webkitUserSelect = 'none';
+  const supports3D = !!(window.CSS?.supports?.('transform-style', 'preserve-3d') && window.CSS?.supports?.('perspective', '1px'));
+  const supportsPointers = 'PointerEvent' in window;
+  const fallbackMode = !supports3D || !supportsPointers || !window.requestAnimationFrame;
 
   let angle = 0;
   let velocity = 0;
@@ -45,11 +34,58 @@
   let lastT = 0;
   let generation = 0;
   let geometryRaf = 0;
+  let zone = null;
 
   const normalize = n => ((n % CARD_COUNT) + CARD_COUNT) % CARD_COUNT;
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+  function setDot(index) {
+    dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
+  }
+
+  function enableFallback() {
+    document.documentElement.classList.add('carousel-fallback');
+    stage.style.perspective = 'none';
+    stage.style.overflow = 'hidden';
+
+    Object.assign(barrel.style, {
+      display:'flex', gap:'18px', width:'100%', maxWidth:'610px', height:'auto',
+      minHeight:'350px', overflowX:'auto', overflowY:'hidden', transform:'none',
+      transformStyle:'flat', scrollSnapType:'x mandatory', scrollBehavior:'smooth',
+      WebkitOverflowScrolling:'touch', touchAction:'pan-x pan-y', overscrollBehaviorX:'contain',
+      pointerEvents:'auto', userSelect:'auto', WebkitUserSelect:'auto', scrollbarWidth:'none'
+    });
+
+    pages.forEach(page => Object.assign(page.style, {
+      position:'relative', inset:'auto', left:'auto', right:'auto', transform:'none',
+      flex:'0 0 90%', width:'90%', height:'auto', minHeight:'350px',
+      scrollSnapAlign:'center', scrollSnapStop:'always', backfaceVisibility:'visible',
+      WebkitBackfaceVisibility:'visible'
+    }));
+
+    const updateFallbackDot = () => {
+      const first = pages[0];
+      if (!first) return;
+      const stride = first.offsetWidth + 18;
+      setDot(stride > 0 ? Math.round(barrel.scrollLeft / stride) : 0);
+    };
+
+    barrel.addEventListener('scroll', () => requestAnimationFrame(updateFallbackDot), {passive:true});
+    updateFallbackDot();
+  }
+
+  function rotateFallback(direction) {
+    const first = pages[0];
+    if (!first) return;
+    const stride = first.offsetWidth + 18;
+    const current = stride > 0 ? Math.round(barrel.scrollLeft / stride) : 0;
+    const target = clamp(current + direction, 0, CARD_COUNT - 1);
+    barrel.scrollTo({left:target * stride, behavior:'smooth'});
+    setDot(target);
+  }
+
   function syncGeometry() {
+    if (fallbackMode) return;
     if (geometryRaf) cancelAnimationFrame(geometryRaf);
     geometryRaf = requestAnimationFrame(() => {
       geometryRaf = 0;
@@ -83,9 +119,9 @@
   }
 
   function render() {
+    if (fallbackMode) return;
     barrel.style.transform = `rotateY(${angle}deg)`;
-    const index = normalize(Math.round(angle / STEP));
-    dots.forEach((dot, i) => dot.classList.toggle('on', i === index));
+    setDot(Math.round(angle / STEP));
   }
 
   function stopAnimation() {
@@ -147,7 +183,7 @@
   }
 
   function releasePointer(pointerId) {
-    if (pointerId == null) return;
+    if (pointerId == null || !zone) return;
     try {
       if (zone.hasPointerCapture?.(pointerId)) zone.releasePointerCapture(pointerId);
     } catch (_) {}
@@ -157,7 +193,7 @@
     releasePointer(pointerId);
     activePointer = null;
     gesture = 'idle';
-    zone.style.cursor = 'grab';
+    if (zone) zone.style.cursor = 'grab';
   }
 
   function begin(e) {
@@ -170,29 +206,23 @@
     lastT = performance.now();
     velocity = 0;
     zone.style.cursor = 'grabbing';
-
     try { zone.setPointerCapture?.(e.pointerId); } catch (_) {}
   }
 
   function move(e) {
     if (activePointer === null || e.pointerId !== activePointer || gesture === 'idle') return;
-
     const dxTotal = e.clientX - startX;
     const dyTotal = e.clientY - startY;
 
     if (gesture === 'pending') {
       if (Math.hypot(dxTotal, dyTotal) < DIRECTION_LOCK) return;
-
       if (Math.abs(dyTotal) > Math.abs(dxTotal)) {
-        // Give vertical gestures back to the browser immediately. Because the
-        // zone uses touch-action: pan-y, native page scrolling remains active.
         gesture = 'vertical';
         releasePointer(e.pointerId);
         activePointer = null;
         zone.style.cursor = 'grab';
         return;
       }
-
       gesture = 'horizontal';
     }
 
@@ -204,7 +234,6 @@
     const dt = Math.max(8, now - lastT);
     lastX = e.clientX;
     lastT = now;
-
     angle += dx * DRAG_GAIN;
     velocity = (dx * DRAG_GAIN / dt) * 1000;
     render();
@@ -245,20 +274,48 @@
   }
 
   function rotateBy(direction) {
+    if (fallbackMode) return rotateFallback(direction);
     invalidate();
     resetGesture();
     const target = (Math.round(angle / STEP) + direction) * STEP;
     settleToCard(direction * BUTTON_SPEED, target);
   }
 
-  zone.addEventListener('pointerdown', begin, {passive:true});
-  zone.addEventListener('pointermove', move, {passive:false});
-  zone.addEventListener('pointerup', end, {passive:true});
-  zone.addEventListener('pointercancel', cancel, {passive:true});
-  zone.addEventListener('lostpointercapture', e => {
-    if (activePointer === e.pointerId && gesture !== 'vertical') cancel(e);
-  });
-  window.addEventListener('blur', cancel);
+  if (fallbackMode) {
+    enableFallback();
+  } else {
+    zone = document.createElement('div');
+    zone.className = 'carousel-touch-zone';
+    zone.setAttribute('aria-hidden', 'true');
+    Object.assign(zone.style, {
+      position:'absolute', left:'50%', top:'50%', transform:'translate(-50%,-50%)',
+      zIndex:'12', touchAction:'pan-y', background:'transparent', cursor:'grab',
+      userSelect:'none', WebkitUserSelect:'none', pointerEvents:'auto'
+    });
+    stage.appendChild(zone);
+
+    barrel.style.transition = 'none';
+    barrel.style.pointerEvents = 'none';
+    barrel.style.userSelect = 'none';
+    barrel.style.webkitUserSelect = 'none';
+
+    zone.addEventListener('pointerdown', begin, {passive:true});
+    zone.addEventListener('pointermove', move, {passive:false});
+    zone.addEventListener('pointerup', end, {passive:true});
+    zone.addEventListener('pointercancel', cancel, {passive:true});
+    zone.addEventListener('lostpointercapture', e => {
+      if (activePointer === e.pointerId && gesture !== 'vertical') cancel(e);
+    });
+    window.addEventListener('blur', cancel);
+
+    window.addEventListener('resize', syncGeometry, {passive:true});
+    window.addEventListener('orientationchange', syncGeometry, {passive:true});
+    window.visualViewport?.addEventListener('resize', syncGeometry, {passive:true});
+    if ('ResizeObserver' in window) new ResizeObserver(syncGeometry).observe(barrel);
+
+    syncGeometry();
+    render();
+  }
 
   document.querySelectorAll('[data-dir]').forEach(control => {
     const direction = Number(control.dataset.dir);
@@ -272,12 +329,4 @@
       if (e.key === 'Enter' || e.key === ' ') run(e);
     });
   });
-
-  window.addEventListener('resize', syncGeometry, {passive:true});
-  window.addEventListener('orientationchange', syncGeometry, {passive:true});
-  window.visualViewport?.addEventListener('resize', syncGeometry, {passive:true});
-  if ('ResizeObserver' in window) new ResizeObserver(syncGeometry).observe(barrel);
-
-  syncGeometry();
-  render();
 })();
