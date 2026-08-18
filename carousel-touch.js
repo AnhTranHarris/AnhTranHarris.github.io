@@ -1,4 +1,4 @@
-/* Harris Portfolio: five-card carousel interaction + responsive geometry + fallback. */
+/* Harris Portfolio: five-card carousel + independent ambient spotlight system. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
@@ -6,7 +6,7 @@
 
   const pages = [...barrel.querySelectorAll('.page')];
   const dots = [...document.querySelectorAll('.dot')];
-  const ambient = document.querySelector('.ambient');
+  const spotlightElements = [...document.querySelectorAll('.spotlight')];
   const CARD_COUNT = pages.length;
   const STEP = 360 / CARD_COUNT;
 
@@ -19,8 +19,8 @@
   const MAX_RELEASE_SPEED = 300;
   const MIN_SETTLE_TIME = .62;
   const MAX_SETTLE_TIME = 1.15;
-  const AMBIENT_MIN_SECONDS = 15;
-  const AMBIENT_MAX_SECONDS = 200;
+  const SPOTLIGHT_MIN_SECONDS = 15;
+  const SPOTLIGHT_MAX_SECONDS = 200;
   const CARD_HEIGHT_SCALE = 1.15;
 
   const supports3D = !!(window.CSS?.supports?.('transform-style', 'preserve-3d') && window.CSS?.supports?.('perspective', '1px'));
@@ -39,8 +39,6 @@
   let generation = 0;
   let geometryRaf = 0;
   let zone = null;
-  let ambientAnimation = null;
-  let lastAmbientStart = -1;
 
   const normalize = n => ((n % CARD_COUNT) + CARD_COUNT) % CARD_COUNT;
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -49,76 +47,121 @@
     dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
   }
 
-  // Keep the expensive compositor hint only while the barrel is actually moving.
   function promoteBarrel() { barrel.style.willChange = 'transform'; }
   function releaseBarrel() { barrel.style.willChange = 'auto'; }
 
-  const AMBIENT_STARTS = [
-    [-14,-10], [0,-13], [14,-10],
-    [-16,0],   [0,0],   [16,0],
-    [-15,11],  [0,13],  [15,11],
-    [-8,-3],   [9,4],   [-4,8]
+  // Independent spotlight system. Each light owns its own animation, start
+  // region, path, scale curve, duration, and brightness pulse.
+  const SPOTLIGHT_STARTS = [
+    [-38,-30], [0,-34], [38,-30],
+    [-42,0],   [0,0],   [42,0],
+    [-38,30],  [0,34],  [38,30],
+    [-20,-15], [22,14], [-14,22]
   ];
 
-  function randomAmbientSeconds() {
-    return AMBIENT_MIN_SECONDS + Math.random() * (AMBIENT_MAX_SECONDS - AMBIENT_MIN_SECONDS);
+  const spotlightStates = spotlightElements.map((el, index) => ({
+    el,
+    index,
+    animation:null,
+    lastStart:-1,
+    activeStart:-1
+  }));
+
+  function randomSpotlightSeconds() {
+    return SPOTLIGHT_MIN_SECONDS + Math.random() * (SPOTLIGHT_MAX_SECONDS - SPOTLIGHT_MIN_SECONDS);
   }
 
-  function chooseAmbientStart() {
-    if (AMBIENT_STARTS.length < 2) return 0;
-    let index;
-    do index = Math.floor(Math.random() * AMBIENT_STARTS.length);
-    while (index === lastAmbientStart);
-    lastAmbientStart = index;
-    return index;
+  function chooseIndependentStart(state) {
+    const occupied = new Set(
+      spotlightStates
+        .filter(other => other !== state && other.activeStart >= 0)
+        .map(other => other.activeStart)
+    );
+    const available = SPOTLIGHT_STARTS
+      .map((_, index) => index)
+      .filter(index => index !== state.lastStart && !occupied.has(index));
+    const pool = available.length ? available : SPOTLIGHT_STARTS.map((_, index) => index).filter(index => index !== state.lastStart);
+    const next = pool[Math.floor(Math.random() * pool.length)] ?? 0;
+    state.lastStart = next;
+    state.activeStart = next;
+    return next;
   }
 
-  function startAmbientCycle() {
-    if (!ambient) return;
-    const startIndex = chooseAmbientStart();
-    const [sx, sy] = AMBIENT_STARTS[startIndex];
-    const duration = randomAmbientSeconds() * 1000;
-    const ex = clamp(sx + (-18 + Math.random() * 36), -18, 18);
-    const ey = clamp(sy + (-16 + Math.random() * 32), -16, 16);
-    const mx = (sx + ex) / 2 + (-5 + Math.random() * 10);
-    const my = (sy + ey) / 2 + (-4 + Math.random() * 8);
-    const s0 = .94 + Math.random() * .08;
-    const s1 = 1.04 + Math.random() * .12;
-    const s2 = .98 + Math.random() * .10;
+  function spotlightScaleRange(type) {
+    if (type === 'large') return [.92, 1.12];
+    if (type === 'medium') return [.88, 1.16];
+    return [.84, 1.20];
+  }
 
-    ambientAnimation?.cancel();
-    ambient.style.animation = 'none';
+  function startSpotlightCycle(state) {
+    const {el} = state;
+    if (!el) return;
 
-    if (ambient.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      ambientAnimation = ambient.animate([
-        {transform:`translate3d(${sx}%,${sy}%,0) scale(${s0})`, opacity:0, offset:0},
-        {transform:`translate3d(${sx * .72 + mx * .28}%,${sy * .72 + my * .28}%,0) scale(${(s0+s1)/2})`, opacity:.48, offset:.16},
-        {transform:`translate3d(${mx}%,${my}%,0) scale(${s1})`, opacity:1, offset:.40},
-        {transform:`translate3d(${mx * .55 + ex * .45}%,${my * .55 + ey * .45}%,0) scale(${(s1+s2)/2})`, opacity:.64, offset:.58},
-        {transform:`translate3d(${ex}%,${ey}%,0) scale(${s2})`, opacity:.16, offset:.82},
-        {transform:`translate3d(${ex}%,${ey}%,0) scale(${s2})`, opacity:0, offset:1}
+    const type = el.dataset.spotlight || 'large';
+    const startIndex = chooseIndependentStart(state);
+    const [sx, sy] = SPOTLIGHT_STARTS[startIndex];
+    const duration = randomSpotlightSeconds() * 1000;
+
+    const ex = clamp(sx + (-46 + Math.random() * 92), -46, 46);
+    const ey = clamp(sy + (-38 + Math.random() * 76), -38, 38);
+    const mx = clamp((sx + ex) / 2 + (-18 + Math.random() * 36), -46, 46);
+    const my = clamp((sy + ey) / 2 + (-14 + Math.random() * 28), -38, 38);
+
+    const [minScale, maxScale] = spotlightScaleRange(type);
+    const s0 = minScale + Math.random() * (maxScale - minScale);
+    const s1 = minScale + Math.random() * (maxScale - minScale);
+    const s2 = minScale + Math.random() * (maxScale - minScale);
+
+    // Each cycle receives its own gentle pulse shape. Because the CSS gradient
+    // alpha establishes the 1.00 / 1.25 / 1.625 brightness hierarchy, the same
+    // pulse multipliers preserve those relative brightness relationships.
+    const p1 = .74 + Math.random() * .14;
+    const p2 = .92 + Math.random() * .08;
+    const p3 = .80 + Math.random() * .16;
+    const p4 = .94 + Math.random() * .06;
+    const p5 = .76 + Math.random() * .16;
+
+    state.animation?.cancel();
+
+    if (el.animate && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      state.animation = el.animate([
+        {transform:`translate(-50%,-50%) translate3d(${sx}vw,${sy}vh,0) scale(${s0})`, opacity:p1, offset:0},
+        {transform:`translate(-50%,-50%) translate3d(${sx*.60+mx*.40}vw,${sy*.60+my*.40}vh,0) scale(${(s0+s1)/2})`, opacity:p2, offset:.22},
+        {transform:`translate(-50%,-50%) translate3d(${mx}vw,${my}vh,0) scale(${s1})`, opacity:p3, offset:.46},
+        {transform:`translate(-50%,-50%) translate3d(${mx*.48+ex*.52}vw,${my*.48+ey*.52}vh,0) scale(${(s1+s2)/2})`, opacity:p4, offset:.70},
+        {transform:`translate(-50%,-50%) translate3d(${ex}vw,${ey}vh,0) scale(${s2})`, opacity:p5, offset:1}
       ], {duration,easing:'ease-in-out',fill:'forwards'});
-      ambientAnimation.onfinish = () => { if (!document.hidden) startAmbientCycle(); };
+      state.animation.onfinish = () => {
+        state.animation = null;
+        if (!document.hidden) startSpotlightCycle(state);
+      };
     } else {
-      ambient.style.opacity = '.55';
+      el.style.transform = `translate(-50%,-50%) translate3d(${sx}vw,${sy}vh,0) scale(${s0})`;
+      el.style.opacity = '.82';
     }
   }
 
-  function syncAmbientPlayback() {
-    if (!ambientAnimation) {
-      if (!document.hidden) startAmbientCycle();
-      return;
-    }
-    if (document.hidden) ambientAnimation.pause();
-    else ambientAnimation.play();
+  function syncSpotlightPlayback() {
+    spotlightStates.forEach(state => {
+      if (!state.animation) {
+        if (!document.hidden) startSpotlightCycle(state);
+        return;
+      }
+      if (document.hidden) state.animation.pause();
+      else state.animation.play();
+    });
   }
 
-  if (ambient) {
-    ambient.style.filter = 'blur(28px) brightness(1.25)';
-    startAmbientCycle();
-    document.addEventListener('visibilitychange', syncAmbientPlayback, {passive:true});
-    window.addEventListener('pageshow', syncAmbientPlayback, {passive:true});
-    window.addEventListener('pagehide', () => ambientAnimation?.pause(), {passive:true});
+  if (spotlightStates.length) {
+    spotlightStates.forEach((state, index) => {
+      // A tiny randomized launch offset prevents identical phase alignment while
+      // remaining visually immediate on load.
+      const delay = Math.random() * 900 + index * 120;
+      setTimeout(() => { if (!document.hidden) startSpotlightCycle(state); }, delay);
+    });
+    document.addEventListener('visibilitychange', syncSpotlightPlayback, {passive:true});
+    window.addEventListener('pageshow', syncSpotlightPlayback, {passive:true});
+    window.addEventListener('pagehide', () => spotlightStates.forEach(state => state.animation?.pause()), {passive:true});
   }
 
   function enableFallback() {
