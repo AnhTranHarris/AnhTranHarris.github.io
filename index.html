@@ -15,11 +15,16 @@
     html,body{margin:0;width:100%;min-height:100%;overflow-x:hidden}
     body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
     a{color:inherit}
-    .ambient{position:fixed;inset:-18%;z-index:-3;pointer-events:none;contain:paint;will-change:transform;background:
+    .ambient{position:fixed;inset:-25%;z-index:-3;pointer-events:none;filter:blur(28px);will-change:transform;background:
       radial-gradient(ellipse 42% 24% at 25% 24%,rgba(71,202,211,.24),transparent 70%),
-      radial-gradient(ellipse 36% 22% at 78% 68%,rgba(37,148,164,.16),transparent 74%);animation:ambientDrift 70s ease-in-out infinite alternate}
-    .ambient.paused{animation-play-state:paused}
-    @keyframes ambientDrift{0%{transform:translate3d(-4%,-3%,0) scale(1)}100%{transform:translate3d(5%,4%,0) scale(1.14)}}
+      radial-gradient(ellipse 36% 22% at 78% 68%,rgba(37,148,164,.16),transparent 74%);animation:ambientDrift 42s ease-in-out infinite alternate}
+    @keyframes ambientDrift{
+      0%{transform:translate3d(-10%,-7%,0) scale(1)}
+      25%{transform:translate3d(7%,10%,0) scale(1.10)}
+      50%{transform:translate3d(13%,-8%,0) scale(.94)}
+      75%{transform:translate3d(-8%,13%,0) scale(1.15)}
+      100%{transform:translate3d(-14%,4%,0) scale(1.04)}
+    }
     .wash{position:fixed;inset:0;z-index:-2;background:radial-gradient(circle at 52% 38%,rgba(39,109,117,.11),transparent 42%),linear-gradient(180deg,rgba(2,13,18,.08),rgba(2,12,17,.82));pointer-events:none}
     .shell{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
     .topbar{height:86px;display:flex;align-items:center;justify-content:center;padding:0 24px;border-bottom:1px solid rgba(174,225,230,.22);background:linear-gradient(90deg,rgba(3,15,21,.78),rgba(8,31,39,.56),rgba(3,15,21,.78));box-shadow:0 10px 34px rgba(0,0,0,.18),inset 0 -1px 0 rgba(99,213,208,.08)}
@@ -52,7 +57,7 @@
       .swipe-guide{order:4;display:flex;width:100%;margin:22px 0 20px}.stage{order:5;width:100%;height:500px;min-height:500px;overflow:visible}.barrel{width:100%;height:390px}
       .page{left:5%;right:5%;width:90%;inset-block:auto;height:100%;padding:27px}.page h2{font-size:2.15rem}.page-bottom{align-items:flex-start;flex-direction:column;gap:12px}.page[data-card="about-me"] p{font-size:.82rem;line-height:1.45}
       .dots{bottom:8px}.site-disclaimer{width:calc(100% - 32px);margin-bottom:14px;padding:14px 12px;font-size:.64rem}
-      .ambient{inset:-12%;animation-duration:90s}
+      .ambient{inset:-18%;animation-duration:50s}
     }
     @media(prefers-reduced-motion:reduce){.ambient{animation:none}.barrel{will-change:auto}}
   </style>
@@ -83,8 +88,5 @@
     <footer class="site-disclaimer" role="note"><strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span></footer>
   </div>
   <script src="carousel-touch.js"></script>
-  <script>
-    (()=>{const a=document.querySelector('.ambient');if(!a)return;const sync=()=>a.classList.toggle('paused',document.hidden);document.addEventListener('visibilitychange',sync,{passive:true});sync()})();
-  </script>
 </body>
 </html>
