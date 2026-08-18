@@ -38,6 +38,8 @@
   let generation = 0;
   let geometryRaf = 0;
   let zone = null;
+  let ambientAnimation = null;
+  let lastAmbientStart = -1;
 
   const normalize = n => ((n % CARD_COUNT) + CARD_COUNT) % CARD_COUNT;
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -46,35 +48,88 @@
     dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
   }
 
-  // Shared desktop/mobile spotlight timing. A new duration is selected only
-  // after a complete drift cycle, so speed never changes midway through a pass.
+  // Twelve discrete entry regions spread across the viewport. A new region is
+  // chosen for every spotlight cycle, avoiding an immediate repeat so the
+  // motion does not appear stuck in one corner.
+  const AMBIENT_STARTS = [
+    [-14,-10], [0,-13], [14,-10],
+    [-16,0],   [0,0],   [16,0],
+    [-15,11],  [0,13],  [15,11],
+    [-8,-3],   [9,4],   [-4,8]
+  ];
+
   function randomAmbientSeconds() {
     return AMBIENT_MIN_SECONDS + Math.random() * (AMBIENT_MAX_SECONDS - AMBIENT_MIN_SECONDS);
   }
 
-  function setNextAmbientDuration() {
-    if (!ambient) return;
-    ambient.style.animationDuration = `${randomAmbientSeconds().toFixed(2)}s`;
+  function chooseAmbientStart() {
+    if (AMBIENT_STARTS.length < 2) return 0;
+    let index;
+    do index = Math.floor(Math.random() * AMBIENT_STARTS.length);
+    while (index === lastAmbientStart);
+    lastAmbientStart = index;
+    return index;
+  }
+
+  function startAmbientCycle() {
+    if (!ambient || document.documentElement.matches?.(':has(body)') === false) return;
+
+    const startIndex = chooseAmbientStart();
+    const [sx, sy] = AMBIENT_STARTS[startIndex];
+    const duration = randomAmbientSeconds() * 1000;
+
+    // Pick an independent travel direction so the same start point can produce
+    // different paths. Distance remains modest to keep compositor cost low.
+    const ex = clamp(sx + (-18 + Math.random() * 36), -18, 18);
+    const ey = clamp(sy + (-16 + Math.random() * 32), -16, 16);
+    const mx = (sx + ex) / 2 + (-5 + Math.random() * 10);
+    const my = (sy + ey) / 2 + (-4 + Math.random() * 8);
+    const s0 = .94 + Math.random() * .08;
+    const s1 = 1.04 + Math.random() * .12;
+    const s2 = .98 + Math.random() * .10;
+
+    ambientAnimation?.cancel();
+    ambient.style.animation = 'none';
+
+    if (ambient.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      ambientAnimation = ambient.animate([
+        {transform:`translate3d(${sx}%,${sy}%,0) scale(${s0})`, opacity:0, offset:0},
+        {transform:`translate3d(${sx * .72 + mx * .28}%,${sy * .72 + my * .28}%,0) scale(${(s0+s1)/2})`, opacity:.48, offset:.16},
+        {transform:`translate3d(${mx}%,${my}%,0) scale(${s1})`, opacity:1, offset:.40},
+        {transform:`translate3d(${mx * .55 + ex * .45}%,${my * .55 + ey * .45}%,0) scale(${(s1+s2)/2})`, opacity:.64, offset:.58},
+        {transform:`translate3d(${ex}%,${ey}%,0) scale(${s2})`, opacity:.16, offset:.82},
+        {transform:`translate3d(${ex}%,${ey}%,0) scale(${s2})`, opacity:0, offset:1}
+      ], {
+        duration,
+        easing:'ease-in-out',
+        fill:'forwards'
+      });
+
+      ambientAnimation.onfinish = () => {
+        if (!document.hidden) startAmbientCycle();
+      };
+    } else {
+      ambient.style.opacity = '.55';
+    }
+  }
+
+  // Preserve the performance optimization: pause the active spotlight while
+  // the page is hidden, then resume it seamlessly when the user returns.
+  function syncAmbientPlayback() {
+    if (!ambientAnimation) {
+      if (!document.hidden) startAmbientCycle();
+      return;
+    }
+    if (document.hidden) ambientAnimation.pause();
+    else ambientAnimation.play();
   }
 
   if (ambient) {
-    setNextAmbientDuration();
-    ambient.addEventListener('animationiteration', setNextAmbientDuration);
+    startAmbientCycle();
+    document.addEventListener('visibilitychange', syncAmbientPlayback, {passive:true});
+    window.addEventListener('pageshow', syncAmbientPlayback, {passive:true});
+    window.addEventListener('pagehide', () => ambientAnimation?.pause(), {passive:true});
   }
-
-  // Keep the visible spotlight motion intact, but stop compositor work while
-  // the page is backgrounded. Returning to the page resumes the same cycle.
-  function syncAmbientPlayback() {
-    if (!ambient) return;
-    ambient.style.animationPlayState = document.hidden ? 'paused' : 'running';
-  }
-
-  document.addEventListener('visibilitychange', syncAmbientPlayback, {passive:true});
-  window.addEventListener('pageshow', syncAmbientPlayback, {passive:true});
-  window.addEventListener('pagehide', () => {
-    if (ambient) ambient.style.animationPlayState = 'paused';
-  }, {passive:true});
-  syncAmbientPlayback();
 
   function enableFallback() {
     document.documentElement.classList.add('carousel-fallback');
