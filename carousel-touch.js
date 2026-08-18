@@ -26,12 +26,13 @@
   const SPOTLIGHT_STARTS=[[-38,-30],[0,-34],[38,-30],[-42,0],[0,0],[42,0],[-38,30],[0,34],[38,30],[-20,-15],[22,14],[-14,22]];
   const spotlightStates=spotlightElements.map((el,index)=>({el,index,animation:null,lastStart:-1,activeStart:-1}));
 
-  // Motion is distance-limited rather than time-randomized. Long journeys
-  // automatically receive long cycles, keeping every light ambient and slow.
+  // Large is the motion baseline. Medium travels 25% faster than large;
+  // small travels 30% faster than medium (1.625x the large baseline).
   function spotlightProfile(type){
-    if(type==='large')return{speed:.16,maxDx:30,maxDy:24,minScale:.95,maxScale:1.05};
-    if(type==='medium')return{speed:.19,maxDx:34,maxDy:28,minScale:.93,maxScale:1.07};
-    return{speed:.22,maxDx:38,maxDy:30,minScale:.91,maxScale:1.09};
+    const baseSpeed=.16;
+    if(type==='large')return{speed:baseSpeed,maxDx:30,maxDy:24,minScale:.95,maxScale:1.05};
+    if(type==='medium')return{speed:baseSpeed*1.25,maxDx:34,maxDy:28,minScale:.93,maxScale:1.07};
+    return{speed:baseSpeed*1.25*1.30,maxDx:38,maxDy:30,minScale:.91,maxScale:1.09};
   }
   function chooseIndependentStart(state){
     const occupied=new Set(spotlightStates.filter(other=>other!==state&&other.activeStart>=0).map(other=>other.activeStart));
@@ -51,9 +52,6 @@
     const mx=clamp((sx+ex)/2+(-6+Math.random()*12),-46,46),my=clamp((sy+ey)/2+(-5+Math.random()*10),-38,38);
     const randomScale=()=>profile.minScale+Math.random()*(profile.maxScale-profile.minScale),s0=randomScale(),s1=randomScale(),s2=randomScale();
 
-    // A restrained brightness envelope: ~24% fade-in, subtle breathing through
-    // the middle, then ~24% fade-out. Relative brightness remains defined by
-    // the large / medium / small gradient alpha values in CSS.
     const p1=.86+Math.random()*.06;
     const p2=Math.min(.99,p1+.03+Math.random()*.04);
     const p3=clamp(p1-.02+Math.random()*.04,.84,.96);
