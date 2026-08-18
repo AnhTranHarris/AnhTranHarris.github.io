@@ -19,6 +19,8 @@
   const MAX_RELEASE_SPEED = 300;
   const MIN_SETTLE_TIME = .62;
   const MAX_SETTLE_TIME = 1.15;
+  const AMBIENT_MIN_SECONDS = 15;
+  const AMBIENT_MAX_SECONDS = 200;
 
   const supports3D = !!(window.CSS?.supports?.('transform-style', 'preserve-3d') && window.CSS?.supports?.('perspective', '1px'));
   const supportsPointers = 'PointerEvent' in window;
@@ -44,10 +46,24 @@
     dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
   }
 
+  // Shared desktop/mobile spotlight timing. A new duration is selected only
+  // after a complete drift cycle, so speed never changes midway through a pass.
+  function randomAmbientSeconds() {
+    return AMBIENT_MIN_SECONDS + Math.random() * (AMBIENT_MAX_SECONDS - AMBIENT_MIN_SECONDS);
+  }
+
+  function setNextAmbientDuration() {
+    if (!ambient) return;
+    ambient.style.animationDuration = `${randomAmbientSeconds().toFixed(2)}s`;
+  }
+
+  if (ambient) {
+    setNextAmbientDuration();
+    ambient.addEventListener('animationiteration', setNextAmbientDuration);
+  }
+
   // Keep the visible spotlight motion intact, but stop compositor work while
-  // the page is backgrounded. Browsers can otherwise keep fixed blurred layers
-  // alive longer than necessary. Returning to the page resumes the same CSS
-  // animation immediately without rebuilding it.
+  // the page is backgrounded. Returning to the page resumes the same cycle.
   function syncAmbientPlayback() {
     if (!ambient) return;
     ambient.style.animationPlayState = document.hidden ? 'paused' : 'running';
