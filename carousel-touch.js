@@ -21,6 +21,7 @@
   const MAX_SETTLE_TIME = 1.15;
   const AMBIENT_MIN_SECONDS = 15;
   const AMBIENT_MAX_SECONDS = 200;
+  const CARD_HEIGHT_SCALE = 1.15;
 
   const supports3D = !!(window.CSS?.supports?.('transform-style', 'preserve-3d') && window.CSS?.supports?.('perspective', '1px'));
   const supportsPointers = 'PointerEvent' in window;
@@ -48,9 +49,6 @@
     dots.forEach((dot, i) => dot.classList.toggle('on', i === normalize(index)));
   }
 
-  // Twelve discrete entry regions spread across the viewport. A new region is
-  // chosen for every spotlight cycle, avoiding an immediate repeat so the
-  // motion does not appear stuck in one corner.
   const AMBIENT_STARTS = [
     [-14,-10], [0,-13], [14,-10],
     [-16,0],   [0,0],   [16,0],
@@ -73,13 +71,9 @@
 
   function startAmbientCycle() {
     if (!ambient || document.documentElement.matches?.(':has(body)') === false) return;
-
     const startIndex = chooseAmbientStart();
     const [sx, sy] = AMBIENT_STARTS[startIndex];
     const duration = randomAmbientSeconds() * 1000;
-
-    // Pick an independent travel direction so the same start point can produce
-    // different paths. Distance remains modest to keep compositor cost low.
     const ex = clamp(sx + (-18 + Math.random() * 36), -18, 18);
     const ey = clamp(sy + (-16 + Math.random() * 32), -16, 16);
     const mx = (sx + ex) / 2 + (-5 + Math.random() * 10);
@@ -99,22 +93,13 @@
         {transform:`translate3d(${mx * .55 + ex * .45}%,${my * .55 + ey * .45}%,0) scale(${(s1+s2)/2})`, opacity:.64, offset:.58},
         {transform:`translate3d(${ex}%,${ey}%,0) scale(${s2})`, opacity:.16, offset:.82},
         {transform:`translate3d(${ex}%,${ey}%,0) scale(${s2})`, opacity:0, offset:1}
-      ], {
-        duration,
-        easing:'ease-in-out',
-        fill:'forwards'
-      });
-
-      ambientAnimation.onfinish = () => {
-        if (!document.hidden) startAmbientCycle();
-      };
+      ], {duration,easing:'ease-in-out',fill:'forwards'});
+      ambientAnimation.onfinish = () => { if (!document.hidden) startAmbientCycle(); };
     } else {
       ambient.style.opacity = '.55';
     }
   }
 
-  // Preserve the performance optimization: pause the active spotlight while
-  // the page is hidden, then resume it seamlessly when the user returns.
   function syncAmbientPlayback() {
     if (!ambientAnimation) {
       if (!document.hidden) startAmbientCycle();
@@ -135,29 +120,25 @@
     document.documentElement.classList.add('carousel-fallback');
     stage.style.perspective = 'none';
     stage.style.overflow = 'hidden';
-
     Object.assign(barrel.style, {
       display:'flex', gap:'18px', width:'100%', maxWidth:'610px', height:'auto',
-      minHeight:'350px', overflowX:'auto', overflowY:'hidden', transform:'none',
+      minHeight:`${Math.round(350 * CARD_HEIGHT_SCALE)}px`, overflowX:'auto', overflowY:'hidden', transform:'none',
       transformStyle:'flat', scrollSnapType:'x mandatory', scrollBehavior:'smooth',
       WebkitOverflowScrolling:'touch', touchAction:'pan-x pan-y', overscrollBehaviorX:'contain',
       pointerEvents:'auto', userSelect:'auto', WebkitUserSelect:'auto', scrollbarWidth:'none'
     });
-
     pages.forEach(page => Object.assign(page.style, {
       position:'relative', inset:'auto', left:'auto', right:'auto', transform:'none',
-      flex:'0 0 90%', width:'90%', height:'auto', minHeight:'350px',
+      flex:'0 0 90%', width:'90%', height:'auto', minHeight:`${Math.round(350 * CARD_HEIGHT_SCALE)}px`,
       scrollSnapAlign:'center', scrollSnapStop:'always', backfaceVisibility:'visible',
       WebkitBackfaceVisibility:'visible'
     }));
-
     const updateFallbackDot = () => {
       const first = pages[0];
       if (!first) return;
       const stride = first.offsetWidth + 18;
       setDot(stride > 0 ? Math.round(barrel.scrollLeft / stride) : 0);
     };
-
     barrel.addEventListener('scroll', () => requestAnimationFrame(updateFallbackDot), {passive:true});
     updateFallbackDot();
   }
@@ -181,19 +162,22 @@
       const width = window.innerWidth;
 
       if (width <= 560) {
-        const cardHeight = clamp(viewportHeight * .54, 350, 390);
+        const baseHeight = clamp(viewportHeight * .54, 350, 390);
+        const cardHeight = baseHeight * CARD_HEIGHT_SCALE;
         barrel.style.height = `${Math.round(cardHeight)}px`;
         stage.style.height = `${Math.round(cardHeight + 110)}px`;
         stage.style.minHeight = `${Math.round(cardHeight + 110)}px`;
       } else if (width <= 900) {
-        const cardHeight = clamp(viewportHeight * .56, 390, 430);
+        const baseHeight = clamp(viewportHeight * .56, 390, 430);
+        const cardHeight = baseHeight * CARD_HEIGHT_SCALE;
         barrel.style.height = `${Math.round(cardHeight)}px`;
         stage.style.height = `${Math.round(cardHeight + 100)}px`;
         stage.style.minHeight = `${Math.round(cardHeight + 100)}px`;
       } else {
-        barrel.style.height = '';
-        stage.style.height = '';
-        stage.style.minHeight = '';
+        const cardHeight = 430 * CARD_HEIGHT_SCALE;
+        barrel.style.height = `${Math.round(cardHeight)}px`;
+        stage.style.height = `${Math.round(cardHeight + 120)}px`;
+        stage.style.minHeight = `${Math.round(cardHeight + 120)}px`;
       }
 
       const cardWidth = pages[0]?.offsetWidth || barrel.offsetWidth;
@@ -212,15 +196,8 @@
     setDot(Math.round(angle / STEP));
   }
 
-  function stopAnimation() {
-    if (raf) cancelAnimationFrame(raf);
-    raf = 0;
-  }
-
-  function invalidate() {
-    generation++;
-    stopAnimation();
-  }
+  function stopAnimation() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+  function invalidate() { generation++; stopAnimation(); }
 
   function settleToCard(initialVelocity, target) {
     invalidate();
@@ -229,7 +206,6 @@
     let last = performance.now();
     const started = last;
     let stableFrames = 0;
-
     const tick = now => {
       if (myGeneration !== generation) return;
       const dt = Math.min(.032, Math.max(.008, (now - last) / 1000));
@@ -237,102 +213,57 @@
       const distance = target - angle;
       const absDistance = Math.abs(distance);
       const elapsed = (now - started) / 1000;
-
       v += ((distance * SPRING) - (v * DAMPING)) * dt;
       const step = v * dt;
-
       if (absDistance > 0 && Math.abs(step) >= absDistance) {
-        angle = target;
-        velocity = 0;
-        render();
-        raf = 0;
-        return;
+        angle = target; velocity = 0; render(); raf = 0; return;
       }
-
-      angle += step;
-      velocity = v;
-      render();
-
+      angle += step; velocity = v; render();
       if (Math.abs(target - angle) < .1 && Math.abs(v) < 1) stableFrames++;
       else stableFrames = 0;
-
       if ((stableFrames >= 3 && elapsed >= MIN_SETTLE_TIME) || elapsed >= MAX_SETTLE_TIME) {
-        angle = target;
-        velocity = 0;
-        render();
-        raf = 0;
-        return;
+        angle = target; velocity = 0; render(); raf = 0; return;
       }
-
       raf = requestAnimationFrame(tick);
     };
-
     raf = requestAnimationFrame(tick);
   }
 
   function releasePointer(pointerId) {
     if (pointerId == null || !zone) return;
-    try {
-      if (zone.hasPointerCapture?.(pointerId)) zone.releasePointerCapture(pointerId);
-    } catch (_) {}
+    try { if (zone.hasPointerCapture?.(pointerId)) zone.releasePointerCapture(pointerId); } catch (_) {}
   }
-
   function resetGesture(pointerId = activePointer) {
-    releasePointer(pointerId);
-    activePointer = null;
-    gesture = 'idle';
+    releasePointer(pointerId); activePointer = null; gesture = 'idle';
     if (zone) zone.style.cursor = 'grab';
   }
-
   function begin(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    invalidate();
-    activePointer = e.pointerId;
-    gesture = 'pending';
-    startX = lastX = e.clientX;
-    startY = e.clientY;
-    lastT = performance.now();
-    velocity = 0;
+    invalidate(); activePointer = e.pointerId; gesture = 'pending';
+    startX = lastX = e.clientX; startY = e.clientY; lastT = performance.now(); velocity = 0;
     zone.style.cursor = 'grabbing';
     try { zone.setPointerCapture?.(e.pointerId); } catch (_) {}
   }
-
   function move(e) {
     if (activePointer === null || e.pointerId !== activePointer || gesture === 'idle') return;
-    const dxTotal = e.clientX - startX;
-    const dyTotal = e.clientY - startY;
-
+    const dxTotal = e.clientX - startX, dyTotal = e.clientY - startY;
     if (gesture === 'pending') {
       if (Math.hypot(dxTotal, dyTotal) < DIRECTION_LOCK) return;
       if (Math.abs(dyTotal) > Math.abs(dxTotal)) {
-        gesture = 'vertical';
-        releasePointer(e.pointerId);
-        activePointer = null;
-        zone.style.cursor = 'grab';
-        return;
+        gesture = 'vertical'; releasePointer(e.pointerId); activePointer = null; zone.style.cursor = 'grab'; return;
       }
       gesture = 'horizontal';
     }
-
     if (gesture !== 'horizontal') return;
     e.preventDefault();
-
-    const now = performance.now();
-    const dx = e.clientX - lastX;
-    const dt = Math.max(8, now - lastT);
-    lastX = e.clientX;
-    lastT = now;
-    angle += dx * DRAG_GAIN;
-    velocity = (dx * DRAG_GAIN / dt) * 1000;
-    render();
+    const now = performance.now(), dx = e.clientX - lastX, dt = Math.max(8, now - lastT);
+    lastX = e.clientX; lastT = now; angle += dx * DRAG_GAIN; velocity = (dx * DRAG_GAIN / dt) * 1000; render();
   }
-
   function finishHorizontal(releaseVelocity) {
     const direction = Math.sign(releaseVelocity);
     const current = Math.round(angle / STEP);
     const offset = angle - current * STEP;
     let targetIndex;
-
     if (direction && Math.abs(releaseVelocity) > MIN_RELEASE_SPEED) {
       targetIndex = direction > 0 ? Math.ceil(angle / STEP) : Math.floor(angle / STEP);
       if (targetIndex === current) targetIndex += direction;
@@ -340,31 +271,23 @@
       targetIndex = Math.round(angle / STEP);
       if (Math.abs(offset) >= STEP / 2) targetIndex += Math.sign(offset);
     }
-
     const target = targetIndex * STEP;
     const initial = Math.sign(target - angle) * Math.min(MAX_RELEASE_SPEED, Math.max(45, Math.abs(releaseVelocity)));
     settleToCard(initial, target);
   }
-
   function end(e) {
     if (activePointer === null || e.pointerId !== activePointer) return;
-    const wasHorizontal = gesture === 'horizontal';
-    const releaseVelocity = velocity;
+    const wasHorizontal = gesture === 'horizontal', releaseVelocity = velocity;
     resetGesture(e.pointerId);
     if (wasHorizontal) finishHorizontal(releaseVelocity);
   }
-
   function cancel(e) {
     if (activePointer !== null && e?.pointerId != null && e.pointerId !== activePointer) return;
-    resetGesture(e?.pointerId ?? activePointer);
-    velocity = 0;
-    render();
+    resetGesture(e?.pointerId ?? activePointer); velocity = 0; render();
   }
-
   function rotateBy(direction) {
     if (fallbackMode) return rotateFallback(direction);
-    invalidate();
-    resetGesture();
+    invalidate(); resetGesture();
     const target = (Math.round(angle / STEP) + direction) * STEP;
     settleToCard(direction * BUTTON_SPEED, target);
   }
@@ -381,12 +304,8 @@
       userSelect:'none', WebkitUserSelect:'none', pointerEvents:'auto'
     });
     stage.appendChild(zone);
-
-    barrel.style.transition = 'none';
-    barrel.style.pointerEvents = 'none';
-    barrel.style.userSelect = 'none';
-    barrel.style.webkitUserSelect = 'none';
-
+    barrel.style.transition = 'none'; barrel.style.pointerEvents = 'none';
+    barrel.style.userSelect = 'none'; barrel.style.webkitUserSelect = 'none';
     zone.addEventListener('pointerdown', begin, {passive:true});
     zone.addEventListener('pointermove', move, {passive:false});
     zone.addEventListener('pointerup', end, {passive:true});
@@ -395,26 +314,17 @@
       if (activePointer === e.pointerId && gesture !== 'vertical') cancel(e);
     });
     window.addEventListener('blur', cancel);
-
     window.addEventListener('resize', syncGeometry, {passive:true});
     window.addEventListener('orientationchange', syncGeometry, {passive:true});
     window.visualViewport?.addEventListener('resize', syncGeometry, {passive:true});
     if ('ResizeObserver' in window) new ResizeObserver(syncGeometry).observe(barrel);
-
-    syncGeometry();
-    render();
+    syncGeometry(); render();
   }
 
   document.querySelectorAll('[data-dir]').forEach(control => {
     const direction = Number(control.dataset.dir);
-    const run = e => {
-      e.preventDefault();
-      e.stopPropagation();
-      rotateBy(direction);
-    };
+    const run = e => { e.preventDefault(); e.stopPropagation(); rotateBy(direction); };
     control.addEventListener('click', run);
-    control.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') run(e);
-    });
+    control.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') run(e); });
   });
 })();
