@@ -1,4 +1,4 @@
-/* Harris Portfolio: five-card carousel interaction only. */
+/* Harris Portfolio: five-card carousel interaction + responsive geometry. */
 (() => {
   const stage = document.querySelector('.stage');
   const barrel = document.querySelector('#barrel');
@@ -24,9 +24,8 @@
   zone.setAttribute('aria-hidden', 'true');
   Object.assign(zone.style, {
     position:'absolute', left:'50%', top:'50%', transform:'translate(-50%,-50%)',
-    width:'90%', height:window.innerWidth <= 560 ? '390px' : '430px', zIndex:'12',
-    touchAction:'pan-y', background:'transparent', cursor:'grab', userSelect:'none',
-    WebkitUserSelect:'none', pointerEvents:'auto'
+    zIndex:'12', touchAction:'pan-y', background:'transparent', cursor:'grab',
+    userSelect:'none', WebkitUserSelect:'none', pointerEvents:'auto'
   });
   stage.appendChild(zone);
 
@@ -45,8 +44,49 @@
   let lastX = 0;
   let lastT = 0;
   let generation = 0;
+  let geometryRaf = 0;
 
   const normalize = n => ((n % CARD_COUNT) + CARD_COUNT) % CARD_COUNT;
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  function syncGeometry() {
+    if (geometryRaf) cancelAnimationFrame(geometryRaf);
+    geometryRaf = requestAnimationFrame(() => {
+      geometryRaf = 0;
+
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const width = window.innerWidth;
+
+      // Height responds to the usable viewport instead of assuming every phone
+      // has a 390px card area. CSS remains the no-JS fallback.
+      if (width <= 560) {
+        const cardHeight = clamp(viewportHeight * .54, 350, 390);
+        barrel.style.height = `${Math.round(cardHeight)}px`;
+        stage.style.height = `${Math.round(cardHeight + 110)}px`;
+        stage.style.minHeight = `${Math.round(cardHeight + 110)}px`;
+      } else if (width <= 900) {
+        const cardHeight = clamp(viewportHeight * .56, 390, 430);
+        barrel.style.height = `${Math.round(cardHeight)}px`;
+        stage.style.height = `${Math.round(cardHeight + 100)}px`;
+        stage.style.minHeight = `${Math.round(cardHeight + 100)}px`;
+      } else {
+        barrel.style.height = '';
+        stage.style.height = '';
+        stage.style.minHeight = '';
+      }
+
+      // Build the five-sided barrel from the rendered card width. For a regular
+      // N-gon, radius = side / (2 * tan(pi/N)). This keeps every phone on the
+      // same true circular geometry instead of relying on a viewport-width guess.
+      const cardWidth = pages[0]?.offsetWidth || barrel.offsetWidth;
+      if (cardWidth > 0) {
+        const radius = cardWidth / (2 * Math.tan(Math.PI / CARD_COUNT));
+        document.documentElement.style.setProperty('--radius', `${radius.toFixed(2)}px`);
+        zone.style.width = `${Math.ceil(cardWidth)}px`;
+      }
+      zone.style.height = `${Math.ceil(barrel.offsetHeight)}px`;
+    });
+  }
 
   function render() {
     barrel.style.transform = `rotateY(${angle}deg)`;
@@ -69,7 +109,7 @@
     const myGeneration = generation;
     let v = initialVelocity;
     let last = performance.now();
-    let started = last;
+    const started = last;
     let stableFrames = 0;
 
     const tick = now => {
@@ -219,9 +259,11 @@
     });
   });
 
-  window.addEventListener('resize', () => {
-    zone.style.height = window.innerWidth <= 560 ? '390px' : '430px';
-  });
+  window.addEventListener('resize', syncGeometry, {passive:true});
+  window.addEventListener('orientationchange', syncGeometry, {passive:true});
+  window.visualViewport?.addEventListener('resize', syncGeometry, {passive:true});
+  new ResizeObserver(syncGeometry).observe(barrel);
 
+  syncGeometry();
   render();
 })();
