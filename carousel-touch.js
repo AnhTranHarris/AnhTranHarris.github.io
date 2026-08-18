@@ -110,6 +110,7 @@
   }
 
   if (ambient) {
+    ambient.style.filter = 'blur(28px) brightness(1.25)';
     startAmbientCycle();
     document.addEventListener('visibilitychange', syncAmbientPlayback, {passive:true});
     window.addEventListener('pageshow', syncAmbientPlayback, {passive:true});
