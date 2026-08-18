@@ -53,7 +53,6 @@
     if (geometryRaf) cancelAnimationFrame(geometryRaf);
     geometryRaf = requestAnimationFrame(() => {
       geometryRaf = 0;
-
       const viewportHeight = window.visualViewport?.height || window.innerHeight;
       const width = window.innerWidth;
 
@@ -109,7 +108,6 @@
 
     const tick = now => {
       if (myGeneration !== generation) return;
-
       const dt = Math.min(.032, Math.max(.008, (now - last) / 1000));
       last = now;
       const distance = target - angle;
@@ -148,16 +146,32 @@
     raf = requestAnimationFrame(tick);
   }
 
+  function releasePointer(pointerId) {
+    if (pointerId == null) return;
+    try {
+      if (zone.hasPointerCapture?.(pointerId)) zone.releasePointerCapture(pointerId);
+    } catch (_) {}
+  }
+
+  function resetGesture(pointerId = activePointer) {
+    releasePointer(pointerId);
+    activePointer = null;
+    gesture = 'idle';
+    zone.style.cursor = 'grab';
+  }
+
   function begin(e) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     invalidate();
-    gesture = 'pending';
     activePointer = e.pointerId;
+    gesture = 'pending';
     startX = lastX = e.clientX;
     startY = e.clientY;
     lastT = performance.now();
     velocity = 0;
     zone.style.cursor = 'grabbing';
+
+    try { zone.setPointerCapture?.(e.pointerId); } catch (_) {}
   }
 
   function move(e) {
@@ -168,12 +182,17 @@
 
     if (gesture === 'pending') {
       if (Math.hypot(dxTotal, dyTotal) < DIRECTION_LOCK) return;
+
       if (Math.abs(dyTotal) > Math.abs(dxTotal)) {
+        // Give vertical gestures back to the browser immediately. Because the
+        // zone uses touch-action: pan-y, native page scrolling remains active.
         gesture = 'vertical';
+        releasePointer(e.pointerId);
         activePointer = null;
         zone.style.cursor = 'grab';
         return;
       }
+
       gesture = 'horizontal';
     }
 
@@ -191,16 +210,7 @@
     render();
   }
 
-  function end(e) {
-    if (activePointer === null || e.pointerId !== activePointer) return;
-
-    const horizontal = gesture === 'horizontal';
-    const releaseVelocity = velocity;
-    activePointer = null;
-    gesture = 'idle';
-    zone.style.cursor = 'grab';
-    if (!horizontal) return;
-
+  function finishHorizontal(releaseVelocity) {
     const direction = Math.sign(releaseVelocity);
     const current = Math.round(angle / STEP);
     const offset = angle - current * STEP;
@@ -219,26 +229,35 @@
     settleToCard(initial, target);
   }
 
-  function cancel() {
-    activePointer = null;
-    gesture = 'idle';
-    zone.style.cursor = 'grab';
+  function end(e) {
+    if (activePointer === null || e.pointerId !== activePointer) return;
+    const wasHorizontal = gesture === 'horizontal';
+    const releaseVelocity = velocity;
+    resetGesture(e.pointerId);
+    if (wasHorizontal) finishHorizontal(releaseVelocity);
+  }
+
+  function cancel(e) {
+    if (activePointer !== null && e?.pointerId != null && e.pointerId !== activePointer) return;
+    resetGesture(e?.pointerId ?? activePointer);
     velocity = 0;
     render();
   }
 
   function rotateBy(direction) {
     invalidate();
-    activePointer = null;
-    gesture = 'idle';
+    resetGesture();
     const target = (Math.round(angle / STEP) + direction) * STEP;
     settleToCard(direction * BUTTON_SPEED, target);
   }
 
   zone.addEventListener('pointerdown', begin, {passive:true});
-  window.addEventListener('pointermove', move, {passive:false});
-  window.addEventListener('pointerup', end, {passive:true});
-  window.addEventListener('pointercancel', cancel, {passive:true});
+  zone.addEventListener('pointermove', move, {passive:false});
+  zone.addEventListener('pointerup', end, {passive:true});
+  zone.addEventListener('pointercancel', cancel, {passive:true});
+  zone.addEventListener('lostpointercapture', e => {
+    if (activePointer === e.pointerId && gesture !== 'vertical') cancel(e);
+  });
   window.addEventListener('blur', cancel);
 
   document.querySelectorAll('[data-dir]').forEach(control => {
