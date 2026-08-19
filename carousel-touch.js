@@ -23,10 +23,10 @@
      with conic-gradient + mask compositing get a directional traveling tracer. */
   const edgeStyle=document.createElement('style');
   edgeStyle.textContent=`
-    .page::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;opacity:0;border:2px solid rgba(255,218,111,.82);box-shadow:inset 0 0 10px rgba(216,184,106,.22),0 0 13px rgba(255,218,111,.42);transition:opacity 110ms linear}
-    .barrel.edge-motion .page::before{opacity:var(--edge-strength,.45)}
-    .edge-tracer-supported .page::before{padding:2px;border:0;box-shadow:none;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 262deg,rgba(216,184,106,.08) 278deg,rgba(255,218,111,.92) 314deg,rgba(255,240,176,1) 326deg,rgba(216,184,106,.18) 350deg,transparent 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;filter:drop-shadow(0 0 4px rgba(255,218,111,.72))}
-    @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before{background:none;border:1px solid rgba(216,184,106,.55);-webkit-mask:none;mask:none;filter:none}}
+    .page::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;opacity:0;border:2px solid rgba(255,226,126,.94);box-shadow:inset 0 0 12px rgba(229,193,95,.30),0 0 17px rgba(255,226,126,.56),0 0 5px rgba(255,244,196,.32);transition:opacity 110ms linear}
+    .barrel.edge-motion .page::before{opacity:var(--edge-strength,.56)}
+    .edge-tracer-supported .page::before{padding:2px;border:0;box-shadow:none;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 258deg,rgba(216,184,106,.10) 274deg,rgba(255,222,112,.96) 307deg,rgba(255,247,207,1) 323deg,rgba(255,255,238,1) 329deg,rgba(255,236,158,.92) 337deg,rgba(216,184,106,.22) 353deg,transparent 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;filter:drop-shadow(0 0 5px rgba(255,226,126,.90)) drop-shadow(0 0 9px rgba(216,184,106,.36))}
+    @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before{background:none;border:1px solid rgba(229,193,95,.68);-webkit-mask:none;mask:none;filter:none}}
   `;
   document.head.appendChild(edgeStyle);
   const tracerSupported=!!(window.CSS?.supports?.('background','conic-gradient(from 0deg,red,blue)')&&(window.CSS?.supports?.('-webkit-mask-composite','xor')||window.CSS?.supports?.('mask-composite','exclude')));
@@ -37,7 +37,7 @@
     if(speed<2){stopEdgeGlow();return}
     const direction=Math.sign(motionVelocity)||1;
     edgePhase=(edgePhase+direction*clamp(speed*.035,1.2,12))%360;
-    const strength=clamp(.24+speed/420,.24,.88);
+    const strength=clamp(.30+speed/336,.30,1);
     barrel.style.setProperty('--edge-angle',`${edgePhase.toFixed(1)}deg`);
     barrel.style.setProperty('--edge-strength',strength.toFixed(2));
     barrel.classList.add('edge-motion');
@@ -126,7 +126,7 @@
 
   /* Pointer state machine. */
   function begin(e){if(e.pointerType==='mouse'&&e.button!==0)return;invalidate();promoteBarrel();activePointer=e.pointerId;gesture='pending';startX=lastX=e.clientX;startY=e.clientY;lastT=performance.now();velocity=0;zone.style.cursor='grabbing';try{zone.setPointerCapture?.(e.pointerId)}catch(_){}}
-  function move(e){if(activePointer===null||e.pointerId!==activePointer||gesture==='idle')return;const dxTotal=e.clientX-startX,dyTotal=e.clientY-startY;if(gesture==='pending'){if(Math.hypot(dxTotal,dyTotal)<DIRECTION_LOCK)return;if(Math.abs(dyTotal)>Math.abs(dxTotal)){gesture='vertical';releasePointer(e.pointerId);activePointer=null;zone.style.cursor='grab';stopEdgeGlow();releaseBarrel();return}gesture='horizontal'}if(gesture!=='horizontal')return;e.preventDefault();const now=performance.now(),dx=e.clientX-lastX,dt=Math.max(8,now-lastT);lastX=e.clientX;lastT=now;angle+=dx*DRAG_GAIN;velocity=(dx*DRAG_GAIN/dt)*1000;render()}
+  function move(e){if(activePointer===null||e.pointerId!==activePointer||gesture==='idle')return;const dxTotal=e.clientX-startX,dyTotal=e.clientY-startY;if(gesture==='pending'){if(Math.hypot(dxTotal,dyTotal)<DIRECTION_LOCK)return;if(Math.abs(dyTotal)>Math.abs(dxTotal)){gesture='vertical';releasePointer(e.pointerId);activePointer=null;zone.style.cursor='grab';releaseBarrel();stopEdgeGlow();return}gesture='horizontal'}if(gesture!=='horizontal')return;e.preventDefault();const now=performance.now(),dx=e.clientX-lastX,dt=Math.max(8,now-lastT);lastX=e.clientX;lastT=now;angle+=dx*DRAG_GAIN;velocity=(dx*DRAG_GAIN/dt)*1000;render()}
   function finishHorizontal(releaseVelocity){const direction=Math.sign(releaseVelocity),current=Math.round(angle/STEP),offset=angle-current*STEP;let targetIndex;if(direction&&Math.abs(releaseVelocity)>MIN_RELEASE_SPEED){targetIndex=direction>0?Math.ceil(angle/STEP):Math.floor(angle/STEP);if(targetIndex===current)targetIndex+=direction}else{targetIndex=Math.round(angle/STEP);if(Math.abs(offset)>=STEP/2)targetIndex+=Math.sign(offset)}const target=targetIndex*STEP,initial=Math.sign(target-angle)*Math.min(MAX_RELEASE_SPEED,Math.max(45,Math.abs(releaseVelocity)));settleToCard(initial,target)}
   function end(e){if(activePointer===null||e.pointerId!==activePointer)return;const wasHorizontal=gesture==='horizontal',releaseVelocity=velocity;resetGesture(e.pointerId);if(wasHorizontal)finishHorizontal(releaseVelocity);else{stopEdgeGlow();releaseBarrel()}}
   function cancel(e){if(activePointer!==null&&e?.pointerId!=null&&e.pointerId!==activePointer)return;snapToNearestCard()}
