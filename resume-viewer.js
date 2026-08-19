@@ -58,8 +58,8 @@
     const oldCols=isMobile?34:48,oldRows=isMobile?54:66;
     const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
     const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
-    const activeDepth=Math.min(5,rows),fadeDepth=Math.min(10,Math.max(0,rows-activeDepth));
-    const historyRowH=clamp(targetRect.height*(isMobile?.0055:.006),3.5,6);
+    const activeDepth=Math.min(10,rows),fadeDepth=Math.min(20,Math.max(0,rows-activeDepth));
+    const historyRowH=clamp(targetRect.height*(isMobile?.0034:.0038),2.4,4.2);
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const flash=new Float32Array(activeDepth);
@@ -118,44 +118,45 @@
         const solidTop=Math.min(targetRect.bottom,activeY+historyRows*historyRowH);
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
 
-        /* Rows 1-5: live particle-reactive Tetris rows only. */
+        /* Rows 1-10: live particle-reactive Tetris rows only. */
         for(let r=0;r<activeDepth;r++){
           const globalRow=rows-1-completedRows-r;if(globalRow<0)continue;const y=targetRect.top+globalRow*blockH;
           for(let c=0;c<cols;c++){if(!active[r][c])continue;const ci=activeColors[r][c]-1;ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
           if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}
         }
         normalizeFlashes();
-        if(Math.random()<.09){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.30+.60*Math.random())}}
+        if(Math.random()<.12){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.38+.62*Math.random())}}
 
-        /* Rows 6-15: completed-row history rendered at a readable visual height. */
+        /* Rows 11-30: completed-row history, progressively cooling into dark portfolio teal. */
         for(let i=0;i<historyRows;i++){
           const row=history[i];
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
           const detailAlpha=Math.max(0,1-t);
-          const tealAlpha=.10+.86*t;
+          const tealAlpha=.08+.88*t;
           const y=activeY+i*historyRowH;
           if(y>=targetRect.bottom)break;
-          ctx.globalAlpha=tealAlpha;ctx.fillStyle='rgb(15,101,77)';ctx.fillRect(targetRect.left,y,targetRect.width,historyRowH+.2);
+          const r=Math.round(10-6*t),g=Math.round(45-27*t),b=Math.round(43-19*t);
+          ctx.globalAlpha=tealAlpha;ctx.fillStyle=`rgb(${r},${g},${b})`;ctx.fillRect(targetRect.left,y,targetRect.width,historyRowH+.2);
           if(detailAlpha>.02){
             for(let c=0;c<cols;c++){
               if(!row.cells[c])continue;
               const ci=Math.max(0,row.colors[c]-1);
-              ctx.globalAlpha=.92*detailAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,historyRowH-.6));
+              ctx.globalAlpha=.90*detailAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,historyRowH-.6));
             }
             const line=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-            line.addColorStop(0,'rgba(15,101,77,0)');line.addColorStop(.20,`rgba(99,213,208,${.58*detailAlpha})`);line.addColorStop(.62,`rgba(255,240,176,${.72*detailAlpha})`);line.addColorStop(1,'rgba(216,184,106,0)');
+            line.addColorStop(0,'rgba(15,101,77,0)');line.addColorStop(.20,`rgba(99,213,208,${.54*detailAlpha})`);line.addColorStop(.62,`rgba(255,240,176,${.78*detailAlpha})`);line.addColorStop(1,'rgba(216,184,106,0)');
             ctx.globalAlpha=1;ctx.fillStyle=line;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,historyRowH*.22));
           }
         }
         ctx.globalAlpha=1;
 
-        /* Settled body begins after the ten-row history and bridges teal into resume paper-white. */
+        /* Settled body begins after row 30 and resolves into the portfolio's dark teal background range. */
         if(solidHeight>0&&wallProgress>.08){
           const g=ctx.createLinearGradient(0,solidTop,0,targetRect.bottom);
-          g.addColorStop(0,'rgba(15,101,77,.98)');
-          g.addColorStop(.45,'rgba(38,128,108,.94)');
-          g.addColorStop(.78,'rgba(194,222,215,.96)');
-          g.addColorStop(1,'rgba(245,244,239,1)');
+          g.addColorStop(0,'rgba(10,45,43,.98)');
+          g.addColorStop(.34,'rgba(7,32,36,.98)');
+          g.addColorStop(.70,'rgba(5,24,30,.99)');
+          g.addColorStop(1,'rgba(3,15,20,1)');
           ctx.globalAlpha=clamp((wallProgress-.08)/.18,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,solidTop,targetRect.width,solidHeight);ctx.globalAlpha=1;
         }
 
