@@ -12,11 +12,36 @@
   const fallbackMode=!supports3D||!supportsPointers||!window.requestAnimationFrame;
 
   let angle=0,velocity=0,raf=0,gesture='idle',activePointer=null,startX=0,startY=0,lastX=0,lastT=0,generation=0,geometryRaf=0,zone=null,recoveryRaf=0;
+  let edgePhase=0,fallbackEdgeTimer=0,fallbackLastScrollLeft=0;
   const normalize=n=>((n%CARD_COUNT)+CARD_COUNT)%CARD_COUNT;
   const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
   const setDot=index=>dots.forEach((dot,i)=>dot.classList.toggle('on',i===normalize(index)));
   const promoteBarrel=()=>{barrel.style.willChange='transform'};
   const releaseBarrel=()=>{barrel.style.willChange='auto'};
+
+  /* Motion-only gold edge tracer. The default is a simple border glow; browsers
+     with conic-gradient + mask compositing get a directional traveling tracer. */
+  const edgeStyle=document.createElement('style');
+  edgeStyle.textContent=`
+    .page::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;opacity:0;border:2px solid rgba(255,218,111,.82);box-shadow:inset 0 0 10px rgba(216,184,106,.22),0 0 13px rgba(255,218,111,.42);transition:opacity 110ms linear}
+    .barrel.edge-motion .page::before{opacity:var(--edge-strength,.45)}
+    .edge-tracer-supported .page::before{padding:2px;border:0;box-shadow:none;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 262deg,rgba(216,184,106,.08) 278deg,rgba(255,218,111,.92) 314deg,rgba(255,240,176,1) 326deg,rgba(216,184,106,.18) 350deg,transparent 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;filter:drop-shadow(0 0 4px rgba(255,218,111,.72))}
+    @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before{background:none;border:1px solid rgba(216,184,106,.55);-webkit-mask:none;mask:none;filter:none}}
+  `;
+  document.head.appendChild(edgeStyle);
+  const tracerSupported=!!(window.CSS?.supports?.('background','conic-gradient(from 0deg,red,blue)')&&(window.CSS?.supports?.('-webkit-mask-composite','xor')||window.CSS?.supports?.('mask-composite','exclude')));
+  if(tracerSupported)document.documentElement.classList.add('edge-tracer-supported');
+  function stopEdgeGlow(){barrel.classList.remove('edge-motion');barrel.style.setProperty('--edge-strength','0')}
+  function updateEdgeGlow(motionVelocity){
+    const speed=Math.abs(motionVelocity);
+    if(speed<2){stopEdgeGlow();return}
+    const direction=Math.sign(motionVelocity)||1;
+    edgePhase=(edgePhase+direction*clamp(speed*.035,1.2,12))%360;
+    const strength=clamp(.24+speed/420,.24,.88);
+    barrel.style.setProperty('--edge-angle',`${edgePhase.toFixed(1)}deg`);
+    barrel.style.setProperty('--edge-strength',strength.toFixed(2));
+    barrel.classList.add('edge-motion');
+  }
 
   /* Independent ambient spotlights. */
   const SPOTLIGHT_STARTS=[[-38,-30],[0,-34],[38,-30],[-42,0],[0,0],[42,0],[-38,30],[0,34],[38,30],[-20,-15],[22,14],[-14,22]];
@@ -52,14 +77,20 @@
   /* Fallback carousel for browsers without the required 3D/pointer stack. */
   function fallbackStride(){const first=pages[0];return first?first.offsetWidth+18:0}
   function currentFallbackIndex(){const stride=fallbackStride();return stride>0?clamp(Math.round(barrel.scrollLeft/stride),0,CARD_COUNT-1):0}
-  function alignFallback(){const stride=fallbackStride(),index=currentFallbackIndex();if(stride>0)barrel.scrollLeft=index*stride;setDot(index)}
+  function alignFallback(){const stride=fallbackStride(),index=currentFallbackIndex();if(stride>0)barrel.scrollLeft=index*stride;setDot(index);stopEdgeGlow()}
   function enableFallback(){
     document.documentElement.classList.add('carousel-fallback');stage.style.perspective='none';stage.style.overflow='hidden';
     Object.assign(barrel.style,{display:'flex',gap:'18px',width:'100%',maxWidth:'610px',height:'auto',minHeight:`${Math.round(350*CARD_HEIGHT_SCALE)}px`,overflowX:'auto',overflowY:'hidden',transform:'none',transformStyle:'flat',scrollSnapType:'x mandatory',scrollBehavior:'smooth',WebkitOverflowScrolling:'touch',touchAction:'pan-x pan-y',overscrollBehaviorX:'contain',pointerEvents:'auto',userSelect:'auto',WebkitUserSelect:'auto',scrollbarWidth:'none',willChange:'auto'});
     pages.forEach(page=>Object.assign(page.style,{position:'relative',inset:'auto',left:'auto',right:'auto',transform:'none',flex:'0 0 90%',width:'90%',height:'auto',minHeight:`${Math.round(350*CARD_HEIGHT_SCALE)}px`,scrollSnapAlign:'center',scrollSnapStop:'always',backfaceVisibility:'visible',WebkitBackfaceVisibility:'visible'}));
-    barrel.addEventListener('scroll',()=>requestAnimationFrame(()=>setDot(currentFallbackIndex())),{passive:true});alignFallback();
+    fallbackLastScrollLeft=barrel.scrollLeft;
+    barrel.addEventListener('scroll',()=>requestAnimationFrame(()=>{
+      const current=barrel.scrollLeft,delta=current-fallbackLastScrollLeft;fallbackLastScrollLeft=current;
+      if(Math.abs(delta)>.25)updateEdgeGlow(delta*28);
+      clearTimeout(fallbackEdgeTimer);fallbackEdgeTimer=setTimeout(stopEdgeGlow,130);
+      setDot(currentFallbackIndex());
+    }),{passive:true});alignFallback();
   }
-  function rotateFallback(direction){const stride=fallbackStride();if(!stride)return;const target=clamp(currentFallbackIndex()+direction,0,CARD_COUNT-1);barrel.scrollTo({left:target*stride,behavior:'smooth'});setDot(target)}
+  function rotateFallback(direction){const stride=fallbackStride();if(!stride)return;updateEdgeGlow(direction*BUTTON_SPEED);clearTimeout(fallbackEdgeTimer);fallbackEdgeTimer=setTimeout(stopEdgeGlow,520);const target=clamp(currentFallbackIndex()+direction,0,CARD_COUNT-1);barrel.scrollTo({left:target*stride,behavior:'smooth'});setDot(target)}
 
   /* Geometry and state. */
   function syncGeometry(){
@@ -73,30 +104,31 @@
       const cardWidth=pages[0]?.offsetWidth||barrel.offsetWidth;if(cardWidth>0){const radius=cardWidth/(2*Math.tan(Math.PI/CARD_COUNT));document.documentElement.style.setProperty('--radius',`${radius.toFixed(2)}px`);if(zone)zone.style.width=`${Math.ceil(cardWidth)}px`}if(zone)zone.style.height=`${Math.ceil(barrel.offsetHeight)}px`;
     })
   }
-  function render(){if(fallbackMode)return;barrel.style.transform=`rotateY(${angle}deg)`;setDot(Math.round(angle/STEP))}
+  function render(){if(fallbackMode)return;barrel.style.transform=`rotateY(${angle}deg)`;setDot(Math.round(angle/STEP));updateEdgeGlow(velocity)}
   function stopAnimation(){if(raf)cancelAnimationFrame(raf);raf=0}
   function invalidate(){generation++;stopAnimation()}
   function releasePointer(pointerId){if(pointerId==null||!zone)return;try{if(zone.hasPointerCapture?.(pointerId))zone.releasePointerCapture(pointerId)}catch(_){}}
   function resetGesture(pointerId=activePointer){releasePointer(pointerId);activePointer=null;gesture='idle';if(zone)zone.style.cursor='grab'}
-  function snapToNearestCard(){if(fallbackMode){alignFallback();return}invalidate();resetGesture();velocity=0;angle=Math.round(angle/STEP)*STEP;render();releaseBarrel()}
+  function snapToNearestCard(){if(fallbackMode){alignFallback();return}invalidate();resetGesture();velocity=0;angle=Math.round(angle/STEP)*STEP;render();stopEdgeGlow();releaseBarrel()}
   function recoverCarousel({geometry=true}={}){
     if(recoveryRaf)cancelAnimationFrame(recoveryRaf);
     snapToNearestCard();
-    recoveryRaf=requestAnimationFrame(()=>{recoveryRaf=0;if(fallbackMode){alignFallback();return}if(geometry)syncGeometry();requestAnimationFrame(()=>{angle=Math.round(angle/STEP)*STEP;velocity=0;render();releaseBarrel()})})
+    recoveryRaf=requestAnimationFrame(()=>{recoveryRaf=0;if(fallbackMode){alignFallback();return}if(geometry)syncGeometry();requestAnimationFrame(()=>{angle=Math.round(angle/STEP)*STEP;velocity=0;render();stopEdgeGlow();releaseBarrel()})})
   }
 
   function settleToCard(initialVelocity,target){
     invalidate();promoteBarrel();const myGeneration=generation;let v=initialVelocity,last=performance.now(),started=last,stableFrames=0;
-    const finish=()=>{velocity=0;render();raf=0;releaseBarrel()};
+    velocity=initialVelocity;updateEdgeGlow(velocity);
+    const finish=()=>{velocity=0;render();stopEdgeGlow();raf=0;releaseBarrel()};
     const tick=now=>{if(myGeneration!==generation)return;const dt=Math.min(.032,Math.max(.008,(now-last)/1000));last=now;const distance=target-angle,absDistance=Math.abs(distance),elapsed=(now-started)/1000;v+=((distance*SPRING)-(v*DAMPING))*dt;const step=v*dt;if(absDistance>0&&Math.abs(step)>=absDistance){angle=target;finish();return}angle+=step;velocity=v;render();if(Math.abs(target-angle)<.1&&Math.abs(v)<1)stableFrames++;else stableFrames=0;if((stableFrames>=3&&elapsed>=MIN_SETTLE_TIME)||elapsed>=MAX_SETTLE_TIME){angle=target;finish();return}raf=requestAnimationFrame(tick)};
     raf=requestAnimationFrame(tick)
   }
 
   /* Pointer state machine. */
   function begin(e){if(e.pointerType==='mouse'&&e.button!==0)return;invalidate();promoteBarrel();activePointer=e.pointerId;gesture='pending';startX=lastX=e.clientX;startY=e.clientY;lastT=performance.now();velocity=0;zone.style.cursor='grabbing';try{zone.setPointerCapture?.(e.pointerId)}catch(_){}}
-  function move(e){if(activePointer===null||e.pointerId!==activePointer||gesture==='idle')return;const dxTotal=e.clientX-startX,dyTotal=e.clientY-startY;if(gesture==='pending'){if(Math.hypot(dxTotal,dyTotal)<DIRECTION_LOCK)return;if(Math.abs(dyTotal)>Math.abs(dxTotal)){gesture='vertical';releasePointer(e.pointerId);activePointer=null;zone.style.cursor='grab';releaseBarrel();return}gesture='horizontal'}if(gesture!=='horizontal')return;e.preventDefault();const now=performance.now(),dx=e.clientX-lastX,dt=Math.max(8,now-lastT);lastX=e.clientX;lastT=now;angle+=dx*DRAG_GAIN;velocity=(dx*DRAG_GAIN/dt)*1000;render()}
+  function move(e){if(activePointer===null||e.pointerId!==activePointer||gesture==='idle')return;const dxTotal=e.clientX-startX,dyTotal=e.clientY-startY;if(gesture==='pending'){if(Math.hypot(dxTotal,dyTotal)<DIRECTION_LOCK)return;if(Math.abs(dyTotal)>Math.abs(dxTotal)){gesture='vertical';releasePointer(e.pointerId);activePointer=null;zone.style.cursor='grab';stopEdgeGlow();releaseBarrel();return}gesture='horizontal'}if(gesture!=='horizontal')return;e.preventDefault();const now=performance.now(),dx=e.clientX-lastX,dt=Math.max(8,now-lastT);lastX=e.clientX;lastT=now;angle+=dx*DRAG_GAIN;velocity=(dx*DRAG_GAIN/dt)*1000;render()}
   function finishHorizontal(releaseVelocity){const direction=Math.sign(releaseVelocity),current=Math.round(angle/STEP),offset=angle-current*STEP;let targetIndex;if(direction&&Math.abs(releaseVelocity)>MIN_RELEASE_SPEED){targetIndex=direction>0?Math.ceil(angle/STEP):Math.floor(angle/STEP);if(targetIndex===current)targetIndex+=direction}else{targetIndex=Math.round(angle/STEP);if(Math.abs(offset)>=STEP/2)targetIndex+=Math.sign(offset)}const target=targetIndex*STEP,initial=Math.sign(target-angle)*Math.min(MAX_RELEASE_SPEED,Math.max(45,Math.abs(releaseVelocity)));settleToCard(initial,target)}
-  function end(e){if(activePointer===null||e.pointerId!==activePointer)return;const wasHorizontal=gesture==='horizontal',releaseVelocity=velocity;resetGesture(e.pointerId);if(wasHorizontal)finishHorizontal(releaseVelocity);else releaseBarrel()}
+  function end(e){if(activePointer===null||e.pointerId!==activePointer)return;const wasHorizontal=gesture==='horizontal',releaseVelocity=velocity;resetGesture(e.pointerId);if(wasHorizontal)finishHorizontal(releaseVelocity);else{stopEdgeGlow();releaseBarrel()}}
   function cancel(e){if(activePointer!==null&&e?.pointerId!=null&&e.pointerId!==activePointer)return;snapToNearestCard()}
   function rotateBy(direction){if(fallbackMode)return rotateFallback(direction);invalidate();resetGesture();const target=(Math.round(angle/STEP)+direction)*STEP;settleToCard(direction*BUTTON_SPEED,target)}
 
