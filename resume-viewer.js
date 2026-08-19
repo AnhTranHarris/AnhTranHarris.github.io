@@ -58,7 +58,7 @@
     const oldCols=isMobile?34:48,oldRows=isMobile?54:66;
     const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
     const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
-    const activeDepth=Math.min(10,rows),fadeDepth=Math.min(20,Math.max(0,rows-activeDepth));
+    const activeDepth=Math.min(5,rows),fadeDepth=Math.min(25,Math.max(0,rows-activeDepth));
     const historyRowH=clamp(targetRect.height*(isMobile?.0034:.0038),2.4,4.2);
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
@@ -118,16 +118,16 @@
         const solidTop=Math.min(targetRect.bottom,activeY+historyRows*historyRowH);
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
 
-        /* Rows 1-10: live particle-reactive Tetris rows only. */
+        /* Rows 1-5: live particle-reactive Tetris rows only. */
         for(let r=0;r<activeDepth;r++){
           const globalRow=rows-1-completedRows-r;if(globalRow<0)continue;const y=targetRect.top+globalRow*blockH;
           for(let c=0;c<cols;c++){if(!active[r][c])continue;const ci=activeColors[r][c]-1;ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
-          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}
+          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.55+Math.random()*.75));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(255,255,245,0)');g.addColorStop(.18,`rgba(255,240,176,${Math.min(1,flash[r]*.9)})`);g.addColorStop(.50,`rgba(255,255,248,${Math.min(1,flash[r]*1.18)})`);g.addColorStop(.72,`rgba(216,184,106,${Math.min(1,flash[r])})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(2.4,historyRowH*.72))}
         }
         normalizeFlashes();
-        if(Math.random()<.12){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.38+.62*Math.random())}}
+        if(Math.random()<.18){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.68+.32*Math.random())}}
 
-        /* Rows 11-30: completed-row history. Structure remains visible while color independently cools into dark teal. */
+        /* Rows 6-30: completed-row history. Structure remains visible while color independently cools into dark teal. */
         for(let i=0;i<historyRows;i++){
           const row=history[i];
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
@@ -149,9 +149,10 @@
           ctx.restore();
         }
 
-        /* Separate bottom-up resume-paper layer: dark at its top edge, resolving to paper white at the bottom. */
+        /* Separate bottom-up resume-paper layer. Cubic rise preserves the dark teal trail much longer. */
         if(solidHeight>0&&wallProgress>.08){
-          const whiteRise=clamp((wallProgress-.18)/.775,0,1);
+          const whitePhase=clamp((wallProgress-.20)/.80,0,1);
+          const whiteRise=whitePhase*whitePhase*whitePhase;
           const visibleHeight=solidHeight*whiteRise;
           if(visibleHeight>0){
             const whiteTop=targetRect.bottom-visibleHeight;
@@ -161,7 +162,7 @@
             g.addColorStop(.58,'rgba(92,119,118,1)');
             g.addColorStop(.82,'rgba(205,214,210,1)');
             g.addColorStop(1,'rgba(245,244,239,1)');
-            ctx.save();ctx.globalAlpha=clamp((wallProgress-.08)/.22,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,whiteTop,targetRect.width,visibleHeight);ctx.restore();
+            ctx.save();ctx.globalAlpha=clamp((wallProgress-.18)/.62,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,whiteTop,targetRect.width,visibleHeight);ctx.restore();
           }
           if(whiteRise<1){
             ctx.save();ctx.globalAlpha=1;ctx.fillStyle='rgb(3,15,20)';ctx.fillRect(targetRect.left,solidTop,targetRect.width,Math.max(0,solidHeight-visibleHeight));ctx.restore();
