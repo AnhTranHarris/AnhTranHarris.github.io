@@ -144,6 +144,22 @@
           if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}else if(Math.random()<.018){flash[r]=.30+.60*Math.random()}
         }
 
+        /* Ten trailing construction lines follow the five live rows, fading from fully visible to transparent. */
+        const trailLineGradient=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+        trailLineGradient.addColorStop(0,'rgba(15,101,77,0)');
+        trailLineGradient.addColorStop(.18,'rgba(99,213,208,1)');
+        trailLineGradient.addColorStop(.58,'rgba(255,240,176,1)');
+        trailLineGradient.addColorStop(.84,'rgba(216,184,106,.9)');
+        trailLineGradient.addColorStop(1,'rgba(216,184,106,0)');
+        for(let i=0;i<10;i++){
+          const opacity=1-(i/9);
+          const y=activeY+(activeDepth+i+1)*blockH;
+          if(y>targetRect.bottom)break;
+          ctx.globalAlpha=opacity;ctx.fillStyle=trailLineGradient;
+          ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.42));
+        }
+        ctx.globalAlpha=1;
+
         const scan=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
         scan.addColorStop(0,'rgba(15,101,77,0)');scan.addColorStop(.16,'rgba(99,213,208,.92)');scan.addColorStop(.60,'rgba(255,240,176,1)');scan.addColorStop(1,'rgba(216,184,106,0)');
         ctx.globalAlpha=.92;ctx.fillStyle=scan;ctx.fillRect(targetRect.left,activeY,targetRect.width,Math.max(1.5,blockH*.7));ctx.globalAlpha=1;
