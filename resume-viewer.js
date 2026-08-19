@@ -59,6 +59,7 @@
     const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
     const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
     const activeDepth=Math.min(5,rows),fadeDepth=Math.min(10,Math.max(0,rows-activeDepth));
+    const historyRowH=clamp(targetRect.height*(isMobile?.0055:.006),3.5,6);
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const flash=new Float32Array(activeDepth);
@@ -114,7 +115,7 @@
         const horizonRows=Math.min(rows,completedRows);
         const activeY=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
         const historyRows=Math.min(fadeDepth,history.length);
-        const solidTop=Math.min(targetRect.bottom,activeY+historyRows*blockH);
+        const solidTop=Math.min(targetRect.bottom,activeY+historyRows*historyRowH);
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
 
         /* Rows 1-5: live particle-reactive Tetris rows only. */
@@ -126,21 +127,24 @@
         normalizeFlashes();
         if(Math.random()<.09){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.30+.60*Math.random())}}
 
-        /* Rows 6-15: snapshots of completed rows. They never receive particles or flash. */
+        /* Rows 6-15: completed-row history rendered at a readable visual height. */
         for(let i=0;i<historyRows;i++){
           const row=history[i];
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
           const detailAlpha=Math.max(0,1-t);
-          const tealAlpha=.20+.78*t;
-          const y=activeY+i*blockH;
+          const tealAlpha=.10+.86*t;
+          const y=activeY+i*historyRowH;
           if(y>=targetRect.bottom)break;
-          ctx.globalAlpha=tealAlpha;ctx.fillStyle='rgb(15,101,77)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH));
+          ctx.globalAlpha=tealAlpha;ctx.fillStyle='rgb(15,101,77)';ctx.fillRect(targetRect.left,y,targetRect.width,historyRowH+.2);
           if(detailAlpha>.02){
             for(let c=0;c<cols;c++){
               if(!row.cells[c])continue;
               const ci=Math.max(0,row.colors[c]-1);
-              ctx.globalAlpha=.88*detailAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24));
+              ctx.globalAlpha=.92*detailAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,historyRowH-.6));
             }
+            const line=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+            line.addColorStop(0,'rgba(15,101,77,0)');line.addColorStop(.20,`rgba(99,213,208,${.58*detailAlpha})`);line.addColorStop(.62,`rgba(255,240,176,${.72*detailAlpha})`);line.addColorStop(1,'rgba(216,184,106,0)');
+            ctx.globalAlpha=1;ctx.fillStyle=line;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,historyRowH*.22));
           }
         }
         ctx.globalAlpha=1;
