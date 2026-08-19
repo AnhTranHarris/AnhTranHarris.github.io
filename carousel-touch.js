@@ -44,6 +44,10 @@
   const fineQuery=window.matchMedia?.('(any-pointer:fine)');
   const coarseQuery=window.matchMedia?.('(any-pointer:coarse)');
   const hoverQuery=window.matchMedia?.('(any-hover:hover)');
+  const forcedColorsQuery=window.matchMedia?.('(forced-colors: active)');
+  const ua=navigator.userAgent||'',vendor=navigator.vendor||'';
+  const isFirefox=/Firefox\//.test(ua);
+  const isSafari=/Safari\//.test(ua)&&/Apple Computer/.test(vendor)&&!/(Chrome|Chromium|CriOS|Edg|OPR|FxiOS)/.test(ua);
   const rendererClasses=['desktop-edge-standard','desktop-edge-webkit','desktop-edge-fallback'];
   const inputClasses=['desktop-input-fine','desktop-input-coarse','desktop-input-hybrid'];
   const performanceClasses=['desktop-performance-full','desktop-performance-reduced'];
@@ -52,7 +56,9 @@
     rendererClasses.forEach(name=>root.classList.remove(name));
     root.classList.remove('edge-tracer-supported');
     if(desktopQuery?.matches){
-      if(hasStandardMask)root.classList.add('desktop-edge-standard');
+      if(forcedColorsQuery?.matches||!hasConic)root.classList.add('desktop-edge-fallback');
+      else if(isSafari&&hasWebkitMask)root.classList.add('desktop-edge-webkit');
+      else if((isFirefox||!isSafari)&&hasStandardMask)root.classList.add('desktop-edge-standard');
       else if(hasWebkitMask)root.classList.add('desktop-edge-webkit');
       else root.classList.add('desktop-edge-fallback');
     }else if(hasConic&&(hasStandardMask||hasWebkitMask))root.classList.add('edge-tracer-supported');
@@ -77,7 +83,7 @@
   }
   function syncDesktopCapabilities(){applyEdgeRenderer();applyInputProfile();applyPerformanceProfile()}
   syncDesktopCapabilities();
-  [desktopQuery,fineQuery,coarseQuery,hoverQuery].forEach(query=>query?.addEventListener?.('change',syncDesktopCapabilities));
+  [desktopQuery,fineQuery,coarseQuery,hoverQuery,forcedColorsQuery].forEach(query=>query?.addEventListener?.('change',syncDesktopCapabilities));
   navigator.connection?.addEventListener?.('change',syncDesktopCapabilities);
 
   function stopEdgeGlow(){barrel.classList.remove('edge-motion');barrel.style.setProperty('--edge-strength','0');edgeLastT=0}
