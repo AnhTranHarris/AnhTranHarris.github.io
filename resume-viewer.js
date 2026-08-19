@@ -151,7 +151,7 @@
 
         /* Separate bottom-up resume-paper layer: dark at its top edge, resolving to paper white at the bottom. */
         if(solidHeight>0&&wallProgress>.08){
-          const whiteRise=clamp((wallProgress-.18)/.62,0,1);
+          const whiteRise=clamp((wallProgress-.18)/.775,0,1);
           const visibleHeight=solidHeight*whiteRise;
           if(visibleHeight>0){
             const whiteTop=targetRect.bottom-visibleHeight;
