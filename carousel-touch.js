@@ -19,7 +19,7 @@
     .page::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;opacity:0;border:2px solid rgba(255,226,126,.94);box-shadow:inset 0 0 12px rgba(229,193,95,.30),0 0 17px rgba(255,226,126,.56),0 0 5px rgba(255,244,196,.32);transition:opacity 110ms linear}
     .barrel.edge-motion .page::before{opacity:var(--edge-strength,.56)}
     .edge-tracer-supported .page::before{padding:2px;border:0;box-shadow:none;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 258deg,rgba(216,184,106,.10) 274deg,rgba(255,222,112,.96) 307deg,rgba(255,247,207,1) 323deg,rgba(255,255,238,1) 329deg,rgba(255,236,158,.92) 337deg,rgba(216,184,106,.22) 353deg,transparent 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;filter:drop-shadow(0 0 5px rgba(255,226,126,.90)) drop-shadow(0 0 9px rgba(216,184,106,.36))}
-    @media(min-width:901px){.page::before{border-width:2.2px}.edge-tracer-supported .page::before{padding:2.2px}}
+    @media(min-width:901px){.page::before{border-width:3px}.edge-tracer-supported .page::before{padding:3px}}
     @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before{background:none;border:1px solid rgba(229,193,95,.68);-webkit-mask:none;mask:none;filter:none}}
   `;
   document.head.appendChild(edgeStyle);
