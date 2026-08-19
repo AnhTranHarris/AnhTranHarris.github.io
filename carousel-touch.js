@@ -21,14 +21,34 @@
     .edge-tracer-supported .page::before{padding:2px;border:0;box-shadow:none;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 258deg,rgba(216,184,106,.10) 274deg,rgba(255,222,112,.96) 307deg,rgba(255,247,207,1) 323deg,rgba(255,255,238,1) 329deg,rgba(255,236,158,.92) 337deg,rgba(216,184,106,.22) 353deg,transparent 360deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;filter:drop-shadow(0 0 5px rgba(255,226,126,.90)) drop-shadow(0 0 9px rgba(216,184,106,.36))}
     @media(min-width:901px){
       .page::before{border-width:10px;box-shadow:inset 0 0 18px rgba(255,215,112,.42),0 0 28px rgba(255,226,126,.72),0 0 11px rgba(255,249,218,.48)}
-      .edge-tracer-supported .page::before{padding:10px;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 70deg,rgba(133,92,25,.025) 92deg,rgba(164,111,30,.06) 118deg,rgba(180,128,38,.11) 144deg,rgba(202,156,62,.18) 170deg,rgba(216,184,106,.28) 196deg,rgba(235,180,64,.42) 220deg,rgba(245,193,73,.58) 242deg,rgba(255,208,84,.74) 262deg,rgba(255,215,96,.86) 278deg,rgba(255,226,121,.94) 292deg,rgba(255,232,142,.98) 302deg,rgba(255,241,181,1) 310deg,rgba(255,247,207,1) 316deg,rgba(255,255,246,1) 320deg,rgba(255,255,255,1) 323deg,rgba(255,253,235,1) 327deg,rgba(255,250,222,1) 332deg,rgba(255,242,184,.99) 338deg,rgba(255,232,142,.96) 344deg,rgba(247,204,88,.80) 350deg,rgba(216,184,106,.48) 355deg,rgba(145,98,25,.18) 358deg,transparent 360deg);filter:drop-shadow(0 0 8px rgba(255,226,126,1)) drop-shadow(0 0 14px rgba(216,184,106,.46))}
+      .desktop-edge-standard .page::before,.desktop-edge-webkit .page::before{padding:10px;border:0;background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 70deg,rgba(133,92,25,.025) 92deg,rgba(164,111,30,.06) 118deg,rgba(180,128,38,.11) 144deg,rgba(202,156,62,.18) 170deg,rgba(216,184,106,.28) 196deg,rgba(235,180,64,.42) 220deg,rgba(245,193,73,.58) 242deg,rgba(255,208,84,.74) 262deg,rgba(255,215,96,.86) 278deg,rgba(255,226,121,.94) 292deg,rgba(255,232,142,.98) 302deg,rgba(255,241,181,1) 310deg,rgba(255,247,207,1) 316deg,rgba(255,255,246,1) 320deg,rgba(255,255,255,1) 323deg,rgba(255,253,235,1) 327deg,rgba(255,250,222,1) 332deg,rgba(255,242,184,.99) 338deg,rgba(255,232,142,.96) 344deg,rgba(247,204,88,.80) 350deg,rgba(216,184,106,.48) 355deg,rgba(145,98,25,.18) 358deg,transparent 360deg);filter:drop-shadow(0 0 8px rgba(255,226,126,1)) drop-shadow(0 0 14px rgba(216,184,106,.46))}
+      .desktop-edge-standard .page::before{mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;-webkit-mask:none}
+      .desktop-edge-webkit .page::before{-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:none}
+      .desktop-edge-fallback .page::before{border:10px solid rgba(255,220,112,.96);background:none;box-shadow:inset 0 0 18px rgba(255,215,112,.42),0 0 32px rgba(255,226,126,.76),0 0 13px rgba(255,249,218,.52)}
       .barrel.edge-motion .page::before{opacity:min(1,calc(var(--edge-strength,.56) * 1.25))}
     }
-    @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before{background:none;border:1px solid rgba(229,193,95,.68);-webkit-mask:none;mask:none;filter:none}}
+    @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before,.desktop-edge-standard .page::before,.desktop-edge-webkit .page::before{background:none;border:1px solid rgba(229,193,95,.68);-webkit-mask:none;mask:none;filter:none}}
   `;
   document.head.appendChild(edgeStyle);
-  const tracerSupported=!!(window.CSS?.supports?.('background','conic-gradient(from 0deg,red,blue)')&&(window.CSS?.supports?.('-webkit-mask-composite','xor')||window.CSS?.supports?.('mask-composite','exclude')));
-  if(tracerSupported)document.documentElement.classList.add('edge-tracer-supported');
+
+  const hasConic=!!window.CSS?.supports?.('background','conic-gradient(from 0deg,red,blue)');
+  const hasStandardMask=!!(hasConic&&window.CSS?.supports?.('mask-composite','exclude'));
+  const hasWebkitMask=!!(hasConic&&window.CSS?.supports?.('-webkit-mask-composite','xor'));
+  const desktopQuery=window.matchMedia?.('(min-width:901px)');
+  const rendererClasses=['desktop-edge-standard','desktop-edge-webkit','desktop-edge-fallback'];
+  function applyEdgeRenderer(){
+    const root=document.documentElement;
+    rendererClasses.forEach(name=>root.classList.remove(name));
+    root.classList.remove('edge-tracer-supported');
+    if(desktopQuery?.matches){
+      if(hasStandardMask)root.classList.add('desktop-edge-standard');
+      else if(hasWebkitMask)root.classList.add('desktop-edge-webkit');
+      else root.classList.add('desktop-edge-fallback');
+    }else if(hasConic&&(hasStandardMask||hasWebkitMask))root.classList.add('edge-tracer-supported');
+  }
+  applyEdgeRenderer();
+  desktopQuery?.addEventListener?.('change',applyEdgeRenderer);
+
   function stopEdgeGlow(){barrel.classList.remove('edge-motion');barrel.style.setProperty('--edge-strength','0')}
   function updateEdgeGlow(motionVelocity){const speed=Math.abs(motionVelocity);if(speed<2){stopEdgeGlow();return}const direction=Math.sign(motionVelocity)||1;edgePhase=(edgePhase+direction*clamp(speed*.035,1.2,12))%360;const strength=clamp(.30+speed/336,.30,1);barrel.style.setProperty('--edge-angle',`${edgePhase.toFixed(1)}deg`);barrel.style.setProperty('--edge-strength',strength.toFixed(2));barrel.classList.add('edge-motion')}
 
