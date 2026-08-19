@@ -127,36 +127,49 @@
         normalizeFlashes();
         if(Math.random()<.12){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.38+.62*Math.random())}}
 
-        /* Rows 11-30: completed-row history only. Detail cools away; no glow is drawn here. */
+        /* Rows 11-30: completed-row history. Structure remains visible while color independently cools into dark teal. */
         for(let i=0;i<historyRows;i++){
           const row=history[i];
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
-          const detailAlpha=Math.max(0,1-(t*2.35));
+          const structureAlpha=.96-(.91*t);
+          const colorBlend=t*t*(3-2*t);
           const y=activeY+i*historyRowH;
           if(y>=targetRect.bottom)break;
-          const r=Math.round(10-7*t),g=Math.round(45-30*t),b=Math.round(43-23*t);
-          ctx.globalAlpha=.72+.28*t;ctx.fillStyle=`rgb(${r},${g},${b})`;ctx.fillRect(targetRect.left,y,targetRect.width,historyRowH+.2);
-          if(detailAlpha>.02){
+          const br=Math.round(10+(3-10)*colorBlend),bg=Math.round(45+(15-45)*colorBlend),bb=Math.round(43+(20-43)*colorBlend);
+          ctx.save();
+          ctx.globalAlpha=.80+.20*colorBlend;ctx.fillStyle=`rgb(${br},${bg},${bb})`;ctx.fillRect(targetRect.left,y,targetRect.width,historyRowH+.2);
+          if(structureAlpha>.025){
             for(let c=0;c<cols;c++){
               if(!row.cells[c])continue;
               const ci=Math.max(0,row.colors[c]-1);
-              ctx.globalAlpha=.72*detailAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,historyRowH-.6));
+              ctx.globalAlpha=.62*structureAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,historyRowH-.6));
             }
+            ctx.globalAlpha=.34*structureAlpha;ctx.fillStyle='rgba(117,186,181,1)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(.65,historyRowH*.12));
           }
+          ctx.restore();
         }
-        ctx.globalAlpha=1;
 
-        /* Settled body begins exactly where row 30 ends, with the same dark teal and no luminous seam. */
+        /* Separate bottom-up resume-paper layer: dark at its top edge, resolving to paper white at the bottom. */
         if(solidHeight>0&&wallProgress>.08){
-          const g=ctx.createLinearGradient(0,solidTop,0,targetRect.bottom);
-          g.addColorStop(0,'rgba(3,15,20,1)');
-          g.addColorStop(.48,'rgba(3,15,20,1)');
-          g.addColorStop(1,'rgba(2,10,14,1)');
-          ctx.globalAlpha=clamp((wallProgress-.08)/.18,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,solidTop,targetRect.width,solidHeight);ctx.globalAlpha=1;
+          const whiteRise=clamp((wallProgress-.18)/.62,0,1);
+          const visibleHeight=solidHeight*whiteRise;
+          if(visibleHeight>0){
+            const whiteTop=targetRect.bottom-visibleHeight;
+            const g=ctx.createLinearGradient(0,whiteTop,0,targetRect.bottom);
+            g.addColorStop(0,'rgba(3,15,20,1)');
+            g.addColorStop(.28,'rgba(18,44,46,1)');
+            g.addColorStop(.58,'rgba(92,119,118,1)');
+            g.addColorStop(.82,'rgba(205,214,210,1)');
+            g.addColorStop(1,'rgba(245,244,239,1)');
+            ctx.save();ctx.globalAlpha=clamp((wallProgress-.08)/.22,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,whiteTop,targetRect.width,visibleHeight);ctx.restore();
+          }
+          if(whiteRise<1){
+            ctx.save();ctx.globalAlpha=1;ctx.fillStyle='rgb(3,15,20)';ctx.fillRect(targetRect.left,solidTop,targetRect.width,Math.max(0,solidHeight-visibleHeight));ctx.restore();
+          }
         }
 
         /* Final frame definition is dark teal only; no gold/cyan glow after the settling rows. */
-        if(p>.90){const a=clamp((p-.90)/.10,0,1);ctx.globalAlpha=a*.42;ctx.strokeStyle='rgba(9,58,60,.72)';ctx.lineWidth=1;ctx.strokeRect(targetRect.left+.5,targetRect.top+.5,targetRect.width-1,targetRect.height-1);ctx.globalAlpha=1}
+        if(p>.90){const a=clamp((p-.90)/.10,0,1);ctx.save();ctx.globalAlpha=a*.42;ctx.strokeStyle='rgba(9,58,60,.72)';ctx.lineWidth=1;ctx.strokeRect(targetRect.left+.5,targetRect.top+.5,targetRect.width-1,targetRect.height-1);ctx.restore()}
       }
 
       if(elapsed<BUILD){particleRaf=requestAnimationFrame(tick)}else{particleRaf=0}
