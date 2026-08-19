@@ -9,7 +9,7 @@
   const supports3D=!!(window.CSS?.supports?.('transform-style','preserve-3d')&&window.CSS?.supports?.('perspective','1px'));
   const supportsPointers='PointerEvent'in window,fallbackMode=!supports3D||!supportsPointers||!window.requestAnimationFrame;
   let angle=0,velocity=0,raf=0,gesture='idle',activePointer=null,startX=0,startY=0,lastX=0,lastT=0,generation=0,geometryRaf=0,zone=null,recoveryRaf=0;
-  let edgePhase=0,fallbackEdgeTimer=0,fallbackLastScrollLeft=0;
+  let edgePhase=0,edgeLastT=0,desktopRenderRaf=0,fallbackEdgeTimer=0,fallbackLastScrollLeft=0;
   const normalize=n=>((n%CARD_COUNT)+CARD_COUNT)%CARD_COUNT,clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
   const setDot=index=>dots.forEach((dot,i)=>dot.classList.toggle('on',i===normalize(index)));
   const promoteBarrel=()=>{barrel.style.willChange='transform'},releaseBarrel=()=>{barrel.style.willChange='auto'};
@@ -80,8 +80,23 @@
   [desktopQuery,fineQuery,coarseQuery,hoverQuery].forEach(query=>query?.addEventListener?.('change',syncDesktopCapabilities));
   navigator.connection?.addEventListener?.('change',syncDesktopCapabilities);
 
-  function stopEdgeGlow(){barrel.classList.remove('edge-motion');barrel.style.setProperty('--edge-strength','0')}
-  function updateEdgeGlow(motionVelocity){const speed=Math.abs(motionVelocity);if(speed<2){stopEdgeGlow();return}const direction=Math.sign(motionVelocity)||1;edgePhase=(edgePhase+direction*clamp(speed*.035,1.2,12))%360;const strength=clamp(.30+speed/336,.30,1);barrel.style.setProperty('--edge-angle',`${edgePhase.toFixed(1)}deg`);barrel.style.setProperty('--edge-strength',strength.toFixed(2));barrel.classList.add('edge-motion')}
+  function stopEdgeGlow(){barrel.classList.remove('edge-motion');barrel.style.setProperty('--edge-strength','0');edgeLastT=0}
+  function updateEdgeGlow(motionVelocity,now=performance.now()){
+    const speed=Math.abs(motionVelocity);if(speed<2){stopEdgeGlow();return}
+    const direction=Math.sign(motionVelocity)||1;
+    if(desktopQuery?.matches){
+      const dt=edgeLastT?clamp((now-edgeLastT)/1000,0,.05):1/60;
+      edgeLastT=now;
+      const degreesPerSecond=clamp(90+speed*.55,105,260);
+      edgePhase=(edgePhase+direction*degreesPerSecond*dt)%360;
+    }else{
+      edgePhase=(edgePhase+direction*clamp(speed*.035,1.2,12))%360;
+    }
+    const strength=clamp(.30+speed/336,.30,1);
+    barrel.style.setProperty('--edge-angle',`${edgePhase.toFixed(1)}deg`);
+    barrel.style.setProperty('--edge-strength',strength.toFixed(2));
+    barrel.classList.add('edge-motion');
+  }
 
   const SPOTLIGHT_STARTS=[[-38,-30],[0,-34],[38,-30],[-42,0],[0,0],[42,0],[-38,30],[0,34],[38,30],[-20,-15],[22,14],[-14,22]];
   const spotlightStates=spotlightElements.map((el,index)=>({el,index,animation:null,lastStart:-1,activeStart:-1}));
@@ -99,17 +114,18 @@
   function rotateFallback(direction){const stride=fallbackStride();if(!stride)return;updateEdgeGlow(direction*BUTTON_SPEED);clearTimeout(fallbackEdgeTimer);fallbackEdgeTimer=setTimeout(stopEdgeGlow,520);const target=clamp(currentFallbackIndex()+direction,0,CARD_COUNT-1);barrel.scrollTo({left:target*stride,behavior:'smooth'});setDot(target)}
 
   function syncGeometry(){if(fallbackMode)return;if(geometryRaf)cancelAnimationFrame(geometryRaf);geometryRaf=requestAnimationFrame(()=>{geometryRaf=0;const viewportHeight=window.visualViewport?.height||window.innerHeight,width=window.innerWidth;let cardHeight;if(width<=560){cardHeight=clamp(viewportHeight*.54,350,390)*CARD_HEIGHT_SCALE;stage.style.height=`${Math.round(cardHeight+110)}px`}else if(width<=900){cardHeight=clamp(viewportHeight*.56,390,430)*CARD_HEIGHT_SCALE;stage.style.height=`${Math.round(cardHeight+100)}px`}else{cardHeight=430*CARD_HEIGHT_SCALE;stage.style.height=`${Math.round(cardHeight+120)}px`}stage.style.minHeight=stage.style.height;barrel.style.height=`${Math.round(cardHeight)}px`;const cardWidth=pages[0]?.offsetWidth||barrel.offsetWidth;if(cardWidth>0){const radius=cardWidth/(2*Math.tan(Math.PI/CARD_COUNT));document.documentElement.style.setProperty('--radius',`${radius.toFixed(2)}px`);if(zone)zone.style.width=`${Math.ceil(cardWidth)}px`}if(zone)zone.style.height=`${Math.ceil(barrel.offsetHeight)}px`})}
-  function render(){if(fallbackMode)return;barrel.style.transform=`rotateY(${angle}deg)`;setDot(Math.round(angle/STEP));updateEdgeGlow(velocity)}
-  function stopAnimation(){if(raf)cancelAnimationFrame(raf);raf=0}
+  function render(now=performance.now()){if(fallbackMode)return;barrel.style.transform=`rotateY(${angle}deg)`;setDot(Math.round(angle/STEP));updateEdgeGlow(velocity,now)}
+  function queueDesktopRender(){if(!desktopQuery?.matches){render();return}if(desktopRenderRaf)return;desktopRenderRaf=requestAnimationFrame(now=>{desktopRenderRaf=0;render(now)})}
+  function stopAnimation(){if(raf)cancelAnimationFrame(raf);raf=0;if(desktopRenderRaf)cancelAnimationFrame(desktopRenderRaf);desktopRenderRaf=0}
   function invalidate(){generation++;stopAnimation()}
   function releasePointer(pointerId){if(pointerId==null||!zone)return;try{if(zone.hasPointerCapture?.(pointerId))zone.releasePointerCapture(pointerId)}catch(_){}}
   function resetGesture(pointerId=activePointer){releasePointer(pointerId);activePointer=null;gesture='idle';if(zone)zone.style.cursor='grab'}
   function snapToNearestCard(){if(fallbackMode){alignFallback();return}invalidate();resetGesture();velocity=0;angle=Math.round(angle/STEP)*STEP;render();stopEdgeGlow();releaseBarrel()}
   function recoverCarousel({geometry=true}={}){if(recoveryRaf)cancelAnimationFrame(recoveryRaf);snapToNearestCard();recoveryRaf=requestAnimationFrame(()=>{recoveryRaf=0;if(fallbackMode){alignFallback();return}if(geometry)syncGeometry();requestAnimationFrame(()=>{angle=Math.round(angle/STEP)*STEP;velocity=0;render();stopEdgeGlow();releaseBarrel()})})}
-  function settleToCard(initialVelocity,target){invalidate();promoteBarrel();const myGeneration=generation;let v=initialVelocity,last=performance.now(),started=last,stableFrames=0;velocity=initialVelocity;updateEdgeGlow(velocity);const finish=()=>{velocity=0;render();stopEdgeGlow();raf=0;releaseBarrel()};const tick=now=>{if(myGeneration!==generation)return;const dt=Math.min(.032,Math.max(.008,(now-last)/1000));last=now;const distance=target-angle,absDistance=Math.abs(distance),elapsed=(now-started)/1000;v+=((distance*SPRING)-(v*DAMPING))*dt;const step=v*dt;if(absDistance>0&&Math.abs(step)>=absDistance){angle=target;finish();return}angle+=step;velocity=v;render();if(Math.abs(target-angle)<.1&&Math.abs(v)<1)stableFrames++;else stableFrames=0;if((stableFrames>=3&&elapsed>=MIN_SETTLE_TIME)||elapsed>=MAX_SETTLE_TIME){angle=target;finish();return}raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick)}
+  function settleToCard(initialVelocity,target){invalidate();promoteBarrel();const myGeneration=generation;let v=initialVelocity,last=performance.now(),started=last,stableFrames=0;velocity=initialVelocity;updateEdgeGlow(velocity,last);const finish=()=>{velocity=0;render();stopEdgeGlow();raf=0;releaseBarrel()};const tick=now=>{if(myGeneration!==generation)return;const dt=Math.min(.032,Math.max(.008,(now-last)/1000));last=now;const distance=target-angle,absDistance=Math.abs(distance),elapsed=(now-started)/1000;v+=((distance*SPRING)-(v*DAMPING))*dt;const step=v*dt;if(absDistance>0&&Math.abs(step)>=absDistance){angle=target;finish();return}angle+=step;velocity=v;render(now);if(Math.abs(target-angle)<.1&&Math.abs(v)<1)stableFrames++;else stableFrames=0;if((stableFrames>=3&&elapsed>=MIN_SETTLE_TIME)||elapsed>=MAX_SETTLE_TIME){angle=target;finish();return}raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick)}
 
   function begin(e){if(e.pointerType==='mouse'&&e.button!==0)return;invalidate();promoteBarrel();activePointer=e.pointerId;gesture='pending';startX=lastX=e.clientX;startY=e.clientY;lastT=performance.now();velocity=0;zone.style.cursor=e.pointerType==='mouse'?'grabbing':'default';try{zone.setPointerCapture?.(e.pointerId)}catch(_){}}
-  function move(e){if(activePointer===null||e.pointerId!==activePointer||gesture==='idle')return;const dxTotal=e.clientX-startX,dyTotal=e.clientY-startY,lock=e.pointerType==='mouse'&&desktopQuery?.matches?MOUSE_DIRECTION_LOCK:DIRECTION_LOCK;if(gesture==='pending'){if(Math.hypot(dxTotal,dyTotal)<lock)return;if(Math.abs(dyTotal)>Math.abs(dxTotal)){gesture='vertical';releasePointer(e.pointerId);activePointer=null;zone.style.cursor='grab';releaseBarrel();stopEdgeGlow();return}gesture='horizontal'}if(gesture!=='horizontal')return;e.preventDefault();const now=performance.now(),dx=e.clientX-lastX,dt=Math.max(8,now-lastT);lastX=e.clientX;lastT=now;angle+=dx*DRAG_GAIN;velocity=(dx*DRAG_GAIN/dt)*1000;render()}
+  function move(e){if(activePointer===null||e.pointerId!==activePointer||gesture==='idle')return;const dxTotal=e.clientX-startX,dyTotal=e.clientY-startY,lock=e.pointerType==='mouse'&&desktopQuery?.matches?MOUSE_DIRECTION_LOCK:DIRECTION_LOCK;if(gesture==='pending'){if(Math.hypot(dxTotal,dyTotal)<lock)return;if(Math.abs(dyTotal)>Math.abs(dxTotal)){gesture='vertical';releasePointer(e.pointerId);activePointer=null;zone.style.cursor='grab';releaseBarrel();stopEdgeGlow();return}gesture='horizontal'}if(gesture!=='horizontal')return;e.preventDefault();const now=performance.now(),dx=e.clientX-lastX,dt=Math.max(8,now-lastT);lastX=e.clientX;lastT=now;angle+=dx*DRAG_GAIN;velocity=(dx*DRAG_GAIN/dt)*1000;if(desktopQuery?.matches&&e.pointerType==='mouse')queueDesktopRender();else render(now)}
   function finishHorizontal(releaseVelocity){const direction=Math.sign(releaseVelocity),current=Math.round(angle/STEP),offset=angle-current*STEP;let targetIndex;if(direction&&Math.abs(releaseVelocity)>MIN_RELEASE_SPEED){targetIndex=direction>0?Math.ceil(angle/STEP):Math.floor(angle/STEP);if(targetIndex===current)targetIndex+=direction}else{targetIndex=Math.round(angle/STEP);if(Math.abs(offset)>=STEP/2)targetIndex+=Math.sign(offset)}const target=targetIndex*STEP,initial=Math.sign(target-angle)*Math.min(MAX_RELEASE_SPEED,Math.max(45,Math.abs(releaseVelocity)));settleToCard(initial,target)}
   function end(e){if(activePointer===null||e.pointerId!==activePointer)return;const wasHorizontal=gesture==='horizontal',releaseVelocity=velocity;resetGesture(e.pointerId);if(wasHorizontal)finishHorizontal(releaseVelocity);else{stopEdgeGlow();releaseBarrel()}}
   function cancel(e){if(activePointer!==null&&e?.pointerId!=null&&e.pointerId!==activePointer)return;snapToNearestCard()}
