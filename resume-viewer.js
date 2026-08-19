@@ -65,9 +65,9 @@
     let completedRows=0,firstBottomHit=false,bottomHitAt=0,last=performance.now(),depositBudget=0;
 
     const colorHash=(r,c)=>1+(((r*17+c*29+((r+c)*7))>>>0)%blockPalette.length);
-    const drops=Array.from({length:rainCount},()=>({x:targetRect.left+Math.random()*targetRect.width,y:targetRect.top-vh*(.08+Math.random()*1.15),speed:150+Math.random()*420,width:.55+Math.random()*1.25,tail:18+Math.random()*72,gap:4+Math.random()*7,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.82?'#fff0b0':'#8fe6d9',stopBand:1+Math.floor(Math.random()*activeDepth)}));
+    const drops=Array.from({length:rainCount},()=>({x:targetRect.left+Math.random()*targetRect.width,y:targetRect.top-vh*(.08+Math.random()*1.15),speed:150+Math.random()*420,width:.55+Math.random()*1.25,tail:18+Math.random()*72,gap:4+Math.random()*7,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.82?'#fff0b0':'#8fe6d9',stopBand:1+Math.floor(Math.random()*activeDepth),retired:false}));
     const start=performance.now();
-    const resetDrop=d=>{d.x=targetRect.left+Math.random()*targetRect.width;d.y=targetRect.top-vh*(.05+Math.random()*.55);d.speed=150+Math.random()*420;d.tail=18+Math.random()*72;d.gap=4+Math.random()*7;d.color=rainPalette[Math.floor(Math.random()*rainPalette.length)];d.head=Math.random()>.82?'#fff0b0':'#8fe6d9';d.stopBand=1+Math.floor(Math.random()*activeDepth)};
+    const resetDrop=d=>{d.x=targetRect.left+Math.random()*targetRect.width;d.y=targetRect.top-vh*(.05+Math.random()*.55);d.speed=150+Math.random()*420;d.tail=18+Math.random()*72;d.gap=4+Math.random()*7;d.color=rainPalette[Math.floor(Math.random()*rainPalette.length)];d.head=Math.random()>.82?'#fff0b0':'#8fe6d9';d.stopBand=1+Math.floor(Math.random()*activeDepth);d.retired=false};
     const fillCell=(row,col)=>{if(row<0||row>=activeDepth||col<0||col>=cols||active[row][col])return false;active[row][col]=1;activeColors[row][col]=1+Math.floor(Math.random()*blockPalette.length);let full=true;for(let c=0;c<cols;c++){if(!active[row][c]){full=false;break}}if(full)flash[row]=1;return true};
     const promoteBottom=()=>{completedRows=Math.min(rows,completedRows+1);for(let r=0;r<activeDepth-1;r++){active[r].set(active[r+1]);activeColors[r].set(activeColors[r+1]);flash[r]=flash[r+1]}active[activeDepth-1].fill(0);activeColors[activeDepth-1].fill(0);flash[activeDepth-1]=0};
     const forceBottomComplete=()=>{for(let c=0;c<cols;c++)if(!active[0][c]){active[0][c]=1;activeColors[0][c]=1+Math.floor(Math.random()*blockPalette.length)}flash[0]=1};
@@ -78,14 +78,26 @@
       const wallProgress=firstBottomHit?clamp((elapsed-bottomHitAt)/Math.max(1,BUILD-bottomHitAt),0,1):0;
       const rainScale=wallProgress<=.75?1:1-.5*clamp((wallProgress-.75)/.20,0,1);
       const activeRain=Math.max(250,Math.round(rainCount*rainScale));
+      const stopRespawn=wallProgress>=.90;
       ctx.clearRect(0,0,vw,vh);
 
       ctx.save();ctx.globalCompositeOperation='lighter';
       for(let i=0;i<activeRain;i++){
-        const d=drops[i];d.y+=d.speed*dt;
+        const d=drops[i];if(d.retired)continue;d.y+=d.speed*dt;
         if(!firstBottomHit&&d.y>=vh-1){firstBottomHit=true;bottomHitAt=elapsed;resetDrop(d);continue}
-        if(firstBottomHit&&completedRows>0){const collisionRows=Math.min(rows,completedRows+d.stopBand),collisionY=targetRect.bottom-collisionRows*blockH;if(d.y>=collisionY){const col=clamp(Math.floor((d.x-targetRect.left)/blockW),0,cols-1);fillCell(Math.min(activeDepth-1,d.stopBand-1),col);resetDrop(d);continue}}
-        if(d.y>=vh-1){if(!firstBottomHit){firstBottomHit=true;bottomHitAt=elapsed}resetDrop(d);continue}
+        if(firstBottomHit&&completedRows>0){
+          const collisionRows=Math.min(rows,completedRows+d.stopBand),collisionY=targetRect.bottom-collisionRows*blockH;
+          if(d.y>=collisionY){
+            const col=clamp(Math.floor((d.x-targetRect.left)/blockW),0,cols-1);fillCell(Math.min(activeDepth-1,d.stopBand-1),col);
+            if(stopRespawn)d.retired=true;else resetDrop(d);
+            continue;
+          }
+        }
+        if(d.y>=vh-1){
+          if(!firstBottomHit){firstBottomHit=true;bottomHitAt=elapsed}
+          if(stopRespawn)d.retired=true;else resetDrop(d);
+          continue;
+        }
         const segments=Math.max(3,Math.floor(d.tail/d.gap));
         for(let j=0;j<segments;j++){const y=d.y-j*d.gap;if(y<-20||y>vh)continue;const fade=1-j/segments;if(fade<=.02)continue;ctx.globalAlpha=j===0?.98:(.06+.62*fade*fade);ctx.fillStyle=j===0?d.head:d.color;ctx.fillRect(d.x,y,d.width,Math.max(2,d.gap*.62))}
       }
@@ -107,7 +119,6 @@
         const detailRows=Math.min(28,Math.max(0,Math.floor((solidTop-activeY)/blockH)));
         const detailStart=Math.max(0,completedRows-detailRows);
 
-        /* Detailed micro-bricks live only in the narrow band immediately behind the active horizon. */
         for(let rr=detailStart;rr<completedRows;rr++){
           const globalRow=rows-1-rr,y=targetRect.top+globalRow*blockH;
           if(y>=solidTop)continue;
@@ -115,10 +126,15 @@
           if(Math.random()<.035){ctx.globalAlpha=.30+.50*Math.random();ctx.fillStyle=Math.random()>.5?'#63d5d0':'#d8b86a';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.45))}
         }
 
-        /* Solid teal structure follows directly behind the horizontal build line, creating a visible construction trail. */
+        /* Settled structure bridges the construction teal into the resume's paper-white at the bottom. */
         if(solidHeight>0&&wallProgress>.08){
           const g=ctx.createLinearGradient(0,solidTop,0,targetRect.bottom);
-          g.addColorStop(0,'rgba(99,213,208,.10)');g.addColorStop(.10,'rgba(28,138,102,.46)');g.addColorStop(.30,'rgba(15,101,77,.82)');g.addColorStop(1,'rgba(7,68,53,.98)');
+          g.addColorStop(0,'rgba(99,213,208,.14)');
+          g.addColorStop(.10,'rgba(28,138,102,.62)');
+          g.addColorStop(.34,'rgba(15,101,77,.94)');
+          g.addColorStop(.60,'rgba(38,128,108,.92)');
+          g.addColorStop(.80,'rgba(194,222,215,.95)');
+          g.addColorStop(1,'rgba(245,244,239,1)');
           ctx.globalAlpha=clamp((wallProgress-.08)/.18,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,solidTop,targetRect.width,solidHeight);ctx.globalAlpha=1;
         }
 
@@ -128,7 +144,6 @@
           if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}else if(Math.random()<.018){flash[r]=.30+.60*Math.random()}
         }
 
-        /* The active horizontal build line is authoritative and travels all the way to the top edge. */
         const scan=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
         scan.addColorStop(0,'rgba(15,101,77,0)');scan.addColorStop(.16,'rgba(99,213,208,.92)');scan.addColorStop(.60,'rgba(255,240,176,1)');scan.addColorStop(1,'rgba(216,184,106,0)');
         ctx.globalAlpha=.92;ctx.fillStyle=scan;ctx.fillRect(targetRect.left,activeY,targetRect.width,Math.max(1.5,blockH*.7));ctx.globalAlpha=1;
