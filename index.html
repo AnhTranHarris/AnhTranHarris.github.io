@@ -54,8 +54,11 @@
       .spotlight-large{width:105vmax;height:68vmax}.spotlight-medium{width:78vmax;height:50vmax}.spotlight-small{width:54vmax;height:34vmax}
     }
     @media(min-width:901px){
-      .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07),inset 0 0 5.4px rgba(255,215,112,.38),0 0 7.2px rgba(255,226,126,.58),0 0 3px rgba(255,249,218,.34)!important}
-      .desktop-performance-reduced .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07),inset 0 0 3.6px rgba(255,215,112,.28),0 0 4.8px rgba(255,226,126,.42),0 0 2.1px rgba(255,249,218,.24)!important}
+      .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}
+      .desktop-performance-reduced .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}
+      .desktop-edge-standard .page::before{-webkit-mask:none!important;-webkit-mask-composite:initial!important;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;mask-composite:exclude!important}
+      .desktop-edge-webkit .page::before{mask:none!important;mask-composite:initial!important;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;-webkit-mask-composite:xor!important}
+      .desktop-edge-standard .barrel.edge-motion .page::before,.desktop-edge-webkit .barrel.edge-motion .page::before{opacity:min(1,calc(var(--edge-strength,.56) * 1.45))!important}
     }
     @media(prefers-reduced-motion:reduce){.spotlight{will-change:auto}.barrel{will-change:auto}}
   </style>
