@@ -30,14 +30,10 @@
     .resume-btn{appearance:none;border:1px solid rgba(174,225,230,.24);border-radius:7px;background:rgba(4,20,26,.86);color:#dbeaec;min-height:38px;padding:0 11px;font:650 .64rem/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.10em;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.resume-btn:hover,.resume-btn:focus-visible{border-color:#d8b86a;color:#fff0b0;outline:none}.resume-close{font-size:.82rem;min-width:40px;padding:0}
     .resume-scroll{overflow:auto;overscroll-behavior:contain;scroll-behavior:smooth;padding:clamp(18px,3vw,36px);background:radial-gradient(circle at 50% 0,rgba(99,213,208,.055),transparent 35%),#07161c;scrollbar-color:rgba(216,184,106,.7) rgba(4,18,24,.7);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
     .resume-sheet{position:relative;width:min(100%,720px);min-height:930px;margin:0 auto;padding:clamp(42px,7vw,78px) clamp(26px,6vw,70px);background:#f5f4ef;color:#263238;border-radius:3px;box-shadow:0 18px 45px rgba(0,0,0,.35);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}.resume-sheet:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,#0a2d23,#63d5d0 55%,#d8b86a)}.resume-sheet h1{margin:0 0 9px;font-size:clamp(1.9rem,4vw,2.6rem);line-height:1;color:#153138}.resume-kicker{margin:0 0 42px;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:#758287}.resume-placeholder{max-width:520px;margin:26% auto 0;text-align:center;font-size:clamp(1rem,2vw,1.18rem);line-height:1.75;color:#415258}.resume-placeholder strong{display:block;margin-bottom:18px;font-size:.67rem;letter-spacing:.18em;text-transform:uppercase;color:#8a713e}.resume-placeholder a{color:#136f72;font-weight:700;text-decoration:none;border-bottom:1px solid rgba(19,111,114,.3)}
-    .resume-fx{position:absolute;inset:0;z-index:10001;pointer-events:none;overflow:hidden;display:none}.resume-fx.active{display:block}
+    .resume-fx{position:absolute;inset:0;z-index:10001;pointer-events:none;overflow:hidden;display:none;opacity:1;transition:opacity ${REVEAL}ms ease}
+    .resume-fx.active{display:block}.resume-overlay.constructing .resume-fx{opacity:1}.resume-overlay.revealing .resume-fx{opacity:0}
     .rv-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-    .rv-line,.rv-edge{position:absolute;opacity:0;pointer-events:none}
-    .rv-line{height:2px;left:var(--left);top:var(--top);width:var(--width);background:linear-gradient(90deg,transparent 0%,#0f654d 12%,#63d5d0 42%,#fff0b0 70%,#d8b86a 82%,transparent 100%);filter:drop-shadow(0 0 5px rgba(99,213,208,.5));transform:scaleX(0);transform-origin:left center;animation:rvLoadLine var(--dur) cubic-bezier(.22,.7,.22,1) var(--delay) forwards}
-    .rv-edge{background:linear-gradient(90deg,#63d5d0,#0f654d,#d8b86a,#fff0b0);filter:drop-shadow(0 0 5px rgba(99,213,208,.55))}.rv-edge.h{height:2px;left:var(--left);top:var(--top);width:var(--width);transform:scaleX(0);transform-origin:left center;animation:rvEdgeH var(--dur) ease var(--delay) forwards}
     @keyframes rvBackIn{to{opacity:1}}@keyframes rvBackOut{from{opacity:1}to{opacity:0}}
-    @keyframes rvLoadLine{0%,8%{opacity:0;transform:scaleX(0)}18%{opacity:.95}70%{opacity:.9;transform:scaleX(1)}100%{opacity:0;transform:scaleX(1)}}
-    @keyframes rvEdgeH{0%{opacity:0;transform:scaleX(0)}10%{opacity:1}90%{opacity:.9;transform:scaleX(1)}100%{opacity:.35;transform:scaleX(1)}}
     @media(max-width:900px){.resume-overlay{padding:0;place-items:stretch;background:rgba(2,10,14,.94);backdrop-filter:none;-webkit-backdrop-filter:none}.resume-shell{width:100%;height:100dvh;border:0;border-radius:0}.resume-toolbar{padding:calc(8px + env(safe-area-inset-top)) 10px 8px;gap:6px}.resume-title{font-size:.59rem;letter-spacing:.14em}.resume-btn{min-height:40px;padding:0 9px;font-size:.58rem}.desktop-only{display:none}.resume-scroll{padding:0;scrollbar-width:none;-ms-overflow-style:none;touch-action:pan-y;overscroll-behavior-y:contain}.resume-scroll::-webkit-scrollbar{display:none}.resume-sheet{width:100%;min-height:calc(100dvh - 58px);border-radius:0;box-shadow:none;padding:38px 22px 70px}.resume-placeholder{margin-top:30vh}}
     @media(prefers-reduced-motion:reduce){.resume-fx{display:none!important}.resume-shell,.resume-toolbar,.resume-scroll{opacity:1!important;transform:none!important;transition:none!important}.resume-source-dissolve{opacity:1!important}}
     @media print{body *{visibility:hidden!important}.resume-overlay,.resume-overlay *{visibility:visible!important}.resume-overlay{position:static!important;display:block!important;padding:0!important;background:#fff!important;opacity:1!important}.resume-toolbar,.resume-fx{display:none!important}.resume-shell{display:block!important;width:auto!important;height:auto!important;border:0!important;box-shadow:none!important;opacity:1!important;transform:none!important}.resume-scroll{overflow:visible!important;padding:0!important;background:#fff!important;opacity:1!important}.resume-sheet{width:8.5in!important;min-height:11in!important;margin:0!important;padding:.75in!important;box-shadow:none!important}}
@@ -53,48 +49,53 @@
   function startPrinter(sourceRect,targetRect){
     stopParticles();
     const ctx=canvas.getContext('2d',{alpha:true});if(!ctx)return;
-    const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.25),vw=innerWidth,vh=innerHeight;
+    const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.2),vw=innerWidth,vh=innerHeight;
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);
 
-    const palette=['#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0'];
-    const streamCount=isMobile?72:118;
-    const gridCols=isMobile?34:48,gridRows=isMobile?54:66;
-    const cellW=targetRect.width/gridCols,cellH=targetRect.height/gridRows;
-    const grid=Array.from({length:gridRows},()=>new Uint8Array(gridCols));
-    const rowFlash=new Float32Array(gridRows);
-    const heights=new Uint16Array(gridCols);
-    let filled=0,last=performance.now(),depositCarry=0;
+    const rainPalette=['#0b4f38','#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0'];
+    const blockPalette=['#0f654d','#1c8a66','#2aa77a','#63d5d0','#8fe6d9','#b89745','#d8b86a','#fff0b0'];
+    const rainCount=500;
 
-    const streams=Array.from({length:streamCount},(_,i)=>{
-      const col=i%gridCols,jitter=(Math.random()-.5)*cellW*.7;
-      return {
-        col,
-        x:targetRect.left+(col+.5)*cellW+jitter,
-        y:targetRect.top-vh*(.15+Math.random()*.9),
-        speed:95+Math.random()*240,
-        tail:22+Math.floor(Math.random()*42),
-        spacing:5+Math.random()*5,
-        width:.7+Math.random()*1.4,
-        phase:Math.random()*Math.PI*2,
-        colorIndex:i%4,
-        resetGap:40+Math.random()*220
-      };
-    });
+    /* Roughly one-tenth of the previous block dimensions, but without a huge stored grid. */
+    const oldCols=isMobile?34:48,oldRows=isMobile?54:66;
+    const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
+    const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
+    const activeDepth=Math.min(18,rows);
+    const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
+    const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
+    const flash=new Float32Array(activeDepth);
+    let completedRows=0,firstBottomHit=false,last=performance.now(),depositBudget=0;
+
+    const colorHash=(r,c)=>1+(((r*17+c*29+((r+c)*7))>>>0)%blockPalette.length);
+    const drops=Array.from({length:rainCount},(_,i)=>({
+      x:targetRect.left+Math.random()*targetRect.width,
+      y:targetRect.top-vh*(.08+Math.random()*1.15),
+      speed:150+Math.random()*420,
+      width:.55+Math.random()*1.25,
+      tail:18+Math.random()*72,
+      gap:4+Math.random()*7,
+      color:rainPalette[Math.floor(Math.random()*rainPalette.length)],
+      head:Math.random()>.82?'#fff0b0':'#8fe6d9',
+      phase:Math.random()*Math.PI*2
+    }));
 
     const start=performance.now();
-    const cellColor=(v,alpha=1)=>{
-      const colors=['#0f654d','#1c8a66','#63d5d0','#d8b86a','#fff0b0'];
-      ctx.globalAlpha=alpha;ctx.fillStyle=colors[Math.max(0,Math.min(colors.length-1,v-1))];
-    };
-    const settle=(col)=>{
-      if(col<0||col>=gridCols||heights[col]>=gridRows)return false;
-      const row=gridRows-1-heights[col];
-      grid[row][col]=1+((col+row+heights[col])%4);
-      heights[col]++;filled++;
-      let complete=true;
-      for(let c=0;c<gridCols;c++){if(!grid[row][c]){complete=false;break}}
-      if(complete)rowFlash[row]=1;
+    const clearActive=()=>{for(let r=0;r<activeDepth;r++){active[r].fill(0);activeColors[r].fill(0);flash[r]=0}};
+    const resetDrop=d=>{d.x=targetRect.left+Math.random()*targetRect.width;d.y=targetRect.top-vh*(.05+Math.random()*.55);d.speed=150+Math.random()*420;d.tail=18+Math.random()*72;d.gap=4+Math.random()*7;d.color=rainPalette[Math.floor(Math.random()*rainPalette.length)];d.head=Math.random()>.82?'#fff0b0':'#8fe6d9'};
+    const fillCell=(row,col)=>{
+      if(row<0||row>=activeDepth||col<0||col>=cols||active[row][col])return false;
+      active[row][col]=1;activeColors[row][col]=1+Math.floor(Math.random()*blockPalette.length);
+      let full=true;for(let c=0;c<cols;c++){if(!active[row][c]){full=false;break}}
+      if(full)flash[row]=1;
       return true;
+    };
+    const forceDeposit=()=>{
+      for(let tries=0;tries<12;tries++){
+        const base=Math.min(activeDepth-1,Math.floor(Math.random()*Math.max(1,activeDepth*.55)));
+        const row=Math.max(0,base),col=Math.floor(Math.random()*cols);
+        if(fillCell(row,col))return true;
+      }
+      return false;
     };
 
     function tick(now){
@@ -102,104 +103,96 @@
       const p=clamp(elapsed/BUILD,0,1);
       ctx.clearRect(0,0,vw,vh);
 
-      /* MATRIX-STYLE RAIN: persistent vertical streams with bright heads and fading tails. */
+      /* MATRIX RAIN: 500 independent vertical drops with luminous heads and fading trails. */
       ctx.save();ctx.globalCompositeOperation='lighter';
-      for(const s of streams){
-        s.y+=s.speed*dt;
-        const stackTop=targetRect.bottom-heights[s.col]*cellH;
-        if(s.y>=stackTop-2){
-          settle(s.col);
-          s.y=targetRect.top-s.resetGap-Math.random()*vh*.55;
-          s.speed=95+Math.random()*240;
-          s.tail=22+Math.floor(Math.random()*42);
-        }
-        const headY=Math.min(s.y,stackTop-2);
-        for(let j=0;j<s.tail;j++){
-          const y=headY-j*s.spacing;
-          if(y<targetRect.top-vh*.25||y>targetRect.bottom)continue;
-          const fade=1-j/s.tail;
-          if(fade<=.02)continue;
-          const isHead=j===0;
-          ctx.globalAlpha=isHead?.96:(.08+.58*fade*fade);
-          ctx.fillStyle=isHead?(p>.12&&Math.sin(elapsed*.006+s.phase)>.72?'#fff0b0':'#8fe6d9'):palette[s.colorIndex];
-          const h=isHead?Math.max(4,s.spacing*.85):Math.max(2,s.spacing*.6);
-          ctx.fillRect(s.x,y,s.width,h);
+      for(const d of drops){
+        d.y+=d.speed*dt;
+        if(d.y>=vh-1){firstBottomHit=true;resetDrop(d)}
+        const headY=Math.min(d.y,vh-1);
+        const segments=Math.max(3,Math.floor(d.tail/d.gap));
+        for(let j=0;j<segments;j++){
+          const y=headY-j*d.gap;if(y<-20||y>vh)continue;
+          const fade=1-j/segments;if(fade<=.02)continue;
+          ctx.globalAlpha=j===0?.98:(.06+.62*fade*fade);
+          ctx.fillStyle=j===0?d.head:d.color;
+          ctx.fillRect(d.x,y,d.width,Math.max(2,d.gap*.62));
         }
       }
       ctx.restore();
 
-      /* Keep deposition advancing steadily so the frame reaches completion at 5 seconds. */
-      const targetFill=Math.floor(gridCols*gridRows*(.08+.92*Math.pow(p,1.12)));
-      depositCarry+=(targetFill-filled);
-      let forced=Math.min(90,Math.floor(depositCarry*.055));
-      depositCarry-=forced;
-      while(forced-->0){
-        let minHeight=gridRows,bucket=[];
-        for(let c=0;c<gridCols;c++){
-          if(heights[c]<minHeight){minHeight=heights[c];bucket=[c]}
-          else if(heights[c]===minHeight)bucket.push(c);
+      /* No Tetris deposition is allowed until the rain visibly touches the viewport bottom. */
+      if(firstBottomHit){
+        const buildProgress=clamp((elapsed-650)/(BUILD-650),0,1);
+        const desiredRows=Math.min(rows,Math.floor(buildProgress*rows));
+        depositBudget+=dt*(cols*(8+buildProgress*42));
+        while(depositBudget>=1){forceDeposit();depositBudget-=1}
+
+        /* Promote completed micro-rows into the permanent wall and keep incomplete rows alive. */
+        let bottomFull=true;
+        for(let c=0;c<cols;c++){if(!active[0][c]){bottomFull=false;break}}
+        if(bottomFull&&completedRows<desiredRows){
+          flash[0]=1;
+          completedRows++;
+          for(let r=0;r<activeDepth-1;r++){
+            active[r].set(active[r+1]);activeColors[r].set(activeColors[r+1]);flash[r]=flash[r+1];
+          }
+          active[activeDepth-1].fill(0);activeColors[activeDepth-1].fill(0);flash[activeDepth-1]=0;
         }
-        if(!bucket.length||minHeight>=gridRows)break;
-        settle(bucket[Math.floor(Math.random()*bucket.length)]);
-      }
 
-      /* TETRIS-LIKE DEPOSITION: incomplete rows remain visible until future rain fills the gaps. */
-      for(let r=0;r<gridRows;r++){
-        for(let c=0;c<gridCols;c++){
-          const v=grid[r][c];if(!v)continue;
-          const x=targetRect.left+c*cellW,y=targetRect.top+r*cellH;
-          cellColor(v,.26+.38*(r/gridRows));
-          ctx.fillRect(x+.7,y+.7,Math.max(1,cellW-1.4),Math.max(1,cellH-1.4));
+        /* Permanent completed wall: tiny randomized blocks, generated procedurally. */
+        const wallRows=Math.min(completedRows,rows);
+        const visiblePermanent=Math.min(wallRows,Math.max(0,rows-activeDepth));
+        for(let rr=0;rr<visiblePermanent;rr++){
+          const globalRow=rows-1-rr,y=targetRect.top+globalRow*blockH;
+          for(let c=0;c<cols;c++){
+            const colorIndex=colorHash(globalRow,c)-1;
+            ctx.globalAlpha=.24+.34*((rr%9)/9);ctx.fillStyle=blockPalette[colorIndex];
+            ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24));
+          }
+          if(Math.random()<.025){
+            ctx.globalAlpha=.25+.55*Math.random();ctx.fillStyle=Math.random()>.45?'#63d5d0':'#d8b86a';
+            ctx.fillRect(targetRect.left,y+blockH*.35,targetRect.width,Math.max(1,blockH*.28));
+          }
+        }
+
+        /* Active/incomplete rows stack above the permanent wall like tiny Tetris bricks. */
+        for(let r=0;r<activeDepth;r++){
+          const globalRow=rows-1-completedRows-r;if(globalRow<0)continue;
+          const y=targetRect.top+globalRow*blockH;
+          for(let c=0;c<cols;c++){
+            if(!active[r][c])continue;
+            const ci=activeColors[r][c]-1;
+            ctx.globalAlpha=.42+.38*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];
+            ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24));
+          }
+          if(flash[r]>0){
+            flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.8));
+            const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+            g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');
+            ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55));
+          }else if(Math.random()<.012){flash[r]=.35+.65*Math.random()}
+        }
+
+        /* Keep construction visually progressing to completion inside the fixed five seconds. */
+        if(p>.78){
+          const targetCompleted=Math.floor(rows*clamp((p-.78)/.22,0,1));
+          if(completedRows<targetCompleted){completedRows=Math.min(targetCompleted,rows);clearActive()}
+        }
+
+        if(p>.90){
+          const a=clamp((p-.90)/.10,0,1);
+          ctx.globalAlpha=a*.70;ctx.strokeStyle='rgba(99,213,208,.88)';ctx.lineWidth=1;ctx.strokeRect(targetRect.left+.5,targetRect.top+.5,targetRect.width-1,targetRect.height-1);
+          ctx.globalAlpha=a*.50;ctx.strokeStyle='rgba(216,184,106,.82)';ctx.strokeRect(targetRect.left+2.5,targetRect.top+2.5,targetRect.width-5,targetRect.height-5);ctx.globalAlpha=1;
         }
       }
 
-      /* A completed horizontal layer flashes like a loading line, then remains part of the frame. */
-      for(let r=0;r<gridRows;r++){
-        if(rowFlash[r]<=0)continue;
-        rowFlash[r]=Math.max(0,rowFlash[r]-dt*1.8);
-        const y=targetRect.top+r*cellH+cellH*.5;
-        const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-        g.addColorStop(0,'rgba(15,101,77,0)');
-        g.addColorStop(.18,`rgba(99,213,208,${rowFlash[r]})`);
-        g.addColorStop(.60,`rgba(255,240,176,${Math.min(1,rowFlash[r]*1.15)})`);
-        g.addColorStop(1,'rgba(216,184,106,0)');
-        ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1.5,cellH*.22));
-      }
-
-      /* Active construction horizon follows the highest deposited material rather than a smooth progress bar. */
-      let maxHeight=0;
-      for(let c=0;c<gridCols;c++)maxHeight=Math.max(maxHeight,heights[c]);
-      const activeY=targetRect.bottom-maxHeight*cellH;
-      const scan=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-      scan.addColorStop(0,'rgba(15,101,77,0)');
-      scan.addColorStop(.22,'rgba(99,213,208,.78)');
-      scan.addColorStop(.62,'rgba(255,240,176,.95)');
-      scan.addColorStop(1,'rgba(216,184,106,0)');
-      ctx.fillStyle=scan;ctx.fillRect(targetRect.left,activeY,targetRect.width,2);
-
-      /* The completed frame resolves during the final half-second. */
-      if(p>.90){
-        const a=clamp((p-.90)/.10,0,1);
-        ctx.globalAlpha=a*.78;ctx.strokeStyle='rgba(99,213,208,.92)';ctx.lineWidth=1.5;
-        ctx.strokeRect(targetRect.left+.75,targetRect.top+.75,targetRect.width-1.5,targetRect.height-1.5);
-        ctx.globalAlpha=a*.58;ctx.strokeStyle='rgba(216,184,106,.86)';
-        ctx.strokeRect(targetRect.left+3,targetRect.top+3,targetRect.width-6,targetRect.height-6);
-        ctx.globalAlpha=1;
-      }
-
-      if(elapsed<BUILD){particleRaf=requestAnimationFrame(tick)}
-      else{
-        for(let r=0;r<gridRows;r++)for(let c=0;c<gridCols;c++)if(!grid[r][c])grid[r][c]=1+((r+c)%4);
-        particleRaf=0;
-      }
+      if(elapsed<BUILD){particleRaf=requestAnimationFrame(tick)}else{particleRaf=0}
     }
     particleRaf=requestAnimationFrame(tick);
   }
 
   function buildEffects(sourceRect,targetRect){
-    fx.querySelectorAll('.rv-line,.rv-edge').forEach(el=>el.remove());if(reduce?.matches)return;
-    startPrinter(sourceRect,targetRect);
-    fx.classList.add('active');
+    if(reduce?.matches)return;startPrinter(sourceRect,targetRect);fx.classList.add('active');
   }
 
   function finishOpen(){
