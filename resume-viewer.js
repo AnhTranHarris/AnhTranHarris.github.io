@@ -62,14 +62,23 @@
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const flash=new Float32Array(activeDepth);
+    const history=[];
     let completedRows=0,firstBottomHit=false,bottomHitAt=0,last=performance.now(),depositBudget=0;
 
+    const canFlash=row=>(row<=0||flash[row-1]<=.02)&&(row>=activeDepth-1||flash[row+1]<=.02);
+    const startFlash=(row,strength=.7)=>{if(row>=0&&row<activeDepth&&canFlash(row))flash[row]=Math.max(flash[row],strength)};
     const drops=Array.from({length:rainCount},()=>({x:targetRect.left+Math.random()*targetRect.width,y:targetRect.top-vh*(.08+Math.random()*1.15),speed:150+Math.random()*420,width:.55+Math.random()*1.25,tail:18+Math.random()*72,gap:4+Math.random()*7,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.82?'#fff0b0':'#8fe6d9',stopBand:1+Math.floor(Math.random()*activeDepth),retired:false}));
     const start=performance.now();
     const resetDrop=d=>{d.x=targetRect.left+Math.random()*targetRect.width;d.y=targetRect.top-vh*(.05+Math.random()*.55);d.speed=150+Math.random()*420;d.tail=18+Math.random()*72;d.gap=4+Math.random()*7;d.color=rainPalette[Math.floor(Math.random()*rainPalette.length)];d.head=Math.random()>.82?'#fff0b0':'#8fe6d9';d.stopBand=1+Math.floor(Math.random()*activeDepth);d.retired=false};
-    const fillCell=(row,col)=>{if(row<0||row>=activeDepth||col<0||col>=cols||active[row][col])return false;active[row][col]=1;activeColors[row][col]=1+Math.floor(Math.random()*blockPalette.length);let full=true;for(let c=0;c<cols;c++){if(!active[row][c]){full=false;break}}if(full)flash[row]=1;return true};
-    const promoteBottom=()=>{completedRows=Math.min(rows,completedRows+1);for(let r=0;r<activeDepth-1;r++){active[r].set(active[r+1]);activeColors[r].set(activeColors[r+1]);flash[r]=flash[r+1]}active[activeDepth-1].fill(0);activeColors[activeDepth-1].fill(0);flash[activeDepth-1]=0};
-    const forceBottomComplete=()=>{for(let c=0;c<cols;c++)if(!active[0][c]){active[0][c]=1;activeColors[0][c]=1+Math.floor(Math.random()*blockPalette.length)}flash[0]=1};
+    const fillCell=(row,col)=>{if(row<0||row>=activeDepth||col<0||col>=cols||active[row][col])return false;active[row][col]=1;activeColors[row][col]=1+Math.floor(Math.random()*blockPalette.length);let full=true;for(let c=0;c<cols;c++){if(!active[row][c]){full=false;break}}if(full)startFlash(row,1);return true};
+    const normalizeFlashes=()=>{for(let r=1;r<activeDepth;r++){if(flash[r]>.02&&flash[r-1]>.02){if(flash[r]>flash[r-1])flash[r-1]=0;else flash[r]=0}}};
+    const promoteBottom=()=>{
+      if(fadeDepth>0){history.unshift({cells:new Uint8Array(active[0]),colors:new Uint8Array(activeColors[0])});if(history.length>fadeDepth)history.pop()}
+      completedRows=Math.min(rows,completedRows+1);
+      for(let r=0;r<activeDepth-1;r++){active[r].set(active[r+1]);activeColors[r].set(activeColors[r+1]);flash[r]=flash[r+1]}
+      active[activeDepth-1].fill(0);activeColors[activeDepth-1].fill(0);flash[activeDepth-1]=0;normalizeFlashes();
+    };
+    const forceBottomComplete=()=>{for(let c=0;c<cols;c++)if(!active[0][c]){active[0][c]=1;activeColors[0][c]=1+Math.floor(Math.random()*blockPalette.length)}startFlash(0,1)};
 
     function tick(now){
       const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
@@ -104,33 +113,39 @@
 
         const horizonRows=Math.min(rows,completedRows);
         const activeY=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
-        const fadeBandHeight=fadeDepth*blockH;
-        const solidTop=Math.min(targetRect.bottom,activeY+fadeBandHeight);
+        const historyRows=Math.min(fadeDepth,history.length);
+        const solidTop=Math.min(targetRect.bottom,activeY+historyRows*blockH);
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
 
-        /* Rows 1-5: the only live particle-reactive Tetris rows. */
+        /* Rows 1-5: live particle-reactive Tetris rows only. */
         for(let r=0;r<activeDepth;r++){
           const globalRow=rows-1-completedRows-r;if(globalRow<0)continue;const y=targetRect.top+globalRow*blockH;
           for(let c=0;c<cols;c++){if(!active[r][c])continue;const ci=activeColors[r][c]-1;ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
-          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}else if(Math.random()<.018){flash[r]=.30+.60*Math.random()}
+          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}
         }
+        normalizeFlashes();
+        if(Math.random()<.09){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.30+.60*Math.random())}}
 
-        /* Rows 6-15: one attached continuation band that fades its line energy into solid teal. */
-        for(let i=0;i<fadeDepth;i++){
+        /* Rows 6-15: snapshots of completed rows. They never receive particles or flash. */
+        for(let i=0;i<historyRows;i++){
+          const row=history[i];
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
-          const lineAlpha=1-t;
+          const detailAlpha=Math.max(0,1-t);
+          const tealAlpha=.20+.78*t;
           const y=activeY+i*blockH;
           if(y>=targetRect.bottom)break;
-          ctx.globalAlpha=.20+.62*t;ctx.fillStyle=`rgba(${Math.round(99-84*t)},${Math.round(213-112*t)},${Math.round(208-131*t)},1)`;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH));
-          if(lineAlpha>.01){
-            const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-            g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.18,`rgba(99,213,208,${lineAlpha})`);g.addColorStop(.58,`rgba(255,240,176,${lineAlpha})`);g.addColorStop(.84,`rgba(216,184,106,${lineAlpha*.9})`);g.addColorStop(1,'rgba(216,184,106,0)');
-            ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.45));
+          ctx.globalAlpha=tealAlpha;ctx.fillStyle='rgb(15,101,77)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH));
+          if(detailAlpha>.02){
+            for(let c=0;c<cols;c++){
+              if(!row.cells[c])continue;
+              const ci=Math.max(0,row.colors[c]-1);
+              ctx.globalAlpha=.88*detailAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24));
+            }
           }
         }
         ctx.globalAlpha=1;
 
-        /* Settled body starts immediately after row 15 and bridges teal into resume paper-white. */
+        /* Settled body begins after the ten-row history and bridges teal into resume paper-white. */
         if(solidHeight>0&&wallProgress>.08){
           const g=ctx.createLinearGradient(0,solidTop,0,targetRect.bottom);
           g.addColorStop(0,'rgba(15,101,77,.98)');
