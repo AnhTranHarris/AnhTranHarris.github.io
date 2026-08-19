@@ -58,13 +58,12 @@
     const oldCols=isMobile?34:48,oldRows=isMobile?54:66;
     const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
     const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
-    const activeDepth=Math.min(5,rows);
+    const activeDepth=Math.min(5,rows),fadeDepth=Math.min(10,Math.max(0,rows-activeDepth));
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const flash=new Float32Array(activeDepth);
     let completedRows=0,firstBottomHit=false,bottomHitAt=0,last=performance.now(),depositBudget=0;
 
-    const colorHash=(r,c)=>1+(((r*17+c*29+((r+c)*7))>>>0)%blockPalette.length);
     const drops=Array.from({length:rainCount},()=>({x:targetRect.left+Math.random()*targetRect.width,y:targetRect.top-vh*(.08+Math.random()*1.15),speed:150+Math.random()*420,width:.55+Math.random()*1.25,tail:18+Math.random()*72,gap:4+Math.random()*7,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.82?'#fff0b0':'#8fe6d9',stopBand:1+Math.floor(Math.random()*activeDepth),retired:false}));
     const start=performance.now();
     const resetDrop=d=>{d.x=targetRect.left+Math.random()*targetRect.width;d.y=targetRect.top-vh*(.05+Math.random()*.55);d.speed=150+Math.random()*420;d.tail=18+Math.random()*72;d.gap=4+Math.random()*7;d.color=rainPalette[Math.floor(Math.random()*rainPalette.length)];d.head=Math.random()>.82?'#fff0b0':'#8fe6d9';d.stopBand=1+Math.floor(Math.random()*activeDepth);d.retired=false};
@@ -87,17 +86,9 @@
         if(!firstBottomHit&&d.y>=vh-1){firstBottomHit=true;bottomHitAt=elapsed;resetDrop(d);continue}
         if(firstBottomHit&&completedRows>0){
           const collisionRows=Math.min(rows,completedRows+d.stopBand),collisionY=targetRect.bottom-collisionRows*blockH;
-          if(d.y>=collisionY){
-            const col=clamp(Math.floor((d.x-targetRect.left)/blockW),0,cols-1);fillCell(Math.min(activeDepth-1,d.stopBand-1),col);
-            if(stopRespawn)d.retired=true;else resetDrop(d);
-            continue;
-          }
+          if(d.y>=collisionY){const col=clamp(Math.floor((d.x-targetRect.left)/blockW),0,cols-1);fillCell(Math.min(activeDepth-1,d.stopBand-1),col);if(stopRespawn)d.retired=true;else resetDrop(d);continue}
         }
-        if(d.y>=vh-1){
-          if(!firstBottomHit){firstBottomHit=true;bottomHitAt=elapsed}
-          if(stopRespawn)d.retired=true;else resetDrop(d);
-          continue;
-        }
+        if(d.y>=vh-1){if(!firstBottomHit){firstBottomHit=true;bottomHitAt=elapsed}if(stopRespawn)d.retired=true;else resetDrop(d);continue}
         const segments=Math.max(3,Math.floor(d.tail/d.gap));
         for(let j=0;j<segments;j++){const y=d.y-j*d.gap;if(y<-20||y>vh)continue;const fade=1-j/segments;if(fade<=.02)continue;ctx.globalAlpha=j===0?.98:(.06+.62*fade*fade);ctx.fillStyle=j===0?d.head:d.color;ctx.fillRect(d.x,y,d.width,Math.max(2,d.gap*.62))}
       }
@@ -113,56 +104,41 @@
 
         const horizonRows=Math.min(rows,completedRows);
         const activeY=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
-        const trailGap=Math.max(blockH*10,targetRect.height*.045);
-        const solidTop=Math.min(targetRect.bottom,activeY+trailGap);
+        const fadeBandHeight=fadeDepth*blockH;
+        const solidTop=Math.min(targetRect.bottom,activeY+fadeBandHeight);
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
-        const detailRows=Math.min(28,Math.max(0,Math.floor((solidTop-activeY)/blockH)));
-        const detailStart=Math.max(0,completedRows-detailRows);
 
-        for(let rr=detailStart;rr<completedRows;rr++){
-          const globalRow=rows-1-rr,y=targetRect.top+globalRow*blockH;
-          if(y>=solidTop)continue;
-          for(let c=0;c<cols;c++){ctx.globalAlpha=.28+.30*((rr-detailStart+1)/Math.max(1,completedRows-detailStart));ctx.fillStyle=blockPalette[colorHash(globalRow,c)-1];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
-          if(Math.random()<.035){ctx.globalAlpha=.30+.50*Math.random();ctx.fillStyle=Math.random()>.5?'#63d5d0':'#d8b86a';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.45))}
-        }
-
-        /* Settled structure bridges the construction teal into the resume's paper-white at the bottom. */
-        if(solidHeight>0&&wallProgress>.08){
-          const g=ctx.createLinearGradient(0,solidTop,0,targetRect.bottom);
-          g.addColorStop(0,'rgba(99,213,208,.14)');
-          g.addColorStop(.10,'rgba(28,138,102,.62)');
-          g.addColorStop(.34,'rgba(15,101,77,.94)');
-          g.addColorStop(.60,'rgba(38,128,108,.92)');
-          g.addColorStop(.80,'rgba(194,222,215,.95)');
-          g.addColorStop(1,'rgba(245,244,239,1)');
-          ctx.globalAlpha=clamp((wallProgress-.08)/.18,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,solidTop,targetRect.width,solidHeight);ctx.globalAlpha=1;
-        }
-
+        /* Rows 1-5: the only live particle-reactive Tetris rows. */
         for(let r=0;r<activeDepth;r++){
           const globalRow=rows-1-completedRows-r;if(globalRow<0)continue;const y=targetRect.top+globalRow*blockH;
           for(let c=0;c<cols;c++){if(!active[r][c])continue;const ci=activeColors[r][c]-1;ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
           if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.8+Math.random()*1.5));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.2,`rgba(99,213,208,${flash[r]})`);g.addColorStop(.62,`rgba(255,240,176,${Math.min(1,flash[r]*1.2)})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.55))}else if(Math.random()<.018){flash[r]=.30+.60*Math.random()}
         }
 
-        /* Ten trailing construction lines directly continue the five live rows, fading from fully visible to transparent. */
-        const trailLineGradient=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-        trailLineGradient.addColorStop(0,'rgba(15,101,77,0)');
-        trailLineGradient.addColorStop(.18,'rgba(99,213,208,1)');
-        trailLineGradient.addColorStop(.58,'rgba(255,240,176,1)');
-        trailLineGradient.addColorStop(.84,'rgba(216,184,106,.9)');
-        trailLineGradient.addColorStop(1,'rgba(216,184,106,0)');
-        for(let i=0;i<10;i++){
-          const opacity=1-(i/9);
-          const y=activeY+(i+1)*blockH;
-          if(y>targetRect.bottom)break;
-          ctx.globalAlpha=opacity;ctx.fillStyle=trailLineGradient;
-          ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.42));
+        /* Rows 6-15: one attached continuation band that fades its line energy into solid teal. */
+        for(let i=0;i<fadeDepth;i++){
+          const t=fadeDepth<=1?1:i/(fadeDepth-1);
+          const lineAlpha=1-t;
+          const y=activeY+i*blockH;
+          if(y>=targetRect.bottom)break;
+          ctx.globalAlpha=.20+.62*t;ctx.fillStyle=`rgba(${Math.round(99-84*t)},${Math.round(213-112*t)},${Math.round(208-131*t)},1)`;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH));
+          if(lineAlpha>.01){
+            const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+            g.addColorStop(0,'rgba(15,101,77,0)');g.addColorStop(.18,`rgba(99,213,208,${lineAlpha})`);g.addColorStop(.58,`rgba(255,240,176,${lineAlpha})`);g.addColorStop(.84,`rgba(216,184,106,${lineAlpha*.9})`);g.addColorStop(1,'rgba(216,184,106,0)');
+            ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,blockH*.45));
+          }
         }
         ctx.globalAlpha=1;
 
-        const scan=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-        scan.addColorStop(0,'rgba(15,101,77,0)');scan.addColorStop(.16,'rgba(99,213,208,.92)');scan.addColorStop(.60,'rgba(255,240,176,1)');scan.addColorStop(1,'rgba(216,184,106,0)');
-        ctx.globalAlpha=.92;ctx.fillStyle=scan;ctx.fillRect(targetRect.left,activeY,targetRect.width,Math.max(1.5,blockH*.7));ctx.globalAlpha=1;
+        /* Settled body starts immediately after row 15 and bridges teal into resume paper-white. */
+        if(solidHeight>0&&wallProgress>.08){
+          const g=ctx.createLinearGradient(0,solidTop,0,targetRect.bottom);
+          g.addColorStop(0,'rgba(15,101,77,.98)');
+          g.addColorStop(.45,'rgba(38,128,108,.94)');
+          g.addColorStop(.78,'rgba(194,222,215,.96)');
+          g.addColorStop(1,'rgba(245,244,239,1)');
+          ctx.globalAlpha=clamp((wallProgress-.08)/.18,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,solidTop,targetRect.width,solidHeight);ctx.globalAlpha=1;
+        }
 
         if(p>.90){const a=clamp((p-.90)/.10,0,1);ctx.globalAlpha=a*.70;ctx.strokeStyle='rgba(99,213,208,.88)';ctx.lineWidth=1;ctx.strokeRect(targetRect.left+.5,targetRect.top+.5,targetRect.width-1,targetRect.height-1);ctx.globalAlpha=a*.50;ctx.strokeStyle='rgba(216,184,106,.82)';ctx.strokeRect(targetRect.left+2.5,targetRect.top+2.5,targetRect.width-5,targetRect.height-5);ctx.globalAlpha=1}
       }
