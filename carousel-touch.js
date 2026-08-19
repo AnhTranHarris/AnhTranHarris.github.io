@@ -27,6 +27,11 @@
       .desktop-edge-fallback .page::before{border:10px solid rgba(255,220,112,.96);background:none;box-shadow:inset 0 0 18px rgba(255,215,112,.42),0 0 32px rgba(255,226,126,.76),0 0 13px rgba(255,249,218,.52)}
       .barrel.edge-motion .page::before{opacity:min(1,calc(var(--edge-strength,.56) * 1.25))}
       .desktop-input-coarse .carousel-guide-arrow,.desktop-input-hybrid .carousel-guide-arrow{min-width:44px;min-height:44px}
+      .desktop-performance-reduced .spotlight-large{width:76vmax!important;height:49vmax!important;filter:blur(26px)!important}
+      .desktop-performance-reduced .spotlight-medium{width:56vmax!important;height:36vmax!important;filter:blur(22px)!important}
+      .desktop-performance-reduced .spotlight-small{display:none!important}
+      .desktop-performance-reduced.desktop-edge-standard .page::before,.desktop-performance-reduced.desktop-edge-webkit .page::before{filter:drop-shadow(0 0 5px rgba(255,226,126,.88)) drop-shadow(0 0 9px rgba(216,184,106,.34))}
+      .desktop-performance-reduced.desktop-edge-fallback .page::before{box-shadow:inset 0 0 12px rgba(255,215,112,.34),0 0 20px rgba(255,226,126,.58),0 0 8px rgba(255,249,218,.34)}
     }
     @media(prefers-reduced-motion:reduce){.page::before{transition:none}.edge-tracer-supported .page::before,.desktop-edge-standard .page::before,.desktop-edge-webkit .page::before{background:none;border:1px solid rgba(229,193,95,.68);-webkit-mask:none;mask:none;filter:none}}
   `;
@@ -41,6 +46,7 @@
   const hoverQuery=window.matchMedia?.('(any-hover:hover)');
   const rendererClasses=['desktop-edge-standard','desktop-edge-webkit','desktop-edge-fallback'];
   const inputClasses=['desktop-input-fine','desktop-input-coarse','desktop-input-hybrid'];
+  const performanceClasses=['desktop-performance-full','desktop-performance-reduced'];
   function applyEdgeRenderer(){
     const root=document.documentElement;
     rendererClasses.forEach(name=>root.classList.remove(name));
@@ -60,9 +66,19 @@
     else if(fine||hover)root.classList.add('desktop-input-fine');
     else root.classList.add('desktop-input-coarse');
   }
-  function syncDesktopCapabilities(){applyEdgeRenderer();applyInputProfile()}
+  function applyPerformanceProfile(){
+    const root=document.documentElement;
+    performanceClasses.forEach(name=>root.classList.remove(name));
+    if(!desktopQuery?.matches)return;
+    const saveData=navigator.connection?.saveData===true;
+    const memory=Number(navigator.deviceMemory)||0,cores=Number(navigator.hardwareConcurrency)||0;
+    const constrainedHardware=memory>0&&memory<=4&&cores>0&&cores<=4;
+    root.classList.add(saveData||constrainedHardware?'desktop-performance-reduced':'desktop-performance-full');
+  }
+  function syncDesktopCapabilities(){applyEdgeRenderer();applyInputProfile();applyPerformanceProfile()}
   syncDesktopCapabilities();
   [desktopQuery,fineQuery,coarseQuery,hoverQuery].forEach(query=>query?.addEventListener?.('change',syncDesktopCapabilities));
+  navigator.connection?.addEventListener?.('change',syncDesktopCapabilities);
 
   function stopEdgeGlow(){barrel.classList.remove('edge-motion');barrel.style.setProperty('--edge-strength','0')}
   function updateEdgeGlow(motionVelocity){const speed=Math.abs(motionVelocity);if(speed<2){stopEdgeGlow();return}const direction=Math.sign(motionVelocity)||1;edgePhase=(edgePhase+direction*clamp(speed*.035,1.2,12))%360;const strength=clamp(.30+speed/336,.30,1);barrel.style.setProperty('--edge-angle',`${edgePhase.toFixed(1)}deg`);barrel.style.setProperty('--edge-strength',strength.toFixed(2));barrel.classList.add('edge-motion')}
