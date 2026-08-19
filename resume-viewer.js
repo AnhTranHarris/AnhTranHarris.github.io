@@ -120,12 +120,23 @@
 
         /* Rows 1-5: live particle-reactive Tetris rows only. */
         for(let r=0;r<activeDepth;r++){
-          const globalRow=rows-1-completedRows-r;if(globalRow<0)continue;const y=targetRect.top+globalRow*blockH;
+          const y=activeY+r*blockH;
+          if(y<targetRect.top||y>=targetRect.bottom)continue;
           for(let c=0;c<cols;c++){if(!active[r][c])continue;const ci=activeColors[r][c]-1;ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
-          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.55+Math.random()*.75));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(255,255,245,0)');g.addColorStop(.18,`rgba(255,240,176,${Math.min(1,flash[r]*.9)})`);g.addColorStop(.50,`rgba(255,255,248,${Math.min(1,flash[r]*1.18)})`);g.addColorStop(.72,`rgba(216,184,106,${Math.min(1,flash[r])})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(2.4,historyRowH*.72))}
+          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.55+Math.random()*.75));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(255,255,245,0)');g.addColorStop(.18,`rgba(255,240,176,${Math.min(1,flash[r]*.9)})`);g.addColorStop(.50,`rgba(255,255,248,${Math.min(1,flash[r]*1.18)})`);g.addColorStop(.72,`rgba(216,184,106,${Math.min(1,flash[r])})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1.2,blockH*.9))}
         }
         normalizeFlashes();
         if(Math.random()<.18){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.68+.32*Math.random())}}
+
+        /* Rows 6-10 may retain a short residual glare; it fades out completely before row 11. */
+        const residualRows=Math.min(5,historyRows);
+        for(let i=0;i<residualRows;i++){
+          const row=history[i],y=activeY+(activeDepth+i)*historyRowH;
+          if(y<targetRect.top||y>=targetRect.bottom)continue;
+          const a=.20*(1-i/Math.max(1,residualRows));
+          if(a<=.01)continue;
+          const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(216,184,106,0)');g.addColorStop(.45,`rgba(255,240,176,${a})`);g.addColorStop(.62,`rgba(255,255,248,${a*.75})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.save();ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,historyRowH*.28));ctx.restore();
+        }
 
         /* Rows 6-30: completed-row history. Structure remains visible while color independently cools into dark teal. */
         for(let i=0;i<historyRows;i++){
@@ -133,7 +144,7 @@
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
           const structureAlpha=.96-(.91*t);
           const colorBlend=t*t*(3-2*t);
-          const y=activeY+i*historyRowH;
+          const y=activeY+activeDepth*blockH+i*historyRowH;
           if(y>=targetRect.bottom)break;
           const br=Math.round(10+(3-10)*colorBlend),bg=Math.round(45+(15-45)*colorBlend),bb=Math.round(43+(20-43)*colorBlend);
           ctx.save();
