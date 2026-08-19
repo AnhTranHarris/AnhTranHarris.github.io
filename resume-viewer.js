@@ -59,7 +59,7 @@
     const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
     const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
     const activeDepth=Math.min(5,rows),fadeDepth=Math.min(25,Math.max(0,rows-activeDepth));
-    const historyRowH=clamp(targetRect.height*(isMobile?.0034:.0038),2.4,4.2);
+    const visualRowH=clamp(targetRect.height*(isMobile?.0034:.0038),2.4,4.2);
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const flash=new Float32Array(activeDepth);
@@ -113,49 +113,67 @@
         if(wallProgress>.985&&completedRows<rows){completedRows=rows;for(let r=0;r<activeDepth;r++){active[r].fill(0);activeColors[r].fill(0);flash[r]=0}}
 
         const horizonRows=Math.min(rows,completedRows);
-        const activeY=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
+        const physicsTop=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
         const historyRows=Math.min(fadeDepth,history.length);
-        const solidTop=Math.min(targetRect.bottom,activeY+historyRows*historyRowH);
+        const bandTop=physicsTop;
+        const rowY=index=>bandTop+index*visualRowH;
+        const solidTop=Math.min(targetRect.bottom,rowY(activeDepth+historyRows));
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
 
-        /* Rows 1-5: live particle-reactive Tetris rows only. */
+        /* Rows 1-5: one shared visual geometry for blocks and glare. */
         for(let r=0;r<activeDepth;r++){
-          const y=activeY+r*blockH;
+          const y=rowY(r);
           if(y<targetRect.top||y>=targetRect.bottom)continue;
-          for(let c=0;c<cols;c++){if(!active[r][c])continue;const ci=activeColors[r][c]-1;ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];ctx.fillRect(targetRect.left+c*blockW+.12,y+.12,Math.max(.8,blockW-.24),Math.max(.8,blockH-.24))}
-          if(flash[r]>0){flash[r]=Math.max(0,flash[r]-dt*(.55+Math.random()*.75));const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(255,255,245,0)');g.addColorStop(.18,`rgba(255,240,176,${Math.min(1,flash[r]*.9)})`);g.addColorStop(.50,`rgba(255,255,248,${Math.min(1,flash[r]*1.18)})`);g.addColorStop(.72,`rgba(216,184,106,${Math.min(1,flash[r])})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1.2,blockH*.9))}
+          for(let c=0;c<cols;c++){
+            if(!active[r][c])continue;
+            const ci=activeColors[r][c]-1;
+            ctx.globalAlpha=.42+.30*Math.random();ctx.fillStyle=blockPalette[Math.max(0,ci)];
+            ctx.fillRect(targetRect.left+c*blockW+.12,y+.18,Math.max(.8,blockW-.24),Math.max(1,visualRowH-.36));
+          }
+          if(flash[r]>0){
+            flash[r]=Math.max(0,flash[r]-dt*(.55+Math.random()*.75));
+            const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+            g.addColorStop(0,'rgba(255,255,245,0)');
+            g.addColorStop(.18,`rgba(255,240,176,${Math.min(1,flash[r]*.9)})`);
+            g.addColorStop(.50,`rgba(255,255,248,${Math.min(1,flash[r]*1.18)})`);
+            g.addColorStop(.72,`rgba(216,184,106,${Math.min(1,flash[r])})`);
+            g.addColorStop(1,'rgba(216,184,106,0)');
+            ctx.globalAlpha=1;ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,visualRowH);
+          }
         }
         normalizeFlashes();
         if(Math.random()<.18){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.68+.32*Math.random())}}
 
-        /* Rows 6-10 may retain a short residual glare; it fades out completely before row 11. */
+        /* Rows 6-10: residual glare uses those exact same row rectangles and never extends past row 10. */
         const residualRows=Math.min(5,historyRows);
         for(let i=0;i<residualRows;i++){
-          const row=history[i],y=activeY+(activeDepth+i)*historyRowH;
+          const y=rowY(activeDepth+i);
           if(y<targetRect.top||y>=targetRect.bottom)continue;
           const a=.20*(1-i/Math.max(1,residualRows));
           if(a<=.01)continue;
-          const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(216,184,106,0)');g.addColorStop(.45,`rgba(255,240,176,${a})`);g.addColorStop(.62,`rgba(255,255,248,${a*.75})`);g.addColorStop(1,'rgba(216,184,106,0)');ctx.save();ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1,historyRowH*.28));ctx.restore();
+          const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+          g.addColorStop(0,'rgba(216,184,106,0)');g.addColorStop(.45,`rgba(255,240,176,${a})`);g.addColorStop(.62,`rgba(255,255,248,${a*.75})`);g.addColorStop(1,'rgba(216,184,106,0)');
+          ctx.save();ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,visualRowH);ctx.restore();
         }
 
-        /* Rows 6-30: completed-row history. Structure remains visible while color independently cools into dark teal. */
+        /* Rows 6-30: completed-row history shares the same rowY() spacing. */
         for(let i=0;i<historyRows;i++){
           const row=history[i];
           const t=fadeDepth<=1?1:i/(fadeDepth-1);
           const structureAlpha=.96-(.91*t);
           const colorBlend=t*t*(3-2*t);
-          const y=activeY+activeDepth*blockH+i*historyRowH;
+          const y=rowY(activeDepth+i);
           if(y>=targetRect.bottom)break;
           const br=Math.round(10+(3-10)*colorBlend),bg=Math.round(45+(15-45)*colorBlend),bb=Math.round(43+(20-43)*colorBlend);
           ctx.save();
-          ctx.globalAlpha=.80+.20*colorBlend;ctx.fillStyle=`rgb(${br},${bg},${bb})`;ctx.fillRect(targetRect.left,y,targetRect.width,historyRowH+.2);
+          ctx.globalAlpha=.80+.20*colorBlend;ctx.fillStyle=`rgb(${br},${bg},${bb})`;ctx.fillRect(targetRect.left,y,targetRect.width,visualRowH+.2);
           if(structureAlpha>.025){
             for(let c=0;c<cols;c++){
               if(!row.cells[c])continue;
               const ci=Math.max(0,row.colors[c]-1);
-              ctx.globalAlpha=.62*structureAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,historyRowH-.6));
+              ctx.globalAlpha=.62*structureAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,visualRowH-.6));
             }
-            ctx.globalAlpha=.34*structureAlpha;ctx.fillStyle='rgba(117,186,181,1)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(.65,historyRowH*.12));
+            ctx.globalAlpha=.34*structureAlpha;ctx.fillStyle='rgba(117,186,181,1)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(.65,visualRowH*.12));
           }
           ctx.restore();
         }
@@ -175,9 +193,7 @@
             g.addColorStop(1,'rgba(245,244,239,1)');
             ctx.save();ctx.globalAlpha=clamp((wallProgress-.18)/.62,0,1);ctx.fillStyle=g;ctx.fillRect(targetRect.left,whiteTop,targetRect.width,visibleHeight);ctx.restore();
           }
-          if(whiteRise<1){
-            ctx.save();ctx.globalAlpha=1;ctx.fillStyle='rgb(3,15,20)';ctx.fillRect(targetRect.left,solidTop,targetRect.width,Math.max(0,solidHeight-visibleHeight));ctx.restore();
-          }
+          if(whiteRise<1){ctx.save();ctx.globalAlpha=1;ctx.fillStyle='rgb(3,15,20)';ctx.fillRect(targetRect.left,solidTop,targetRect.width,Math.max(0,solidHeight-visibleHeight));ctx.restore()}
         }
 
         /* Final frame definition is dark teal only; no gold/cyan glow after the settling rows. */
