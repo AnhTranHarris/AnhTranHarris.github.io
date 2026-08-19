@@ -55,49 +55,143 @@
     const ctx=canvas.getContext('2d',{alpha:true});if(!ctx)return;
     const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.25),vw=innerWidth,vh=innerHeight;
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);
-    const palette=['#63d5d0','#1c8a66','#d8b86a','#8fe6d9','#fff0b0'];
-    const columns=isMobile?58:96,columnWidth=targetRect.width/columns;
-    const particles=Array.from({length:5000},(_,i)=>{
-      const col=i%columns,x=targetRect.left+(col+.5)*columnWidth+(Math.random()-.5)*columnWidth*.52;
-      return {x,phase:Math.random()*(targetRect.height+vh*.9),speed:.16+Math.random()*.42,size:.55+Math.random()*1.55,len:3+Math.random()*15,color:palette[i%palette.length],alpha:.18+Math.random()*.62,twinkle:Math.random()*Math.PI*2};
+
+    const palette=['#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0'];
+    const streamCount=isMobile?72:118;
+    const gridCols=isMobile?34:48,gridRows=isMobile?54:66;
+    const cellW=targetRect.width/gridCols,cellH=targetRect.height/gridRows;
+    const grid=Array.from({length:gridRows},()=>new Uint8Array(gridCols));
+    const rowFlash=new Float32Array(gridRows);
+    const heights=new Uint16Array(gridCols);
+    let filled=0,last=performance.now(),depositCarry=0;
+
+    const streams=Array.from({length:streamCount},(_,i)=>{
+      const col=i%gridCols,jitter=(Math.random()-.5)*cellW*.7;
+      return {
+        col,
+        x:targetRect.left+(col+.5)*cellW+jitter,
+        y:targetRect.top-vh*(.15+Math.random()*.9),
+        speed:95+Math.random()*240,
+        tail:22+Math.floor(Math.random()*42),
+        spacing:5+Math.random()*5,
+        width:.7+Math.random()*1.4,
+        phase:Math.random()*Math.PI*2,
+        colorIndex:i%4,
+        resetGap:40+Math.random()*220
+      };
     });
+
     const start=performance.now();
+    const cellColor=(v,alpha=1)=>{
+      const colors=['#0f654d','#1c8a66','#63d5d0','#d8b86a','#fff0b0'];
+      ctx.globalAlpha=alpha;ctx.fillStyle=colors[Math.max(0,Math.min(colors.length-1,v-1))];
+    };
+    const settle=(col)=>{
+      if(col<0||col>=gridCols||heights[col]>=gridRows)return false;
+      const row=gridRows-1-heights[col];
+      grid[row][col]=1+((col+row+heights[col])%4);
+      heights[col]++;filled++;
+      let complete=true;
+      for(let c=0;c<gridCols;c++){if(!grid[row][c]){complete=false;break}}
+      if(complete)rowFlash[row]=1;
+      return true;
+    };
+
     function tick(now){
-      const elapsed=now-start,p=clamp(elapsed/BUILD,0,1),rise=1-Math.pow(1-p,2.05),buildY=targetRect.bottom-targetRect.height*rise;
+      const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
+      const p=clamp(elapsed/BUILD,0,1);
       ctx.clearRect(0,0,vw,vh);
+
+      /* MATRIX-STYLE RAIN: persistent vertical streams with bright heads and fading tails. */
       ctx.save();ctx.globalCompositeOperation='lighter';
-      const travel=targetRect.height+vh*.9;
-      for(const q of particles){
-        let y=targetRect.top-vh*.72+((q.phase+elapsed*q.speed)%travel);
-        if(y>buildY){
-          const impact=clamp(1-(y-buildY)/26,0,1);
-          if(impact<=0)continue;
-          y=buildY-(Math.random()*1.7);
-          ctx.globalAlpha=q.alpha*(.45+.55*impact);
-          ctx.fillStyle=q.color;
-          ctx.fillRect(q.x,y,q.size,Math.max(1,q.size*.8));
-          continue;
+      for(const s of streams){
+        s.y+=s.speed*dt;
+        const stackTop=targetRect.bottom-heights[s.col]*cellH;
+        if(s.y>=stackTop-2){
+          settle(s.col);
+          s.y=targetRect.top-s.resetGap-Math.random()*vh*.55;
+          s.speed=95+Math.random()*240;
+          s.tail=22+Math.floor(Math.random()*42);
         }
-        const headGlow=.78+.22*Math.sin(elapsed*.008+q.twinkle);
-        ctx.globalAlpha=q.alpha*headGlow;ctx.fillStyle=q.color;
-        ctx.fillRect(q.x,y,q.size,q.len);
+        const headY=Math.min(s.y,stackTop-2);
+        for(let j=0;j<s.tail;j++){
+          const y=headY-j*s.spacing;
+          if(y<targetRect.top-vh*.25||y>targetRect.bottom)continue;
+          const fade=1-j/s.tail;
+          if(fade<=.02)continue;
+          const isHead=j===0;
+          ctx.globalAlpha=isHead?.96:(.08+.58*fade*fade);
+          ctx.fillStyle=isHead?(p>.12&&Math.sin(elapsed*.006+s.phase)>.72?'#fff0b0':'#8fe6d9'):palette[s.colorIndex];
+          const h=isHead?Math.max(4,s.spacing*.85):Math.max(2,s.spacing*.6);
+          ctx.fillRect(s.x,y,s.width,h);
+        }
       }
       ctx.restore();
 
-      const builtHeight=targetRect.bottom-buildY;
-      if(builtHeight>0){
-        const fill=ctx.createLinearGradient(0,buildY,0,targetRect.bottom);
-        fill.addColorStop(0,'rgba(99,213,208,.08)');fill.addColorStop(.45,'rgba(15,101,77,.06)');fill.addColorStop(1,'rgba(216,184,106,.045)');
-        ctx.fillStyle=fill;ctx.fillRect(targetRect.left,buildY,targetRect.width,builtHeight);
+      /* Keep deposition advancing steadily so the frame reaches completion at 5 seconds. */
+      const targetFill=Math.floor(gridCols*gridRows*(.08+.92*Math.pow(p,1.12)));
+      depositCarry+=(targetFill-filled);
+      let forced=Math.min(90,Math.floor(depositCarry*.055));
+      depositCarry-=forced;
+      while(forced-->0){
+        let minHeight=gridRows,bucket=[];
+        for(let c=0;c<gridCols;c++){
+          if(heights[c]<minHeight){minHeight=heights[c];bucket=[c]}
+          else if(heights[c]===minHeight)bucket.push(c);
+        }
+        if(!bucket.length||minHeight>=gridRows)break;
+        settle(bucket[Math.floor(Math.random()*bucket.length)]);
       }
 
-      const grad=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);grad.addColorStop(0,'rgba(15,101,77,0)');grad.addColorStop(.18,'rgba(99,213,208,.9)');grad.addColorStop(.58,'rgba(255,240,176,1)');grad.addColorStop(.84,'rgba(216,184,106,.72)');grad.addColorStop(1,'rgba(216,184,106,0)');ctx.fillStyle=grad;ctx.fillRect(targetRect.left,buildY,targetRect.width,2);
+      /* TETRIS-LIKE DEPOSITION: incomplete rows remain visible until future rain fills the gaps. */
+      for(let r=0;r<gridRows;r++){
+        for(let c=0;c<gridCols;c++){
+          const v=grid[r][c];if(!v)continue;
+          const x=targetRect.left+c*cellW,y=targetRect.top+r*cellH;
+          cellColor(v,.26+.38*(r/gridRows));
+          ctx.fillRect(x+.7,y+.7,Math.max(1,cellW-1.4),Math.max(1,cellH-1.4));
+        }
+      }
 
-      ctx.strokeStyle='rgba(99,213,208,.58)';ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(targetRect.left,buildY);ctx.lineTo(targetRect.left,targetRect.bottom);ctx.lineTo(targetRect.right,targetRect.bottom);ctx.lineTo(targetRect.right,buildY);ctx.stroke();
-      if(p>.88){ctx.globalAlpha=clamp((p-.88)/.12,0,1)*.55;ctx.strokeStyle='rgba(216,184,106,.72)';ctx.strokeRect(targetRect.left+.5,targetRect.top+.5,targetRect.width-1,targetRect.height-1);ctx.globalAlpha=1}
+      /* A completed horizontal layer flashes like a loading line, then remains part of the frame. */
+      for(let r=0;r<gridRows;r++){
+        if(rowFlash[r]<=0)continue;
+        rowFlash[r]=Math.max(0,rowFlash[r]-dt*1.8);
+        const y=targetRect.top+r*cellH+cellH*.5;
+        const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+        g.addColorStop(0,'rgba(15,101,77,0)');
+        g.addColorStop(.18,`rgba(99,213,208,${rowFlash[r]})`);
+        g.addColorStop(.60,`rgba(255,240,176,${Math.min(1,rowFlash[r]*1.15)})`);
+        g.addColorStop(1,'rgba(216,184,106,0)');
+        ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(1.5,cellH*.22));
+      }
 
-      if(elapsed<BUILD){particleRaf=requestAnimationFrame(tick)}else{particleRaf=0}
+      /* Active construction horizon follows the highest deposited material rather than a smooth progress bar. */
+      let maxHeight=0;
+      for(let c=0;c<gridCols;c++)maxHeight=Math.max(maxHeight,heights[c]);
+      const activeY=targetRect.bottom-maxHeight*cellH;
+      const scan=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
+      scan.addColorStop(0,'rgba(15,101,77,0)');
+      scan.addColorStop(.22,'rgba(99,213,208,.78)');
+      scan.addColorStop(.62,'rgba(255,240,176,.95)');
+      scan.addColorStop(1,'rgba(216,184,106,0)');
+      ctx.fillStyle=scan;ctx.fillRect(targetRect.left,activeY,targetRect.width,2);
+
+      /* The completed frame resolves during the final half-second. */
+      if(p>.90){
+        const a=clamp((p-.90)/.10,0,1);
+        ctx.globalAlpha=a*.78;ctx.strokeStyle='rgba(99,213,208,.92)';ctx.lineWidth=1.5;
+        ctx.strokeRect(targetRect.left+.75,targetRect.top+.75,targetRect.width-1.5,targetRect.height-1.5);
+        ctx.globalAlpha=a*.58;ctx.strokeStyle='rgba(216,184,106,.86)';
+        ctx.strokeRect(targetRect.left+3,targetRect.top+3,targetRect.width-6,targetRect.height-6);
+        ctx.globalAlpha=1;
+      }
+
+      if(elapsed<BUILD){particleRaf=requestAnimationFrame(tick)}
+      else{
+        for(let r=0;r<gridRows;r++)for(let c=0;c<gridCols;c++)if(!grid[r][c])grid[r][c]=1+((r+c)%4);
+        particleRaf=0;
+      }
     }
     particleRaf=requestAnimationFrame(tick);
   }
@@ -105,15 +199,6 @@
   function buildEffects(sourceRect,targetRect){
     fx.querySelectorAll('.rv-line,.rv-edge').forEach(el=>el.remove());if(reduce?.matches)return;
     startPrinter(sourceRect,targetRect);
-    const loadRows=2;
-    for(let i=0;i<loadRows;i++){
-      const el=document.createElement('i');el.className='rv-line';
-      const top=targetRect.bottom-targetRect.height*((i+1)/(loadRows+1));
-      el.style.cssText=`--left:${targetRect.left+targetRect.width*.08}px;--top:${top}px;--width:${targetRect.width*.84}px;--dur:${1500+Math.random()*350}ms;--delay:${1650+i*1450}ms`;
-      fx.appendChild(el);
-    }
-    const l=targetRect.left,t=targetRect.top,w=targetRect.width,b=targetRect.bottom;
-    [['h',`--left:${l}px;--top:${b-2}px;--width:${w}px;--dur:2100ms;--delay:650ms`],['h',`--left:${l}px;--top:${t}px;--width:${w}px;--dur:1500ms;--delay:3450ms`]].forEach(([d,style])=>{const el=document.createElement('i');el.className=`rv-edge ${d}`;el.style.cssText=style;fx.appendChild(el)});
     fx.classList.add('active');
   }
 
