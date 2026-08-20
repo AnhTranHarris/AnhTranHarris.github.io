@@ -95,7 +95,7 @@
     const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.2),vw=innerWidth,vh=innerHeight;
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);fx.classList.add('active');
     const rainPalette=['#0b4f38','#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0','#f5f4ef'];
-    const columnCount=isMobile?48:76,colW=targetRect.width/columnCount,maxParticles=isMobile?4800:7200;
+    const columnCount=isMobile?48:76,colW=targetRect.width/columnCount,maxParticles=isMobile?900:1400;
     const columns=Array.from({length:columnCount},(_,i)=>({x:targetRect.left+i*colW,delay:100+Math.random()*560+(i%11)*7,duration:2200+Math.random()*720,phase:Math.random()*Math.PI*2,ridge:(Math.random()-.5)*22,frontY:targetRect.bottom}));
     const particles=[],recentClusterRanges=[],scheduledBursts=[];
     const maxOverlap=targetRect.width*.02;
@@ -124,11 +124,11 @@
     };
     const emitPrimaryCluster=(elapsed,interval)=>{
       if(elapsed>3150||particles.length>=maxParticles)return;
-      const range=chooseClusterRange(),count=50+Math.floor(Math.random()*451);
+      const range=chooseClusterRange(),count=8+Math.floor(Math.random()*68);
       recentClusterRanges.push(range);if(recentClusterRanges.length>=4)recentClusterRanges.length=0;
       emitBurst(range,count,1);
-      if(count>100)scheduledBursts.push({at:elapsed+10,range,count:5+Math.floor(Math.random()*85),speedScale:1});
-      if(interval>100)scheduledBursts.push({at:elapsed+27,range,count:50,speedScale:.80});
+      if(count>15)scheduledBursts.push({at:elapsed+10,range,count:1+Math.floor(Math.random()*13),speedScale:1});
+      if(interval>100)scheduledBursts.push({at:elapsed+27,range,count:8,speedScale:.80});
     };
     function tick(now){
       const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
@@ -149,9 +149,10 @@
       for(let i=0;i<particles.length;i++){
         const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.007)*.03;q.y+=q.vy*dt;q.life-=dt*(elapsed>3050?.82:.18);
         if(q.life<=0||q.y>vh+90)continue;particles[write++]=q;
+        const colIndex=clamp(Math.floor((q.x-targetRect.left)/colW),0,columnCount-1),visibleFront=columns[colIndex].frontY;
         const segments=Math.max(3,Math.floor(q.tail/q.gap));
         for(let s=0;s<segments;s++){
-          const y=q.y-s*q.gap;if(y<targetRect.top-20||y>vh+20)continue;const fade=1-s/segments;
+          const y=q.y-s*q.gap;if(y<targetRect.top-20||y>vh+20||y<visibleFront+1)continue;const fade=1-s/segments;
           ctx.globalAlpha=(s===0?.94:(.05+.52*fade*fade))*q.life;ctx.fillStyle=s===0?q.head:q.color;ctx.fillRect(q.x,y,q.w,Math.max(1.5,q.gap*.55));
         }
       }
