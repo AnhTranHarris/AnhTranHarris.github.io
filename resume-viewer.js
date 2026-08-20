@@ -58,7 +58,7 @@
     const oldCols=isMobile?34:48,oldRows=isMobile?54:66;
     const blockW=Math.max(1.15,(targetRect.width/oldCols)*.10),blockH=Math.max(1.15,(targetRect.height/oldRows)*.10);
     const cols=Math.max(12,Math.floor(targetRect.width/blockW)),rows=Math.max(12,Math.floor(targetRect.height/blockH));
-    const activeDepth=Math.min(5,rows),fadeDepth=Math.min(25,Math.max(0,rows-activeDepth));
+    const activeDepth=Math.min(10,rows),fadeDepth=Math.min(20,Math.max(0,rows-activeDepth));
     const visualRowH=clamp(targetRect.height*(isMobile?.0034:.0038),2.4,4.2);
     const active=Array.from({length:activeDepth},()=>new Uint8Array(cols));
     const activeColors=Array.from({length:activeDepth},()=>new Uint8Array(cols));
@@ -120,7 +120,7 @@
         const solidTop=Math.min(targetRect.bottom,rowY(activeDepth+historyRows));
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
 
-        /* Rows 1-5: one shared visual geometry for blocks and glare. */
+        /* Rows 1-10: active particle-reactive Tetris rows using one shared visual geometry. */
         for(let r=0;r<activeDepth;r++){
           const y=rowY(r);
           if(y<targetRect.top||y>=targetRect.bottom)continue;
@@ -144,38 +144,33 @@
         normalizeFlashes();
         if(Math.random()<.18){const candidates=[];for(let r=0;r<activeDepth;r++)if(flash[r]<=.02&&canFlash(r))candidates.push(r);if(candidates.length){const r=candidates[Math.floor(Math.random()*candidates.length)];startFlash(r,.68+.32*Math.random())}}
 
-        /* Rows 6-10: residual glare uses those exact same row rectangles and never extends past row 10. */
-        const residualRows=Math.min(5,historyRows);
-        for(let i=0;i<residualRows;i++){
-          const y=rowY(activeDepth+i);
-          if(y<targetRect.top||y>=targetRect.bottom)continue;
-          const a=.20*(1-i/Math.max(1,residualRows));
-          if(a<=.01)continue;
-          const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);
-          g.addColorStop(0,'rgba(216,184,106,0)');g.addColorStop(.45,`rgba(255,240,176,${a})`);g.addColorStop(.62,`rgba(255,255,248,${a*.75})`);g.addColorStop(1,'rgba(216,184,106,0)');
-          ctx.save();ctx.fillStyle=g;ctx.fillRect(targetRect.left,y,targetRect.width,visualRowH);ctx.restore();
+        /* Rows 11-30: completed history stays structurally intact underneath the fade overlay. */
+        for(let i=0;i<historyRows;i++){
+          const row=history[i],y=rowY(activeDepth+i);
+          if(y>=targetRect.bottom)break;
+          ctx.save();
+          ctx.globalAlpha=.94;ctx.fillStyle='rgb(10,45,43)';ctx.fillRect(targetRect.left,y,targetRect.width,visualRowH+.2);
+          for(let c=0;c<cols;c++){
+            if(!row.cells[c])continue;
+            const ci=Math.max(0,row.colors[c]-1);
+            ctx.globalAlpha=.68;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,visualRowH-.6));
+          }
+          ctx.globalAlpha=.22;ctx.fillStyle='rgba(117,186,181,1)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(.65,visualRowH*.12));
+          ctx.restore();
         }
 
-        /* Rows 6-30: completed-row history shares the same rowY() spacing. */
-        for(let i=0;i<historyRows;i++){
-          const row=history[i];
-          const t=fadeDepth<=1?1:i/(fadeDepth-1);
-          const structureAlpha=.96-(.91*t);
-          const colorBlend=t*t*(3-2*t);
-          const y=rowY(activeDepth+i);
-          if(y>=targetRect.bottom)break;
-          const br=Math.round(10+(3-10)*colorBlend),bg=Math.round(45+(15-45)*colorBlend),bb=Math.round(43+(20-43)*colorBlend);
-          ctx.save();
-          ctx.globalAlpha=.80+.20*colorBlend;ctx.fillStyle=`rgb(${br},${bg},${bb})`;ctx.fillRect(targetRect.left,y,targetRect.width,visualRowH+.2);
-          if(structureAlpha>.025){
-            for(let c=0;c<cols;c++){
-              if(!row.cells[c])continue;
-              const ci=Math.max(0,row.colors[c]-1);
-              ctx.globalAlpha=.62*structureAlpha;ctx.fillStyle=blockPalette[ci];ctx.fillRect(targetRect.left+c*blockW+.12,y+.3,Math.max(.8,blockW-.24),Math.max(1,visualRowH-.6));
-            }
-            ctx.globalAlpha=.34*structureAlpha;ctx.fillStyle='rgba(117,186,181,1)';ctx.fillRect(targetRect.left,y,targetRect.width,Math.max(.65,visualRowH*.12));
+        /* Single authoritative fade: transparent at row 11, fully dark teal by row 30. */
+        if(historyRows>0){
+          const fadeTop=rowY(activeDepth),fadeBottom=Math.min(targetRect.bottom,rowY(activeDepth+historyRows));
+          if(fadeBottom>fadeTop){
+            const fadeG=ctx.createLinearGradient(0,fadeTop,0,fadeBottom);
+            fadeG.addColorStop(0,'rgba(3,15,20,0)');
+            fadeG.addColorStop(.20,'rgba(3,15,20,.15)');
+            fadeG.addColorStop(.45,'rgba(3,15,20,.40)');
+            fadeG.addColorStop(.72,'rgba(3,15,20,.72)');
+            fadeG.addColorStop(1,'rgba(3,15,20,1)');
+            ctx.save();ctx.globalAlpha=1;ctx.fillStyle=fadeG;ctx.fillRect(targetRect.left,fadeTop,targetRect.width,fadeBottom-fadeTop);ctx.restore();
           }
-          ctx.restore();
         }
 
         /* Separate bottom-up resume-paper layer. Cubic rise preserves the dark teal trail much longer. */
@@ -196,7 +191,6 @@
           if(whiteRise<1){ctx.save();ctx.globalAlpha=1;ctx.fillStyle='rgb(3,15,20)';ctx.fillRect(targetRect.left,solidTop,targetRect.width,Math.max(0,solidHeight-visibleHeight));ctx.restore()}
         }
 
-        /* Final frame definition is dark teal only; no gold/cyan glow after the settling rows. */
         if(p>.90){const a=clamp((p-.90)/.10,0,1);ctx.save();ctx.globalAlpha=a*.42;ctx.strokeStyle='rgba(9,58,60,.72)';ctx.lineWidth=1;ctx.strokeRect(targetRect.left+.5,targetRect.top+.5,targetRect.width-1,targetRect.height-1);ctx.restore()}
       }
 
