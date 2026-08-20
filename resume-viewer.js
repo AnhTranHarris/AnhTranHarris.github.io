@@ -96,17 +96,20 @@
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);fx.classList.add('active');
     const rainPalette=['#0b4f38','#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0','#f5f4ef'];
     const rockPalette=['rgba(245,244,239,.94)','rgba(205,214,210,.92)','rgba(92,119,118,.88)','rgba(18,44,46,.94)','rgba(8,32,36,.96)','rgba(216,184,106,.72)'];
-    const maxParticles=isMobile?900:1400,maxFragments=isMobile?180:280;
+    const maxParticles=isMobile?900:1400,maxFragments=isMobile?210:320;
     const columns=[];let x=targetRect.left,columnIndex=0;
     while(x<targetRect.right-.5){
       const remaining=targetRect.right-x,width=Math.min(remaining,targetRect.width*(.045+Math.random()*.055));
-      const events=[];let bottom=targetRect.bottom,releaseBase=280+Math.random()*440;
+      const events=[];let bottom=targetRect.bottom;
       while(bottom>targetRect.top+2){
         const height=Math.min(bottom-targetRect.top,targetRect.height*(.055+Math.random()*.105));
-        const y0=bottom-height;
-        releaseBase+=180+Math.random()*420;
-        const release=clamp(releaseBase+(Math.random()-.5)*180,320,3380),crackLead=80+Math.random()*180;
-        events.push({y0,y1:bottom,height,crackAt:Math.max(120,release-crackLead),release,released:false,spawned:false});
+        const y0=bottom-height,centerY=y0+height*.5;
+        const heightPos=clamp((targetRect.bottom-centerY)/targetRect.height,0,1);
+        const baseRelease=360+heightPos*2050;
+        const earlyChance=.20+heightPos*.34;
+        const earlyPull=Math.random()<earlyChance?420+Math.random()*1250:0;
+        const release=clamp(baseRelease-earlyPull+(Math.random()-.5)*520,280,3380),crackLead=80+Math.random()*220;
+        events.push({y0,y1:bottom,height,crackAt:Math.max(100,release-crackLead),release,released:false,spawned:false});
         bottom=y0;
       }
       columns.push({x0:x,x1:x+width,width,index:columnIndex++,events,frontY:targetRect.bottom});x+=width;
@@ -125,14 +128,15 @@
       const count=1+Math.floor(Math.random()*3),baseW=col.width/count;
       for(let i=0;i<count&&fragments.length<maxFragments;i++){
         const w=baseW*(.78+Math.random()*.38),h=event.height*(.72+Math.random()*.28),fx0=col.x0+i*baseW+(Math.random()-.5)*baseW*.12,fy0=event.y0+(event.height-h)*Math.random();
-        fragments.push({x:fx0,y:fy0,w,h,vx:(Math.random()-.5)*34,vy:18+Math.random()*45,g:460+Math.random()*260,rot:(Math.random()-.5)*.09,vr:(Math.random()-.5)*.7,born:performance.now(),splitAt:150+Math.random()*360,split:false,color:rockPalette[Math.floor(Math.random()*rockPalette.length)]});
+        fragments.push({x:fx0,y:fy0,w,h,vx:(Math.random()-.5)*34,vy:18+Math.random()*45,g:460+Math.random()*260,rot:(Math.random()-.5)*.09,vr:(Math.random()-.5)*.7,born:performance.now(),nextSplitAt:140+Math.random()*320,splitsLeft:1+Math.floor(Math.random()*3),color:rockPalette[Math.floor(Math.random()*rockPalette.length)]});
       }
     };
-    const splitFragment=f=>{
-      if(f.split||fragments.length>=maxFragments||f.w<6||f.h<8)return;f.split=true;
-      const pieces=2+Math.floor(Math.random()*3),childW=Math.max(2,f.w/pieces);
-      for(let i=0;i<pieces&&fragments.length<maxFragments;i++)fragments.push({x:f.x+i*childW,y:f.y+Math.random()*Math.max(2,f.h*.25),w:childW*(.68+Math.random()*.45),h:f.h*(.35+Math.random()*.38),vx:f.vx+(Math.random()-.5)*75,vy:f.vy+20+Math.random()*80,g:f.g*(.9+Math.random()*.35),rot:f.rot+(Math.random()-.5)*.15,vr:f.vr+(Math.random()-.5)*1.3,born:performance.now(),splitAt:1e9,split:true,color:f.color});
-      f.h*=.45;f.w*=.72;
+    const splitFragment=(f,now)=>{
+      if(f.splitsLeft<=0||fragments.length>=maxFragments||f.w<4||f.h<6)return;
+      f.splitsLeft--;
+      const pieces=2+Math.floor(Math.random()*3),childW=Math.max(1.8,f.w/pieces),remaining=f.splitsLeft;
+      for(let i=0;i<pieces&&fragments.length<maxFragments;i++)fragments.push({x:f.x+i*childW+(Math.random()-.5)*3,y:f.y+Math.random()*Math.max(2,f.h*.32),w:childW*(.58+Math.random()*.52),h:f.h*(.28+Math.random()*.36),vx:f.vx+(Math.random()-.5)*95,vy:f.vy+25+Math.random()*95,g:f.g*(.88+Math.random()*.4),rot:f.rot+(Math.random()-.5)*.2,vr:f.vr+(Math.random()-.5)*1.6,born:now,nextSplitAt:110+Math.random()*310,splitsLeft:Math.max(0,remaining-(Math.random()<.45?0:1)),color:f.color});
+      f.w*=.62;f.h*=.52;f.vx+=(Math.random()-.5)*45;f.vy+=25+Math.random()*60;f.nextSplitAt=(now-f.born)+120+Math.random()*330;
     };
     function tick(now){
       const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
@@ -157,7 +161,7 @@
       if(clusterGenerationOpen){for(let i=scheduledBursts.length-1;i>=0;i--){const burst=scheduledBursts[i];if(elapsed>=burst.at){emitBurst(burst.range,burst.count,burst.speedScale,burst.originBand);scheduledBursts.splice(i,1)}}}
       ctx.save();ctx.beginPath();ctx.rect(targetRect.left,targetRect.top,targetRect.width,targetRect.height);ctx.clip();ctx.globalCompositeOperation='lighter';
       for(const col of columns){for(const event of col.events){if(event.released)continue;if(elapsed>=event.crackAt){const crackP=clamp((elapsed-event.crackAt)/Math.max(1,event.release-event.crackAt),0,1),y=event.y0+event.height*(.20+.55*crackP);ctx.globalAlpha=.16+.34*crackP;ctx.strokeStyle=col.index%4===0?'rgba(216,184,106,.8)':'rgba(99,213,208,.65)';ctx.lineWidth=.7+crackP*.8;ctx.beginPath();ctx.moveTo(col.x0+col.width*.08,y);ctx.lineTo(col.x0+col.width*(.38+Math.random()*.12),y+2+Math.random()*3);ctx.lineTo(col.x1-col.width*.08,y-1+Math.random()*3);ctx.stroke()}}}
-      let fw=0;for(let i=0;i<fragments.length;i++){const f=fragments[i];const age=now-f.born;if(age>=f.splitAt)splitFragment(f);f.vy+=f.g*dt;f.x+=f.vx*dt;f.y+=f.vy*dt;f.rot+=f.vr*dt;if(f.y>vh+140||f.x<-120||f.x>vw+120)continue;fragments[fw++]=f;ctx.save();ctx.translate(f.x+f.w*.5,f.y+f.h*.5);ctx.rotate(f.rot);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=.92;ctx.fillStyle=f.color;ctx.beginPath();ctx.moveTo(-f.w*.5+Math.random()*2,-f.h*.5);ctx.lineTo(f.w*.5,-f.h*.5+Math.random()*3);ctx.lineTo(f.w*.43+Math.random()*3,f.h*.5);ctx.lineTo(-f.w*.48,f.h*.42+Math.random()*3);ctx.closePath();ctx.fill();ctx.globalAlpha=.22;ctx.strokeStyle='rgba(255,240,176,.55)';ctx.lineWidth=.7;ctx.stroke();ctx.restore()}fragments.length=fw;
+      let fw=0;for(let i=0;i<fragments.length;i++){const f=fragments[i];const age=now-f.born;if(age>=f.nextSplitAt&&f.splitsLeft>0)splitFragment(f,now);f.vy+=f.g*dt;f.x+=f.vx*dt;f.y+=f.vy*dt;f.rot+=f.vr*dt;if(f.y>vh+140||f.x<-120||f.x>vw+120)continue;fragments[fw++]=f;ctx.save();ctx.translate(f.x+f.w*.5,f.y+f.h*.5);ctx.rotate(f.rot);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=.92;ctx.fillStyle=f.color;ctx.beginPath();ctx.moveTo(-f.w*.5+Math.random()*2,-f.h*.5);ctx.lineTo(f.w*.5,-f.h*.5+Math.random()*3);ctx.lineTo(f.w*.43+Math.random()*3,f.h*.5);ctx.lineTo(-f.w*.48,f.h*.42+Math.random()*3);ctx.closePath();ctx.fill();ctx.globalAlpha=.22;ctx.strokeStyle='rgba(255,240,176,.55)';ctx.lineWidth=.7;ctx.stroke();ctx.restore()}fragments.length=fw;
       ctx.globalCompositeOperation='lighter';
       let write=0;for(let i=0;i<particles.length;i++){const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.007)*.03;q.y+=q.vy*dt;if(q.y>vh+90)continue;particles[write++]=q;const col=columnAtX(q.x),visibleFront=col.frontY,segments=Math.max(3,Math.floor(q.tail/q.gap));for(let s=0;s<segments;s++){const y=q.y-s*q.gap;if(y<targetRect.top-20||y>vh+20||y<visibleFront+1)continue;const trail=1-s/segments;ctx.globalAlpha=s===0?.94:(.05+.52*trail*trail);ctx.fillStyle=s===0?q.head:q.color;ctx.fillRect(q.x,y,q.w,Math.max(1.5,q.gap*.55))}}particles.length=write;ctx.restore();
       if(elapsed<CLOSE){particleRaf=requestAnimationFrame(tick)}else{particleRaf=0;ctx.clearRect(0,0,vw,vh)}
