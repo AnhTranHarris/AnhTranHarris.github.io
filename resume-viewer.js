@@ -95,73 +95,51 @@
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);fx.classList.add('active');
     const palette=['#f5f4ef','#dbe7e3','#8fe6d9','#63d5d0','#1c8a66','#0f654d','#0b4f38','#d8b86a','#fff0b0'];
     const columnCount=isMobile?44:68,colW=targetRect.width/columnCount,maxParticles=isMobile?1450:2100;
-    const columns=Array.from({length:columnCount},(_,i)=>({
-      x:targetRect.left+i*colW,
-      delay:120+Math.random()*520+(i%9)*11,
-      duration:2250+Math.random()*650,
-      phase:Math.random()*Math.PI*2,
-      ridge:(Math.random()-.5)*22,
-      prevY:targetRect.bottom
-    }));
+    const columns=Array.from({length:columnCount},(_,i)=>({x:targetRect.left+i*colW,delay:120+Math.random()*520+(i%9)*11,duration:2250+Math.random()*650,phase:Math.random()*Math.PI*2,ridge:(Math.random()-.5)*22,prevY:targetRect.bottom}));
     const particles=[];
     const start=performance.now();let last=start;
     const spawnEdge=(col,oldY,newY,elapsed)=>{
       if(elapsed>3100||particles.length>=maxParticles||newY>=oldY)return;
       const travel=oldY-newY,n=Math.min(7,Math.max(1,Math.floor(travel/2.5)));
-      for(let k=0;k<n&&particles.length<maxParticles;k++){
-        const y=newY+Math.random()*Math.max(2,travel+8);
-        particles.push({x:col.x+Math.random()*colW,y,vx:(Math.random()-.5)*24,vy:24+Math.random()*70,g:300+Math.random()*430,w:.65+Math.random()*1.45,h:2+Math.random()*7,tail:10+Math.random()*38,color:palette[Math.floor(Math.random()*palette.length)],life:1,phase:Math.random()*6.28});
-      }
+      for(let k=0;k<n&&particles.length<maxParticles;k++){const y=newY+Math.random()*Math.max(2,travel+8);particles.push({x:col.x+Math.random()*colW,y,vx:(Math.random()-.5)*24,vy:24+Math.random()*70,g:300+Math.random()*430,w:.65+Math.random()*1.45,h:2+Math.random()*7,tail:10+Math.random()*38,color:palette[Math.floor(Math.random()*palette.length)],life:1,phase:Math.random()*6.28})}
     };
     function tick(now){
       const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
+      const reveal=clamp((elapsed-CLOSE*.50)/(CLOSE*.50),0,1),maskAlpha=1-reveal,baseOverlayAlpha=(isMobile?.94:.82)*maskAlpha,blurPx=(isMobile?0:8)*maskAlpha;
+      overlay.style.background=`rgba(2,10,14,${baseOverlayAlpha})`;overlay.style.backdropFilter=`blur(${blurPx}px)`;overlay.style.webkitBackdropFilter=`blur(${blurPx}px)`;shell.style.opacity=String(maskAlpha);
       ctx.clearRect(0,0,vw,vh);
       ctx.save();ctx.beginPath();ctx.rect(targetRect.left,targetRect.top,targetRect.width,targetRect.height);ctx.clip();
 
-      /* The resume remains fully solid. Only the material behind this irregular erosion front is removed. */
       for(let i=0;i<columns.length;i++){
-        const col=columns[i],local=clamp((elapsed-col.delay)/col.duration,0,1),ease=local*local*(3-2*local);
-        const shelf=Math.sin(col.phase+ease*9)*8+Math.sin(col.phase*.7+ease*21)*3+col.ridge*(1-ease)*.35;
-        const frontY=clamp(targetRect.bottom-ease*(targetRect.height+24)+shelf,targetRect.top-24,targetRect.bottom);
+        const col=columns[i],local=clamp((elapsed-col.delay)/col.duration,0,1),ease=local*local*(3-2*local),shelf=Math.sin(col.phase+ease*9)*8+Math.sin(col.phase*.7+ease*21)*3+col.ridge*(1-ease)*.35,frontY=clamp(targetRect.bottom-ease*(targetRect.height+24)+shelf,targetRect.top-24,targetRect.bottom);
         spawnEdge(col,col.prevY,frontY,elapsed);col.prevY=Math.min(col.prevY,frontY);
-        ctx.globalAlpha=1;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x-.6,frontY,colW+1.2,targetRect.bottom-frontY+2);
-
-        /* Small ledges/pockets keep the breakup edge from reading as a clean wipe. */
-        if(local>.05&&local<.98){
-          const ledgeH=2+((i*7)%5),ledgeY=frontY-(3+((i*11)%13));
-          ctx.globalAlpha=.72;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x+colW*.12,ledgeY,colW*.72,ledgeH);
-          ctx.globalAlpha=.35;ctx.fillStyle=i%5===0?'rgba(216,184,106,1)':'rgba(99,213,208,1)';ctx.fillRect(col.x,frontY-1,colW,1);
-        }
+        ctx.globalAlpha=maskAlpha;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x-.6,frontY,colW+1.2,targetRect.bottom-frontY+2);
+        if(local>.05&&local<.98){const ledgeH=2+((i*7)%5),ledgeY=frontY-(3+((i*11)%13));ctx.globalAlpha=.72*maskAlpha;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x+colW*.12,ledgeY,colW*.72,ledgeH);ctx.globalAlpha=.35*maskAlpha;ctx.fillStyle=i%5===0?'rgba(216,184,106,1)':'rgba(99,213,208,1)';ctx.fillRect(col.x,frontY-1,colW,1)}
       }
 
-      /* Falling material inherits the established Matrix-rain language. */
       ctx.globalCompositeOperation='lighter';
       let write=0;
       for(let i=0;i<particles.length;i++){
         const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.009)*.12;q.y+=q.vy*dt;q.life-=dt*(elapsed>3000?.9:.22);
-        if(q.life<=0||q.y>vh+80)continue;
-        particles[write++]=q;
-        ctx.globalAlpha=.78*q.life;ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,q.w,q.h);
-        ctx.globalAlpha=.16*q.life;ctx.fillRect(q.x,q.y-q.tail,q.w*.7,q.tail);
+        if(q.life<=0||q.y>vh+80)continue;particles[write++]=q;ctx.globalAlpha=.78*q.life;ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,q.w,q.h);ctx.globalAlpha=.16*q.life;ctx.fillRect(q.x,q.y-q.tail,q.w*.7,q.tail)
       }
-      particles.length=write;
-      ctx.restore();
-
+      particles.length=write;ctx.restore();
       if(elapsed<CLOSE){particleRaf=requestAnimationFrame(tick)}else{particleRaf=0;ctx.clearRect(0,0,vw,vh)}
     }
     particleRaf=requestAnimationFrame(tick);
   }
 
   function buildEffects(sourceRect,targetRect){if(reduce?.matches)return;startPrinter(sourceRect,targetRect);fx.classList.add('active')}
-  function finishOpen(){stopParticles();overlay.classList.remove('constructing','revealing');overlay.classList.add('open','frame-ready');fx.classList.remove('active');sourceCard?.classList.remove('resume-source-dissolve');shell.style.opacity='';shell.style.transform='';close.focus({preventScroll:true})}
-  function openResume(e){e?.preventDefault();if(open||closing)return;open=true;lastFocus=document.activeElement;clearTimers();stopParticles();scroller.scrollTop=0;document.body.classList.add('resume-open');overlay.setAttribute('aria-hidden','false');overlay.classList.remove('open','closing','revealing','frame-ready');overlay.classList.add('constructing');if(reduce?.matches){overlay.classList.add('frame-ready','revealing');later(finishOpen,1);return}sourceCard?.classList.add('resume-source-dissolve');requestAnimationFrame(()=>{const sourceRect=sourceCard?.getBoundingClientRect()||trigger.getBoundingClientRect(),targetRect=shell.getBoundingClientRect();buildEffects(sourceRect,targetRect)});later(()=>{overlay.classList.add('frame-ready');overlay.classList.remove('constructing');overlay.classList.add('revealing')},BUILD);later(finishOpen,TOTAL)}
+  function resetCloseStyles(){shell.style.opacity='';shell.style.transform='';overlay.style.background='';overlay.style.backdropFilter='';overlay.style.webkitBackdropFilter=''}
+  function finishOpen(){stopParticles();overlay.classList.remove('constructing','revealing');overlay.classList.add('open','frame-ready');fx.classList.remove('active');sourceCard?.classList.remove('resume-source-dissolve');resetCloseStyles();close.focus({preventScroll:true})}
+  function openResume(e){e?.preventDefault();if(open||closing)return;open=true;lastFocus=document.activeElement;clearTimers();stopParticles();resetCloseStyles();scroller.scrollTop=0;document.body.classList.add('resume-open');overlay.setAttribute('aria-hidden','false');overlay.classList.remove('open','closing','revealing','frame-ready');overlay.classList.add('constructing');if(reduce?.matches){overlay.classList.add('frame-ready','revealing');later(finishOpen,1);return}sourceCard?.classList.add('resume-source-dissolve');requestAnimationFrame(()=>{const sourceRect=sourceCard?.getBoundingClientRect()||trigger.getBoundingClientRect(),targetRect=shell.getBoundingClientRect();buildEffects(sourceRect,targetRect)});later(()=>{overlay.classList.add('frame-ready');overlay.classList.remove('constructing');overlay.classList.add('revealing')},BUILD);later(finishOpen,TOTAL)}
   function closeResume(){
     if(!open||closing)return;closing=true;clearTimers();stopParticles();
-    if(reduce?.matches){overlay.classList.remove('open','revealing','frame-ready');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('resume-open');fx.classList.remove('active');sourceCard?.classList.remove('resume-source-dissolve');open=false;closing=false;lastFocus?.focus?.({preventScroll:true});return}
+    if(reduce?.matches){overlay.classList.remove('open','revealing','frame-ready');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('resume-open');fx.classList.remove('active');sourceCard?.classList.remove('resume-source-dissolve');resetCloseStyles();open=false;closing=false;lastFocus?.focus?.({preventScroll:true});return}
     sourceCard?.classList.add('resume-source-dissolve');overlay.classList.remove('open','revealing');overlay.classList.add('closing','frame-ready');
     requestAnimationFrame(()=>startDisassembly(shell.getBoundingClientRect()));
     later(()=>sourceCard?.classList.remove('resume-source-dissolve'),Math.round(CLOSE*.70));
-    later(()=>{stopParticles();overlay.classList.remove('closing','frame-ready');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('resume-open');fx.classList.remove('active');shell.style.opacity='';shell.style.transform='';open=false;closing=false;lastFocus?.focus?.({preventScroll:true})},CLOSE);
+    later(()=>{stopParticles();overlay.classList.remove('closing','frame-ready');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('resume-open');fx.classList.remove('active');resetCloseStyles();open=false;closing=false;lastFocus?.focus?.({preventScroll:true})},CLOSE);
   }
 
   trigger.textContent='View Resume →';trigger.href='#resume';trigger.removeAttribute('target');trigger.removeAttribute('rel');trigger.setAttribute('aria-haspopup','dialog');trigger.setAttribute('aria-controls','resume-viewer');trigger.addEventListener('click',openResume);
