@@ -12,6 +12,7 @@
   const clearTimers=()=>{timers.forEach(clearTimeout);timers=[]};
   const stopParticles=()=>{if(particleRaf)cancelAnimationFrame(particleRaf);particleRaf=0};
   const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
+  const smootherstep=t=>{t=clamp(t,0,1);return t*t*t*(t*(t*6-15)+10)};
 
   const css=document.createElement('style');
   css.textContent=`
@@ -105,7 +106,7 @@
     };
     function tick(now){
       const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
-      const reveal=clamp((elapsed-CLOSE*.50)/(CLOSE*.50),0,1),maskAlpha=1-reveal,baseOverlayAlpha=(isMobile?.94:.82)*maskAlpha,blurPx=(isMobile?0:8)*maskAlpha;
+      const handoffRaw=clamp((elapsed-CLOSE*.45)/(CLOSE*.475),0,1),reveal=smootherstep(handoffRaw),maskAlpha=1-reveal,baseOverlayAlpha=(isMobile?.94:.82)*maskAlpha,blurPx=(isMobile?0:8)*maskAlpha;
       overlay.style.background=`rgba(2,10,14,${baseOverlayAlpha})`;overlay.style.backdropFilter=`blur(${blurPx}px)`;overlay.style.webkitBackdropFilter=`blur(${blurPx}px)`;shell.style.opacity=String(maskAlpha);
       ctx.clearRect(0,0,vw,vh);
       ctx.save();ctx.beginPath();ctx.rect(targetRect.left,targetRect.top,targetRect.width,targetRect.height);ctx.clip();
@@ -138,7 +139,7 @@
     if(reduce?.matches){overlay.classList.remove('open','revealing','frame-ready');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('resume-open');fx.classList.remove('active');sourceCard?.classList.remove('resume-source-dissolve');resetCloseStyles();open=false;closing=false;lastFocus?.focus?.({preventScroll:true});return}
     sourceCard?.classList.add('resume-source-dissolve');overlay.classList.remove('open','revealing');overlay.classList.add('closing','frame-ready');
     requestAnimationFrame(()=>startDisassembly(shell.getBoundingClientRect()));
-    later(()=>sourceCard?.classList.remove('resume-source-dissolve'),Math.round(CLOSE*.70));
+    later(()=>sourceCard?.classList.remove('resume-source-dissolve'),Math.round(CLOSE*.45));
     later(()=>{stopParticles();overlay.classList.remove('closing','frame-ready');overlay.setAttribute('aria-hidden','true');document.body.classList.remove('resume-open');fx.classList.remove('active');resetCloseStyles();open=false;closing=false;lastFocus?.focus?.({preventScroll:true})},CLOSE);
   }
 
