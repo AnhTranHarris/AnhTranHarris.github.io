@@ -115,7 +115,8 @@
         const horizonRows=Math.min(rows,completedRows);
         const physicsTop=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
         const historyRows=Math.min(fadeDepth,history.length);
-        const bandTop=physicsTop;
+        const terminalTravel=Math.max(0,(activeDepth+fadeDepth-1)*visualRowH);
+        const bandTop=physicsTop-terminalTravel*wallProgress;
         const rowY=index=>bandTop+index*visualRowH;
         const solidTop=Math.min(targetRect.bottom,rowY(activeDepth+historyRows));
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
