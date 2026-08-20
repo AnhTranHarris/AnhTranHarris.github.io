@@ -112,11 +112,11 @@
         while(completedRows<desiredRows&&promotions<maxPromotions){forceBottomComplete();promoteBottom();promotions++}
         if(wallProgress>.985&&completedRows<rows){completedRows=rows;for(let r=0;r<activeDepth;r++){active[r].fill(0);activeColors[r].fill(0);flash[r]=0}}
 
-        const horizonRows=Math.min(rows,completedRows);
-        const physicsTop=Math.max(targetRect.top,targetRect.bottom-horizonRows*blockH);
         const historyRows=Math.min(fadeDepth,history.length);
-        const terminalTravel=Math.max(0,(activeDepth+fadeDepth-1)*visualRowH);
-        const bandTop=physicsTop-terminalTravel*wallProgress;
+        const totalVisualRows=activeDepth+fadeDepth;
+        const bandStart=targetRect.bottom-visualRowH;
+        const bandEnd=targetRect.top-(totalVisualRows-1)*visualRowH;
+        const bandTop=bandStart+(bandEnd-bandStart)*wallProgress;
         const rowY=index=>bandTop+index*visualRowH;
         const solidTop=Math.min(targetRect.bottom,rowY(activeDepth+historyRows));
         const solidHeight=Math.max(0,targetRect.bottom-solidTop);
