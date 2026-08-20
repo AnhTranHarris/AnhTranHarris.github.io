@@ -94,20 +94,59 @@
     const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.2),vw=innerWidth,vh=innerHeight;
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);fx.classList.add('active');
     const palette=['#f5f4ef','#dbe7e3','#8fe6d9','#63d5d0','#1c8a66','#0f654d','#0b4f38','#d8b86a','#fff0b0'];
-    const count=isMobile?1050:1500,cols=Math.max(18,Math.floor(targetRect.width/18)),colW=targetRect.width/cols;
-    const particles=Array.from({length:count},(_,i)=>{const col=i%cols,x0=targetRect.left+col*colW+Math.random()*colW,y0=targetRect.top+Math.random()*targetRect.height,release=280+Math.random()*1900+(col%7)*18;return{x:x0,y:y0,y0,vx:(Math.random()-.5)*18,vy:18+Math.random()*38,g:260+Math.random()*360,w:.7+Math.random()*1.4,h:2+Math.random()*7,tail:8+Math.random()*34,release,color:palette[Math.floor(Math.random()*palette.length)],phase:Math.random()*6.28}});
-    const fractures=Array.from({length:14},(_,i)=>({y:targetRect.top+(i+1)*targetRect.height/15,delay:120+i*32+Math.random()*180}));
-    const start=performance.now(),lastStart=start;
-    let last=lastStart;
+    const columnCount=isMobile?44:68,colW=targetRect.width/columnCount,maxParticles=isMobile?1450:2100;
+    const columns=Array.from({length:columnCount},(_,i)=>({
+      x:targetRect.left+i*colW,
+      delay:120+Math.random()*520+(i%9)*11,
+      duration:2250+Math.random()*650,
+      phase:Math.random()*Math.PI*2,
+      ridge:(Math.random()-.5)*22,
+      prevY:targetRect.bottom
+    }));
+    const particles=[];
+    const start=performance.now();let last=start;
+    const spawnEdge=(col,oldY,newY,elapsed)=>{
+      if(elapsed>3100||particles.length>=maxParticles||newY>=oldY)return;
+      const travel=oldY-newY,n=Math.min(7,Math.max(1,Math.floor(travel/2.5)));
+      for(let k=0;k<n&&particles.length<maxParticles;k++){
+        const y=newY+Math.random()*Math.max(2,travel+8);
+        particles.push({x:col.x+Math.random()*colW,y,vx:(Math.random()-.5)*24,vy:24+Math.random()*70,g:300+Math.random()*430,w:.65+Math.random()*1.45,h:2+Math.random()*7,tail:10+Math.random()*38,color:palette[Math.floor(Math.random()*palette.length)],life:1,phase:Math.random()*6.28});
+      }
+    };
     function tick(now){
-      const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now,p=clamp(elapsed/CLOSE,0,1);
+      const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
       ctx.clearRect(0,0,vw,vh);
       ctx.save();ctx.beginPath();ctx.rect(targetRect.left,targetRect.top,targetRect.width,targetRect.height);ctx.clip();
-      if(elapsed<1150){for(const f of fractures){if(elapsed<f.delay)continue;const a=clamp((elapsed-f.delay)/360,0,1)*(1-clamp((elapsed-760)/500,0,1));ctx.globalAlpha=a*.72;const g=ctx.createLinearGradient(targetRect.left,0,targetRect.right,0);g.addColorStop(0,'rgba(99,213,208,0)');g.addColorStop(.25,'rgba(216,184,106,.72)');g.addColorStop(.62,'rgba(245,244,239,.85)');g.addColorStop(1,'rgba(99,213,208,0)');ctx.fillStyle=g;ctx.fillRect(targetRect.left,f.y,targetRect.width,1)}}
+
+      /* The resume remains fully solid. Only the material behind this irregular erosion front is removed. */
+      for(let i=0;i<columns.length;i++){
+        const col=columns[i],local=clamp((elapsed-col.delay)/col.duration,0,1),ease=local*local*(3-2*local);
+        const shelf=Math.sin(col.phase+ease*9)*8+Math.sin(col.phase*.7+ease*21)*3+col.ridge*(1-ease)*.35;
+        const frontY=clamp(targetRect.bottom-ease*(targetRect.height+24)+shelf,targetRect.top-24,targetRect.bottom);
+        spawnEdge(col,col.prevY,frontY,elapsed);col.prevY=Math.min(col.prevY,frontY);
+        ctx.globalAlpha=1;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x-.6,frontY,colW+1.2,targetRect.bottom-frontY+2);
+
+        /* Small ledges/pockets keep the breakup edge from reading as a clean wipe. */
+        if(local>.05&&local<.98){
+          const ledgeH=2+((i*7)%5),ledgeY=frontY-(3+((i*11)%13));
+          ctx.globalAlpha=.72;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x+colW*.12,ledgeY,colW*.72,ledgeH);
+          ctx.globalAlpha=.35;ctx.fillStyle=i%5===0?'rgba(216,184,106,1)':'rgba(99,213,208,1)';ctx.fillRect(col.x,frontY-1,colW,1);
+        }
+      }
+
+      /* Falling material inherits the established Matrix-rain language. */
       ctx.globalCompositeOperation='lighter';
-      for(const q of particles){if(elapsed<q.release)continue;const age=(elapsed-q.release)/1000;q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(age*7+q.phase)*.08;q.y+=q.vy*dt;const life=1-clamp((elapsed-2850)/1150,0,1);if(life<=0||q.y>targetRect.bottom+80)continue;const speedFade=clamp(age/.18,0,1);ctx.globalAlpha=(.18+.78*speedFade)*life;ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,q.w,q.h);ctx.globalAlpha=.18*life;ctx.fillRect(q.x,q.y-q.tail,q.w*.72,q.tail)}
+      let write=0;
+      for(let i=0;i<particles.length;i++){
+        const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.009)*.12;q.y+=q.vy*dt;q.life-=dt*(elapsed>3000?.9:.22);
+        if(q.life<=0||q.y>vh+80)continue;
+        particles[write++]=q;
+        ctx.globalAlpha=.78*q.life;ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,q.w,q.h);
+        ctx.globalAlpha=.16*q.life;ctx.fillRect(q.x,q.y-q.tail,q.w*.7,q.tail);
+      }
+      particles.length=write;
       ctx.restore();
-      const shellFade=1-clamp((elapsed-420)/2850,0,1);shell.style.opacity=String(shellFade);shell.style.transform=`scale(${1-.012*clamp((elapsed-500)/2600,0,1)})`;
+
       if(elapsed<CLOSE){particleRaf=requestAnimationFrame(tick)}else{particleRaf=0;ctx.clearRect(0,0,vw,vh)}
     }
     particleRaf=requestAnimationFrame(tick);
