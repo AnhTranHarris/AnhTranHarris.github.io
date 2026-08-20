@@ -95,17 +95,17 @@
     const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.2),vw=innerWidth,vh=innerHeight;
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);fx.classList.add('active');
     const rainPalette=['#0b4f38','#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0','#f5f4ef'];
-    const columnCount=isMobile?48:76,colW=targetRect.width/columnCount,maxParticles=isMobile?1900:2800;
+    const columnCount=isMobile?48:76,colW=targetRect.width/columnCount,maxParticles=isMobile?4800:7200;
     const columns=Array.from({length:columnCount},(_,i)=>({x:targetRect.left+i*colW,delay:100+Math.random()*560+(i%11)*7,duration:2200+Math.random()*720,phase:Math.random()*Math.PI*2,ridge:(Math.random()-.5)*22,frontY:targetRect.bottom}));
-    const particles=[],recentClusterRanges=[];
+    const particles=[],recentClusterRanges=[],scheduledBursts=[];
     const maxOverlap=targetRect.width*.02;
-    let nextClusterAt=80+Math.random()*120;
+    let nextClusterAt=50+Math.random()*75;
     const start=performance.now();let last=start;
     const overlapWidth=(a,b)=>Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left));
     const chooseClusterRange=()=>{
       const width=targetRect.width*(.05+Math.random()*.10);
       let best=null,bestOverlap=Infinity;
-      for(let attempt=0;attempt<18;attempt++){
+      for(let attempt=0;attempt<24;attempt++){
         const left=targetRect.left+Math.random()*Math.max(1,targetRect.width-width),candidate={left,right:left+width,width};
         let worst=0;for(const prior of recentClusterRanges)worst=Math.max(worst,overlapWidth(candidate,prior));
         if(worst<=maxOverlap)return candidate;
@@ -113,15 +113,22 @@
       }
       return best||{left:targetRect.left,right:targetRect.left+width,width};
     };
-    const emitCluster=elapsed=>{
-      if(elapsed>3150||particles.length>=maxParticles)return;
-      const range=chooseClusterRange(),count=5+Math.floor(Math.random()*46);
-      recentClusterRanges.push(range);if(recentClusterRanges.length>=4)recentClusterRanges.length=0;
+    const emitBurst=(range,count,speedScale=1)=>{
+      if(particles.length>=maxParticles)return;
+      const originTop=targetRect.top+targetRect.height*(.015+Math.random()*.10);
       for(let n=0;n<count&&particles.length<maxParticles;n++){
-        const x=range.left+Math.random()*range.width,colIndex=clamp(Math.floor((x-targetRect.left)/colW),0,columnCount-1),edgeY=columns[colIndex].frontY;
-        const y=clamp(edgeY-3+Math.random()*14,targetRect.top-8,targetRect.bottom+8);
-        particles.push({x,y,vx:(Math.random()-.5)*3.2,vy:115+Math.random()*275,g:170+Math.random()*250,w:.5+Math.random()*.9,h:1.8+Math.random()*3.8,gap:3.5+Math.random()*6.5,tail:24+Math.random()*82,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.75?'#fff0b0':'#8fe6d9',life:1,phase:Math.random()*6.28});
+        const x=range.left+Math.random()*range.width;
+        const y=clamp(originTop+Math.random()*Math.min(42,targetRect.height*.06),targetRect.top-4,targetRect.top+targetRect.height*.14);
+        particles.push({x,y,vx:(Math.random()-.5)*2.4,vy:(110+Math.random()*280)*speedScale,g:(165+Math.random()*245)*speedScale,w:.48+Math.random()*.92,h:1.7+Math.random()*3.9,gap:3.4+Math.random()*6.8,tail:26+Math.random()*88,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.74?'#fff0b0':'#8fe6d9',life:1,phase:Math.random()*6.28});
       }
+    };
+    const emitPrimaryCluster=(elapsed,interval)=>{
+      if(elapsed>3150||particles.length>=maxParticles)return;
+      const range=chooseClusterRange(),count=50+Math.floor(Math.random()*451);
+      recentClusterRanges.push(range);if(recentClusterRanges.length>=4)recentClusterRanges.length=0;
+      emitBurst(range,count,1);
+      if(count>100)scheduledBursts.push({at:elapsed+10,range,count:5+Math.floor(Math.random()*85),speedScale:1});
+      if(interval>100)scheduledBursts.push({at:elapsed+27,range,count:50,speedScale:.80});
     };
     function tick(now){
       const elapsed=now-start,dt=Math.min(.034,Math.max(.008,(now-last)/1000));last=now;
@@ -135,11 +142,12 @@
         ctx.globalAlpha=maskAlpha;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x-.6,frontY,colW+1.2,targetRect.bottom-frontY+2);
         if(local>.05&&local<.98){const ledgeH=2+((i*7)%5),ledgeY=frontY-(3+((i*11)%13));ctx.globalAlpha=.72*maskAlpha;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x+colW*.12,ledgeY,colW*.72,ledgeH);ctx.globalAlpha=.35*maskAlpha;ctx.fillStyle=i%5===0?'rgba(216,184,106,1)':'rgba(99,213,208,1)';ctx.fillRect(col.x,frontY-1,colW,1)}
       }
-      while(elapsed>=nextClusterAt&&nextClusterAt<=3150){emitCluster(elapsed);nextClusterAt+=100+Math.random()*100}
+      while(elapsed>=nextClusterAt&&nextClusterAt<=3150){const interval=50+Math.random()*75;emitPrimaryCluster(elapsed,interval);nextClusterAt+=interval}
+      for(let i=scheduledBursts.length-1;i>=0;i--){const burst=scheduledBursts[i];if(elapsed>=burst.at){emitBurst(burst.range,burst.count,burst.speedScale);scheduledBursts.splice(i,1)}}
       ctx.globalCompositeOperation='lighter';
       let write=0;
       for(let i=0;i<particles.length;i++){
-        const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.007)*.035;q.y+=q.vy*dt;q.life-=dt*(elapsed>3050?.82:.18);
+        const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.007)*.03;q.y+=q.vy*dt;q.life-=dt*(elapsed>3050?.82:.18);
         if(q.life<=0||q.y>vh+90)continue;particles[write++]=q;
         const segments=Math.max(3,Math.floor(q.tail/q.gap));
         for(let s=0;s<segments;s++){
