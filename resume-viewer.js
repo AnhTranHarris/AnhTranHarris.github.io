@@ -95,18 +95,32 @@
     const isMobile=mobile?.matches,dpr=Math.min(window.devicePixelRatio||1,isMobile?1:1.2),vw=innerWidth,vh=innerHeight;
     canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);canvas.style.width=`${vw}px`;canvas.style.height=`${vh}px`;ctx.setTransform(dpr,0,0,dpr,0,0);fx.classList.add('active');
     const rainPalette=['#0b4f38','#0f654d','#1c8a66','#63d5d0','#8fe6d9','#d8b86a','#fff0b0','#f5f4ef'];
-    const columnCount=isMobile?48:76,colW=targetRect.width/columnCount,maxParticles=isMobile?1650:2400;
-    const columns=Array.from({length:columnCount},(_,i)=>({x:targetRect.left+i*colW,delay:100+Math.random()*560+(i%11)*7,duration:2200+Math.random()*720,phase:Math.random()*Math.PI*2,ridge:(Math.random()-.5)*22,prevY:targetRect.bottom}));
-    const particles=[];
+    const columnCount=isMobile?48:76,colW=targetRect.width/columnCount,maxParticles=isMobile?1900:2800;
+    const columns=Array.from({length:columnCount},(_,i)=>({x:targetRect.left+i*colW,delay:100+Math.random()*560+(i%11)*7,duration:2200+Math.random()*720,phase:Math.random()*Math.PI*2,ridge:(Math.random()-.5)*22,frontY:targetRect.bottom}));
+    const particles=[],recentClusterRanges=[];
+    const maxOverlap=targetRect.width*.02;
+    let nextClusterAt=80+Math.random()*120;
     const start=performance.now();let last=start;
-    const spawnCluster=(index,oldY,newY,elapsed)=>{
-      if(elapsed>3150||particles.length>=maxParticles||newY>=oldY)return;
-      const travel=oldY-newY,clusterSize=Math.min(6,Math.max(2,Math.floor(travel/3)+1));
-      const neighborRadius=2+Math.floor(Math.random()*3);
-      for(let k=0;k<clusterSize&&particles.length<maxParticles;k++){
-        const offset=Math.floor((Math.random()*(neighborRadius*2+1))-neighborRadius),j=clamp(index+offset,0,columnCount-1),lane=columns[j];
-        const x=lane.x+colW*(.18+Math.random()*.64),y=newY+Math.random()*Math.max(3,travel+12);
-        particles.push({x,y,vx:(Math.random()-.5)*5,vy:105+Math.random()*250,g:180+Math.random()*240,w:.55+Math.random()*.95,h:2+Math.random()*4,gap:4+Math.random()*6,tail:22+Math.random()*72,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.76?'#fff0b0':'#8fe6d9',life:1,phase:Math.random()*6.28});
+    const overlapWidth=(a,b)=>Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left));
+    const chooseClusterRange=()=>{
+      const width=targetRect.width*(.05+Math.random()*.10);
+      let best=null,bestOverlap=Infinity;
+      for(let attempt=0;attempt<18;attempt++){
+        const left=targetRect.left+Math.random()*Math.max(1,targetRect.width-width),candidate={left,right:left+width,width};
+        let worst=0;for(const prior of recentClusterRanges)worst=Math.max(worst,overlapWidth(candidate,prior));
+        if(worst<=maxOverlap)return candidate;
+        if(worst<bestOverlap){best=candidate;bestOverlap=worst}
+      }
+      return best||{left:targetRect.left,right:targetRect.left+width,width};
+    };
+    const emitCluster=elapsed=>{
+      if(elapsed>3150||particles.length>=maxParticles)return;
+      const range=chooseClusterRange(),count=5+Math.floor(Math.random()*46);
+      recentClusterRanges.push(range);if(recentClusterRanges.length>=4)recentClusterRanges.length=0;
+      for(let n=0;n<count&&particles.length<maxParticles;n++){
+        const x=range.left+Math.random()*range.width,colIndex=clamp(Math.floor((x-targetRect.left)/colW),0,columnCount-1),edgeY=columns[colIndex].frontY;
+        const y=clamp(edgeY-3+Math.random()*14,targetRect.top-8,targetRect.bottom+8);
+        particles.push({x,y,vx:(Math.random()-.5)*3.2,vy:115+Math.random()*275,g:170+Math.random()*250,w:.5+Math.random()*.9,h:1.8+Math.random()*3.8,gap:3.5+Math.random()*6.5,tail:24+Math.random()*82,color:rainPalette[Math.floor(Math.random()*rainPalette.length)],head:Math.random()>.75?'#fff0b0':'#8fe6d9',life:1,phase:Math.random()*6.28});
       }
     };
     function tick(now){
@@ -117,19 +131,20 @@
       ctx.save();ctx.beginPath();ctx.rect(targetRect.left,targetRect.top,targetRect.width,targetRect.height);ctx.clip();
       for(let i=0;i<columns.length;i++){
         const col=columns[i],local=clamp((elapsed-col.delay)/col.duration,0,1),ease=local*local*(3-2*local),shelf=Math.sin(col.phase+ease*9)*8+Math.sin(col.phase*.7+ease*21)*3+col.ridge*(1-ease)*.35,frontY=clamp(targetRect.bottom-ease*(targetRect.height+24)+shelf,targetRect.top-24,targetRect.bottom);
-        spawnCluster(i,col.prevY,frontY,elapsed);col.prevY=Math.min(col.prevY,frontY);
+        col.frontY=frontY;
         ctx.globalAlpha=maskAlpha;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x-.6,frontY,colW+1.2,targetRect.bottom-frontY+2);
         if(local>.05&&local<.98){const ledgeH=2+((i*7)%5),ledgeY=frontY-(3+((i*11)%13));ctx.globalAlpha=.72*maskAlpha;ctx.fillStyle='rgb(2,10,14)';ctx.fillRect(col.x+colW*.12,ledgeY,colW*.72,ledgeH);ctx.globalAlpha=.35*maskAlpha;ctx.fillStyle=i%5===0?'rgba(216,184,106,1)':'rgba(99,213,208,1)';ctx.fillRect(col.x,frontY-1,colW,1)}
       }
+      while(elapsed>=nextClusterAt&&nextClusterAt<=3150){emitCluster(elapsed);nextClusterAt+=100+Math.random()*100}
       ctx.globalCompositeOperation='lighter';
       let write=0;
       for(let i=0;i<particles.length;i++){
-        const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.007)*.045;q.y+=q.vy*dt;q.life-=dt*(elapsed>3050?.82:.18);
+        const q=particles[i];q.vy+=q.g*dt;q.x+=q.vx*dt+Math.sin(q.phase+elapsed*.007)*.035;q.y+=q.vy*dt;q.life-=dt*(elapsed>3050?.82:.18);
         if(q.life<=0||q.y>vh+90)continue;particles[write++]=q;
         const segments=Math.max(3,Math.floor(q.tail/q.gap));
         for(let s=0;s<segments;s++){
           const y=q.y-s*q.gap;if(y<targetRect.top-20||y>vh+20)continue;const fade=1-s/segments;
-          ctx.globalAlpha=(s===0?.92:(.05+.50*fade*fade))*q.life;ctx.fillStyle=s===0?q.head:q.color;ctx.fillRect(q.x,y,q.w,Math.max(1.5,q.gap*.55));
+          ctx.globalAlpha=(s===0?.94:(.05+.52*fade*fade))*q.life;ctx.fillStyle=s===0?q.head:q.color;ctx.fillRect(q.x,y,q.w,Math.max(1.5,q.gap*.55));
         }
       }
       particles.length=write;ctx.restore();
