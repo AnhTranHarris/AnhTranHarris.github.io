@@ -71,12 +71,11 @@
     ctx.imageSmoothingEnabled = true;
   }
 
-  // Velocity is viewport-widths per millisecond. Motion remains frame-rate independent.
   function chooseSpeedVwPerMs(){
     const r = Math.random();
-    if (r < .22) return rand(.015,.023);  // extreme zips
-    if (r < .92) return rand(.009,.015);  // majority fast
-    return rand(.006,.009);                // small slower accent group
+    if (r < .22) return rand(.015,.023);
+    if (r < .92) return rand(.009,.015);
+    return rand(.006,.009);
   }
 
   function makeParticle(o={}){
@@ -124,7 +123,6 @@
       const baseSpeed = chooseSpeedVwPerMs();
       const basePreRoll = rand(45,125);
       const spread = rand(5,28);
-
       for(let j=0;j<members;j++){
         tealEvents.push(makeParticle({
           y:clamp(baseY+rand(-spread,spread),.5,cssH-.5),
@@ -138,8 +136,6 @@
       }
     }
 
-    // Coverage particles are real visible tracer flights assigned across narrow Y lanes.
-    // Their launches end early enough that every lane can finish before bridge fade begins.
     const laneH = clamp(cssH/72,5,12);
     const lanes = Math.ceil(cssH/laneH);
     for(let i=0;i<lanes;i++){
@@ -216,8 +212,6 @@
 
   function completeCoverage(e){
     if(!e.coverage||e.completed)return;
-    // Completion is still caused by the assigned tracer flight: once that coverage tracer's
-    // tail has drained, its entire traversed lane is committed as erased.
     eraseRect(0,e.y-e.eraseWidth/2,cssW,e.eraseWidth,1);
     e.completed=true;
   }
@@ -235,8 +229,6 @@
     g.addColorStop(.995,'rgba(99,213,208,.96)');
     g.addColorStop(1,'rgba(237,247,248,1)');
 
-    // Percentage still varies 4%-20%, but we add a physical minimum so the aura survives
-    // subpixel particle thicknesses on high-DPI screens.
     const primaryRadius=Math.max(1.15,e.thickness*(.55+e.glowPct*4.0));
     const secondaryRadius=Math.max(2.4,primaryRadius*2.15);
     const primaryWidth=e.thickness+Math.max(.7,e.thickness*e.glowPct*2);
@@ -245,7 +237,6 @@
     fctx.save();
     fctx.lineCap='butt';
 
-    // Broad secondary aura.
     fctx.globalAlpha=alpha*(.12+.32*e.glowIntensity2);
     fctx.strokeStyle=e.color;
     fctx.lineWidth=secondaryWidth;
@@ -253,13 +244,11 @@
     fctx.shadowBlur=secondaryRadius;
     fctx.beginPath();fctx.moveTo(tailStart,e.y);fctx.lineTo(head,e.y);fctx.stroke();
 
-    // Tighter primary aura.
     fctx.globalAlpha=alpha*(.16+.42*e.glowIntensity);
     fctx.lineWidth=primaryWidth;
     fctx.shadowBlur=primaryRadius;
     fctx.beginPath();fctx.moveTo(tailStart,e.y);fctx.lineTo(head,e.y);fctx.stroke();
 
-    // Clean luminous tracer body above the two halos.
     fctx.shadowBlur=0;
     fctx.globalAlpha=alpha*.46;
     fctx.strokeStyle=g;
@@ -284,7 +273,6 @@
     const head=startX+e.dir*e.speedPxMs*motionElapsed;
     const tailStart=head-e.dir*e.tracerLen;
 
-    // Event stays alive until the tail itself drains completely out of the opposite edge.
     const tailGone=e.dir>0 ? tailStart>cssW+pad : tailStart<-pad;
     if(tailGone){
       completeCoverage(e);
@@ -313,7 +301,6 @@
       }
 
       fctx.save();
-      // Head receives both halos without altering the clean core dimensions.
       fctx.fillStyle=e.color;
       fctx.shadowColor=e.color;
       fctx.shadowBlur=halo.secondaryRadius;
@@ -395,27 +382,18 @@
     if(!start)start=now;
     const t=now-start;
 
-    // FX canvas is redrawn each frame, but active tracer lifecycles are never globally faded or
-    // cut off. Each tracer disappears only when its own tail has drained.
     fctx.clearRect(0,0,cssW,cssH);
 
-    let activeTracers=0;
     for(const e of goldEvents) drawGoldEvent(e,t);
-    for(const e of tealEvents) if(drawTealEvent(e,t)) activeTracers++;
+    for(const e of tealEvents) drawTealEvent(e,t);
 
-    // Safety target: coverage particles are scheduled to finish naturally before this point.
-    // If a very slow device delays frames, completing already-traversed coverage lanes prevents
-    // stranded white without fading or clearing the entire mask.
     if(t>=WHITE_TARGET_MS && !allCoverageComplete()){
       for(const e of tealEvents) if(e.coverage && !e.completed) completeCoverage(e);
     }
 
-    // The bridge fade starts only after the white-erasure phase. Existing particle FX are allowed
-    // to drain naturally; there is no 2400ms global FX clear anymore.
     if(t>=BRIDGE_FADE_START_MS){
       const p=clamp((t-BRIDGE_FADE_START_MS)/(TOTAL_MS-BRIDGE_FADE_START_MS),0,1);
       tealLayer.style.opacity=String(1-easeInOut(p));
-      mask.style.opacity=String(1-easeInOut(p));
     }
 
     if(t>=TOTAL_MS){finish();return;}
