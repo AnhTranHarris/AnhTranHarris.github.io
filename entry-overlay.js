@@ -1,5 +1,5 @@
-/* Harris Portfolio: modular 3.1s entry choreography.
-   White membrane -> triangular murmuration -> word formations -> neon warp -> portfolio reveal.
+/* Harris Portfolio: modular 3.1s flock entry choreography.
+   Four triangle groups: words, portfolio alignment, membrane erasure, free flight.
    Isolated from carousel/resume systems; watchdog always releases the page. */
 (() => {
   'use strict';
@@ -25,18 +25,11 @@
   }
 
   const TOTAL = 3100;
-  const FADE_START = 2960;
-  const WORDS = [
-    { text: 'BUILD', start: 620, peak: 920, release: 1110 },
-    { text: 'EXPLORE', start: 1030, peak: 1340, release: 1530 },
-    { text: 'IMPROVE', start: 1450, peak: 1760, release: 1970 }
-  ];
-  const PARTICLES = 230;
-  const WORD_PARTICLES = 150;
+  const WIPE_START = 2140;
+  const WIPE_END = 2960;
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const mix = (a, b, t) => a + (b - a) * t;
-  const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
   const smooth = t => {
     t = clamp(t, 0, 1);
     return t * t * (3 - 2 * t);
@@ -46,15 +39,58 @@
   let w = 1, h = 1, dpr = 1, start = 0, raf = 0, finished = false;
   let wordTargets = new Map();
 
-  const particles = Array.from({ length: PARTICLES }, (_, i) => ({
-    x: rand(-0.12, 1.12), y: rand(-0.12, 1.12),
-    vx: rand(-0.00016, 0.00016), vy: rand(-0.00012, 0.00012),
-    rot: rand(0, TAU), spin: rand(-0.0045, 0.0045),
-    size: rand(2.6, 8.5), depth: rand(0.25, 1), phase: rand(0, TAU),
-    wordSlot: i < WORD_PARTICLES ? i : -1,
-    lane: Math.floor(rand(0, 5)),
-    hue: Math.random() < .18 ? 'gold' : 'teal'
-  }));
+  function randomEdgePoint(pad = 10) {
+    const side = Math.floor(rand(0, 4));
+    if (side === 0) return { x: rand(-pad, w + pad), y: -pad };
+    if (side === 1) return { x: w + pad, y: rand(-pad, h + pad) };
+    if (side === 2) return { x: rand(-pad, w + pad), y: h + pad };
+    return { x: -pad, y: rand(-pad, h + pad) };
+  }
+
+  function oppositeEdgePoint(from, pad = 18) {
+    if (from.x < 0) return { x: w + pad, y: rand(h * .08, h * .92) };
+    if (from.x > w) return { x: -pad, y: rand(h * .08, h * .92) };
+    if (from.y < 0) return { x: rand(w * .08, w * .92), y: h + pad };
+    return { x: rand(w * .08, w * .92), y: -pad };
+  }
+
+  function makeBird(group, i) {
+    const origin = randomEdgePoint(rand(5, 16));
+    const end = oppositeEdgePoint(origin, rand(14, 30));
+    const cx = rand(w * .18, w * .82);
+    const cy = rand(h * .16, h * .84);
+    return {
+      group,
+      i,
+      origin,
+      end,
+      cx,
+      cy,
+      startDelay: rand(0, 520),
+      duration: rand(1500, 2650),
+      phase: rand(0, TAU),
+      wobble: rand(8, 36),
+      depthPhase: rand(0, TAU),
+      base: rand(2.6, 7.2),
+      rot: rand(0, TAU),
+      spin: rand(-.0019, .0019),
+      tone: Math.random() < .12 ? 'gold' : (Math.random() < .26 ? 'teal' : 'charcoal'),
+      targetSlot: i,
+      settled: false
+    };
+  }
+
+  const group1 = Array.from({ length: 76 }, (_, i) => makeBird(1, i));
+  const group2 = Array.from({ length: 62 }, (_, i) => makeBird(2, i));
+  const group3 = Array.from({ length: 50 }, (_, i) => makeBird(3, i));
+  const group4 = Array.from({ length: 64 }, (_, i) => makeBird(4, i));
+  const all = [...group1, ...group2, ...group3, ...group4];
+
+  const WORDS = [
+    { text: 'BUILD', start: 520, peak: 760, release: 980 },
+    { text: 'EXPLORE', start: 900, peak: 1150, release: 1370 },
+    { text: 'IMPROVE', start: 1280, peak: 1530, release: 1770 }
+  ];
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 1.75);
@@ -72,37 +108,36 @@
     wordTargets = new Map();
     const off = document.createElement('canvas');
     const octx = off.getContext('2d');
-    const ow = Math.min(980, Math.max(420, w * .82));
-    const oh = Math.min(260, Math.max(160, h * .25));
+    const ow = Math.min(920, Math.max(420, w * .78));
+    const oh = Math.min(220, Math.max(150, h * .22));
     off.width = Math.round(ow);
     off.height = Math.round(oh);
     octx.textAlign = 'center';
     octx.textBaseline = 'middle';
     octx.fillStyle = '#000';
-    octx.font = `800 ${Math.max(56, Math.min(142, ow / 6.6))}px Inter, Arial, sans-serif`;
+    octx.font = `800 ${Math.max(52, Math.min(128, ow / 7))}px Inter, Arial, sans-serif`;
 
     for (const spec of WORDS) {
       octx.clearRect(0, 0, off.width, off.height);
       octx.fillText(spec.text, off.width / 2, off.height / 2);
       const img = octx.getImageData(0, 0, off.width, off.height).data;
       const pts = [];
-      const step = Math.max(5, Math.round(off.width / 130));
+      const step = Math.max(7, Math.round(off.width / 105));
       for (let y = 2; y < off.height - 2; y += step) {
         for (let x = 2; x < off.width - 2; x += step) {
-          if (img[(y * off.width + x) * 4 + 3] > 120) pts.push([x / off.width, y / off.height]);
+          if (img[(y * off.width + x) * 4 + 3] > 100) pts.push([x / off.width, y / off.height]);
         }
       }
       for (let i = pts.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [pts[i], pts[j]] = [pts[j], pts[i]];
       }
-      wordTargets.set(spec.text, pts.slice(0, WORD_PARTICLES));
+      wordTargets.set(spec.text, pts.slice(0, group1.length));
     }
   }
 
-  function activeWord(t) {
-    for (const spec of WORDS) if (t >= spec.start && t <= spec.release) return spec;
-    return null;
+  function wordAt(t) {
+    return WORDS.find(spec => t >= spec.start && t <= spec.release) || null;
   }
 
   function wordStrength(spec, t) {
@@ -111,7 +146,40 @@
     return 1 - smooth((t - spec.peak) / (spec.release - spec.peak));
   }
 
-  function drawTriangle(x, y, size, rot, fill, alpha = 1) {
+  function bezier(a, b, c, t) {
+    const u = 1 - t;
+    return u * u * a + 2 * u * t * b + t * t * c;
+  }
+
+  function flightState(p, t) {
+    const local = (t - p.startDelay) / p.duration;
+    const q = ((local % 1) + 1) % 1;
+    const eased = q < .5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
+    let x = bezier(p.origin.x, p.cx, p.end.x, eased);
+    let y = bezier(p.origin.y, p.cy, p.end.y, eased);
+
+    const depth = .12 + .88 * Math.pow(Math.sin(Math.PI * q), 1.35);
+    const lateral = Math.sin(t * .0031 + p.phase + q * 6.1) * p.wobble * (.25 + depth * .75);
+    const vertical = Math.cos(t * .0024 + p.phase * .71 + q * 5.2) * p.wobble * .36;
+    x += lateral;
+    y += vertical;
+
+    return { x, y, depth, q };
+  }
+
+  function trianglePath(x, y, size, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * .93, size * .78);
+    ctx.lineTo(-size * .93, size * .78);
+    ctx.closePath();
+    ctx.restore();
+  }
+
+  function drawTriangle(x, y, size, rot, fill, alpha) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(rot);
@@ -119,169 +187,155 @@
     ctx.fillStyle = fill;
     ctx.beginPath();
     ctx.moveTo(0, -size);
-    ctx.lineTo(size * .88, size * .72);
-    ctx.lineTo(-size * .88, size * .72);
+    ctx.lineTo(size * .93, size * .78);
+    ctx.lineTo(-size * .93, size * .78);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
   }
 
-  function drawMembrane(t) {
+  function colorFor(p, depth, alpha = 1) {
+    if (p.tone === 'gold') return `rgba(128,103,53,${alpha})`;
+    if (p.tone === 'teal') return `rgba(41,106,108,${alpha})`;
+    const c = Math.round(mix(38, 16, depth));
+    return `rgba(${c},${c + 3},${c + 5},${alpha})`;
+  }
+
+  function portfolioLineTarget(i) {
+    const topY = 86;
+    const cardW = Math.min(610, w * .56);
+    const cardH = Math.min(430, h * .48);
+    const cx = w * .66;
+    const cy = h * .51;
+    const perimeter = 2 * (cardW + cardH);
+    if (i < 18) {
+      const t = i / 17;
+      return { x: mix(w * .31, w * .69, t), y: topY };
+    }
+    const j = i - 18;
+    const d = (j / Math.max(1, group2.length - 19)) * perimeter;
+    let x, y;
+    if (d < cardW) {
+      x = cx - cardW / 2 + d; y = cy - cardH / 2;
+    } else if (d < cardW + cardH) {
+      x = cx + cardW / 2; y = cy - cardH / 2 + (d - cardW);
+    } else if (d < cardW * 2 + cardH) {
+      x = cx + cardW / 2 - (d - cardW - cardH); y = cy + cardH / 2;
+    } else {
+      x = cx - cardW / 2; y = cy + cardH / 2 - (d - cardW * 2 - cardH);
+    }
+    return { x, y };
+  }
+
+  function drawWhiteMembrane() {
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
+  }
 
-    if (t < 1420) return;
-    const consume = ease((t - 1420) / 1450);
-    const cx = w * .54, cy = h * .49;
-    const maxR = Math.hypot(w, h) * .72;
-    const baseR = mix(0, maxR, consume);
-    const points = 42;
+  function eraseGroup3Paths(t) {
+    if (t < 480) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    for (const p of group3) {
+      const s = flightState(p, t);
+      const life = clamp((t - 480) / 1700, 0, 1);
+      const size = p.base * (1.2 + s.depth * 3.7) * life;
+      ctx.globalAlpha = .12 + s.depth * .22;
+      ctx.translate(s.x, s.y);
+      ctx.rotate(p.rot + t * p.spin);
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 2.2);
+      ctx.lineTo(size * 1.9, size * 1.7);
+      ctx.lineTo(-size * 1.9, size * 1.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    ctx.restore();
+  }
+
+  function drawGroup1(t) {
+    const spec = wordAt(t);
+    const strength = wordStrength(spec, t);
+    const targets = spec ? wordTargets.get(spec.text) || [] : [];
+
+    group1.forEach((p, i) => {
+      const f = flightState(p, t);
+      let x = f.x, y = f.y, depth = f.depth;
+      if (strength > 0 && targets[i]) {
+        const [tx, ty] = targets[i];
+        const txp = w * .5 + (tx - .5) * Math.min(w * .76, 880);
+        const typ = h * .49 + (ty - .5) * Math.min(h * .22, 210);
+        const pull = smooth(strength);
+        x = mix(x, txp, pull);
+        y = mix(y, typ, pull);
+        depth = mix(depth, .62, pull);
+      }
+      const size = p.base * (.45 + depth * 2.35) * (strength > .45 ? .78 : 1);
+      drawTriangle(x, y, size, p.rot + t * p.spin, colorFor(p, depth, .88), .88);
+    });
+  }
+
+  function drawGroup2(t) {
+    const align = smooth((t - 1420) / 800) * (1 - smooth((t - 2540) / 300));
+    group2.forEach((p, i) => {
+      const f = flightState(p, t);
+      const target = portfolioLineTarget(i);
+      const x = mix(f.x, target.x, align);
+      const y = mix(f.y, target.y, align);
+      const depth = mix(f.depth, .48, align);
+      const size = p.base * (.42 + depth * 1.85) * (1 - align * .18);
+      drawTriangle(x, y, size, p.rot + t * p.spin, colorFor(p, depth, .80), .80);
+    });
+  }
+
+  function drawGroup3(t) {
+    group3.forEach(p => {
+      const f = flightState(p, t);
+      const fade = 1 - smooth((t - 2200) / 520);
+      if (fade <= 0) return;
+      const size = p.base * (.5 + f.depth * 2.8);
+      drawTriangle(f.x, f.y, size, p.rot + t * p.spin, colorFor(p, f.depth, .72), .72 * fade);
+    });
+  }
+
+  function drawGroup4(t) {
+    group4.forEach(p => {
+      const f = flightState(p, t);
+      const fade = 1 - smooth((t - 2700) / 300);
+      const size = p.base * (.38 + f.depth * 2.6);
+      drawTriangle(f.x, f.y, size, p.rot + t * p.spin, colorFor(p, f.depth, .68), .68 * fade);
+    });
+  }
+
+  function nearCameraWipe(t) {
+    if (t < WIPE_START) return;
+    const p = smooth((t - WIPE_START) / (WIPE_END - WIPE_START));
+    const startX = -w * .10;
+    const endX = w * 1.12;
+    const x = mix(startX, endX, p);
+    const y = h * (.66 - Math.sin(p * Math.PI) * .31);
+    const size = mix(Math.min(w, h) * .05, Math.hypot(w, h) * .82, Math.pow(p, 1.38));
+    const rot = mix(-.45, .20, p) + Math.sin(p * Math.PI * 2.2) * .06;
 
     ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = smooth((t - WIPE_START) / 240);
+    ctx.translate(x, y);
+    ctx.rotate(rot);
     ctx.beginPath();
-    for (let i = 0; i < points; i++) {
-      const a = i / points * TAU;
-      const jag = Math.sin(a * 7 + t * .006) * 18 + Math.sin(a * 13 - t * .004) * 9;
-      const r = Math.max(0, baseR + jag * consume);
-      const x = cx + Math.cos(a) * r;
-      const y = cy + Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 1.16, size * .88);
+    ctx.lineTo(-size * 1.16, size * .88);
     ctx.closePath();
     ctx.fill();
-
-    const chips = Math.floor(18 + consume * 42);
-    for (let i = 0; i < chips; i++) {
-      const a = (i / chips) * TAU + Math.sin(i * 2.17) * .16;
-      const r = baseR + rand(-34, 72) * consume;
-      const x = cx + Math.cos(a) * r;
-      const y = cy + Math.sin(a) * r;
-      const s = rand(5, 22) * consume;
-      ctx.beginPath();
-      ctx.moveTo(x, y - s);
-      ctx.lineTo(x + s, y + s);
-      ctx.lineTo(x - s * .7, y + s * .55);
-      ctx.closePath();
-      ctx.fill();
-    }
     ctx.restore();
-  }
 
-  function drawWarp(t) {
-    if (t < 1280) return;
-    const p = smooth((t - 1280) / 1580);
-    const cx = w * .54, cy = h * .49;
-    const count = Math.round(34 + p * 52);
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.lineCap = 'round';
-
-    for (let i = 0; i < count; i++) {
-      const seed = (i * 0.61803398875) % 1;
-      const a = seed * TAU + Math.sin(i * 1.7) * .08;
-      const travel = ((t * (.00016 + (i % 7) * .000013) + seed) % 1);
-      const r0 = Math.pow(travel, 2.15) * Math.hypot(w, h) * .62;
-      const len = 16 + 155 * travel * p;
-      const x0 = cx + Math.cos(a) * r0;
-      const y0 = cy + Math.sin(a) * r0;
-      const x1 = cx + Math.cos(a) * (r0 + len);
-      const y1 = cy + Math.sin(a) * (r0 + len);
-      const gold = i % 6 === 0;
-      ctx.strokeStyle = gold ? 'rgba(255,226,126,.88)' : (i % 3 === 0 ? 'rgba(177,255,248,.92)' : 'rgba(80,235,225,.72)');
-      ctx.globalAlpha = clamp(.12 + travel * .9, 0, .92) * p;
-      ctx.lineWidth = gold ? 1.4 : (travel > .76 ? 1.8 : .8);
-      ctx.shadowBlur = travel > .68 ? 11 : 4;
-      ctx.shadowColor = gold ? '#ffe27e' : '#63f5ec';
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
+    if (p < .92) {
+      drawTriangle(x, y, size * .96, rot, 'rgba(20,23,25,.88)', .82 * (1 - smooth((p - .66) / .34)));
     }
-    ctx.restore();
-  }
-
-  function drawParticles(t, dt) {
-    const spec = activeWord(t);
-    const strength = wordStrength(spec, t);
-    const targets = spec ? wordTargets.get(spec.text) || [] : [];
-    const warp = smooth((t - 1300) / 1500);
-    const cx = w * .54, cy = h * .49;
-
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      let nx = p.x, ny = p.y;
-
-      if (strength > 0 && p.wordSlot >= 0 && targets[p.wordSlot]) {
-        const [tx, ty] = targets[p.wordSlot];
-        const targetX = .5 + (tx - .5) * Math.min(.82, 920 / Math.max(w, 920));
-        const targetY = .5 + (ty - .5) * Math.min(.31, 260 / Math.max(h, 260));
-        const pull = .018 + strength * .095;
-        nx += (targetX - nx) * pull;
-        ny += (targetY - ny) * pull;
-      } else {
-        const flock = 1 - warp;
-        const waveX = Math.sin(t * .0019 + p.phase + p.y * 7) * .00025 * flock;
-        const waveY = Math.cos(t * .00145 + p.phase * .7 + p.x * 6) * .00018 * flock;
-        nx += (p.vx + waveX) * dt;
-        ny += (p.vy + waveY) * dt;
-
-        if (warp > 0) {
-          const px = nx * w, py = ny * h;
-          const dx = px - cx, dy = py - cy;
-          const mag = Math.max(1, Math.hypot(dx, dy));
-          const thrust = (.000018 + p.depth * .000045) * dt * warp;
-          nx += (dx / mag) * thrust;
-          ny += (dy / mag) * thrust;
-        }
-      }
-
-      if (nx < -.18) nx = 1.15;
-      if (nx > 1.18) nx = -.15;
-      if (ny < -.18) ny = 1.15;
-      if (ny > 1.18) ny = -.15;
-      p.x = nx; p.y = ny; p.rot += p.spin * dt;
-
-      const px = nx * w, py = ny * h;
-      const near = clamp(.45 + p.depth * .75 + warp * p.depth * 1.8, .4, 2.65);
-      const size = p.size * near * (strength > .45 && p.wordSlot >= 0 ? .72 : 1);
-      let fill = '#24282b';
-      let alpha = .78;
-      if (t > 1180) {
-        const neon = smooth((t - 1180) / 950);
-        fill = p.hue === 'gold' ? `rgba(255,221,118,${.5 + neon * .45})` : `rgba(72,229,219,${.48 + neon * .48})`;
-        alpha = .58 + neon * .38;
-      }
-      if (t > 2580) alpha *= 1 - smooth((t - 2580) / 430);
-      drawTriangle(px, py, size, p.rot, fill, alpha);
-    }
-  }
-
-  function drawPortfolioConvergence(t) {
-    if (t < 2150) return;
-    const p = smooth((t - 2150) / 760);
-    const fade = 1 - smooth((t - 2860) / 220);
-    const alpha = p * fade;
-    const cx = w * .54, cy = h * .49;
-    const cardW = Math.min(610, w * .56);
-    const cardH = Math.min(430, h * .48);
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = 'rgba(255,226,126,.92)';
-    ctx.shadowBlur = 14;
-    ctx.shadowColor = '#ffe27e';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH);
-    ctx.strokeStyle = 'rgba(99,245,235,.76)';
-    ctx.shadowColor = '#63f5eb';
-    ctx.beginPath();
-    ctx.moveTo(w * .18, 86);
-    ctx.lineTo(w * .82, 86);
-    ctx.stroke();
-    ctx.restore();
   }
 
   function finish() {
@@ -290,27 +344,25 @@
     cancelAnimationFrame(raf);
     document.documentElement.dataset.entryState = 'complete';
     overlay.classList.add('entry-complete');
-    setTimeout(() => overlay.remove(), 180);
+    setTimeout(() => overlay.remove(), 140);
   }
 
   const watchdog = setTimeout(finish, 4300);
+
   function frame(now) {
     if (!start) start = now;
     const t = now - start;
-    const last = frame.last || now;
-    const dt = Math.min(32, now - last);
-    frame.last = now;
 
     ctx.clearRect(0, 0, w, h);
-    drawMembrane(t);
-    drawWarp(t);
-    drawParticles(t, dt);
-    drawPortfolioConvergence(t);
+    drawWhiteMembrane();
+    eraseGroup3Paths(t);
+    nearCameraWipe(t);
 
-    if (t >= FADE_START) {
-      const a = 1 - smooth((t - FADE_START) / (TOTAL - FADE_START));
-      canvas.style.opacity = String(clamp(a, 0, 1));
-    }
+    ctx.globalCompositeOperation = 'source-over';
+    drawGroup1(t);
+    drawGroup2(t);
+    drawGroup3(t);
+    drawGroup4(t);
 
     if (t >= TOTAL) {
       clearTimeout(watchdog);
@@ -321,14 +373,19 @@
   }
 
   const onVisibility = () => {
-    if (!document.hidden && !finished && !raf) raf = requestAnimationFrame(frame);
+    if (!document.hidden && !finished) {
+      frame.last = performance.now();
+    }
   };
-  document.addEventListener('visibilitychange', onVisibility, { passive: true });
-  window.addEventListener('resize', resize, { passive: true });
-  window.addEventListener('pageshow', e => { if (e.persisted) finish(); }, { once: true });
-  window.addEventListener('pagehide', () => { if (!finished) cancelAnimationFrame(raf); }, { once: true });
 
-  document.documentElement.dataset.entryState = 'running';
+  window.addEventListener('resize', resize, { passive: true });
+  document.addEventListener('visibilitychange', onVisibility, { passive: true });
+  window.addEventListener('pagehide', () => cancelAnimationFrame(raf), { once: true });
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) finish();
+  });
+
   resize();
+  document.documentElement.dataset.entryState = 'running';
   raf = requestAnimationFrame(frame);
 })();
