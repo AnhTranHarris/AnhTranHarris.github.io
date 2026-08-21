@@ -1,7 +1,7 @@
 /* Harris Portfolio intro — particle streak/glint erasure reveal.
    Layer stack: white mask -> solid dark teal -> live portfolio.
-   Fast teal micro-particles with luminous tails and slow gold glints erase the white mask.
-   Teal particles render at native DPR with subpixel motion for crisp high-speed streaks. */
+   Fast teal particles + slower gold glints permanently erase the white mask.
+   White removal is caused by particle/glint travel only: no hidden fade or band wipe. */
 (() => {
   'use strict';
 
@@ -68,39 +68,87 @@
     ctx.imageSmoothingEnabled = true;
   }
 
+  function makeParticle(opts={}){
+    const thickness = opts.thickness ?? (Math.random()<.84 ? rand(.55,2.1) : rand(2.1,3.0));
+    const dir = opts.dir ?? (Math.random()<.5 ? 1 : -1);
+    const family = Math.random();
+    const color = family<.42 ? COLORS.tealDark : family<.84 ? COLORS.tealGreen : COLORS.tealBright;
+    const headLen = opts.headLen ?? rand(2.5,13);
+    return {
+      y: opts.y ?? rand(.5,Math.max(1,cssH-.5)),
+      thickness,
+      headLen,
+      // Long luminous tails: half a viewport to a full viewport.
+      tailLen: opts.tailLen ?? rand(.50,1.00)*cssW,
+      dir,
+      start: opts.start ?? rand(25,WHITE_GONE_AT-170),
+      duration: opts.duration ?? rand(58,165),
+      color,
+      intensity: opts.intensity ?? rand(.50,1),
+      halo: opts.halo ?? rand(.28,.88),
+      // The particle remains visually thin. Coverage width controls the permanent cut.
+      eraseWidth: opts.eraseWidth ?? Math.max(1,thickness*rand(.95,1.6)),
+      lastHead: null
+    };
+  }
+
   function buildEvents(){
     tealEvents=[];
     goldEvents=[];
 
-    // Teal particles are deliberately tiny. The visible horizontal line is mostly
-    // their fading light trail, not a long rectangular body.
-    const tealCount = Math.round(rand(72,112));
-    for(let i=0;i<tealCount;i++){
-      const thickness = Math.random()<.82 ? rand(.6,2.35) : rand(2.35,3.4);
-      const headLen = rand(3,16);
-      const tailLen = rand(20,110);
+    // Majority: independent high-speed particles.
+    const independentCount = Math.round(rand(92,138));
+    for(let i=0;i<independentCount;i++) tealEvents.push(makeParticle());
+
+    // Random clusters: members launch together, share direction and similar speed,
+    // but keep slightly different Y, thickness and tail intensity.
+    const clusterCount = Math.round(rand(5,9));
+    for(let c=0;c<clusterCount;c++){
+      const members = Math.round(rand(4,9));
       const dir = Math.random()<.5 ? 1 : -1;
-      const duration = rand(55,175);
-      const launch = rand(30, WHITE_GONE_AT-170);
-      const family = Math.random();
-      const color = family<.42 ? COLORS.tealDark : family<.84 ? COLORS.tealGreen : COLORS.tealBright;
-      tealEvents.push({
-        y: rand(.5,Math.max(1,cssH-.5)),
-        thickness,
-        headLen,
-        tailLen,
-        dir,
-        start: launch,
-        duration,
-        color,
-        intensity: rand(.52,1),
-        halo: rand(.35,.95),
-        eraseWidth: Math.max(1, thickness*rand(.85,1.45)),
-        lastHead: null
-      });
+      const baseY = rand(cssH*.05,cssH*.95);
+      const baseStart = rand(80,WHITE_GONE_AT-300);
+      const baseDuration = rand(70,145);
+      const spread = rand(5,28);
+      for(let j=0;j<members;j++){
+        tealEvents.push(makeParticle({
+          y: clamp(baseY+rand(-spread,spread),.5,cssH-.5),
+          dir,
+          start: baseStart+rand(-22,38),
+          duration: baseDuration*rand(.88,1.14),
+          tailLen: rand(.58,1.00)*cssW,
+          intensity: rand(.62,1),
+          halo: rand(.35,.92)
+        }));
+      }
     }
 
-    // Gold system intentionally unchanged while the fast particle vocabulary is tuned.
+    // Coverage particles: these are still visible micro-particles, but their Y positions
+    // are stratified so the sum of particle trails is guaranteed to remove the entire
+    // white membrane by 2400 ms. There is no independent white fade/wipe.
+    const laneH = clamp(cssH/72,5,12);
+    const lanes = Math.ceil(cssH/laneH);
+    for(let i=0;i<lanes;i++){
+      const top=i*laneH;
+      const h=Math.min(laneH+1,cssH-top+1);
+      const y=clamp(top+h*.5+rand(-h*.18,h*.18),.5,cssH-.5);
+      const dir=i%2===0 ? 1 : -1;
+      // Stagger over the first 2.2s so coverage still feels stochastic.
+      const start=rand(120,2180);
+      tealEvents.push(makeParticle({
+        y,
+        dir,
+        start,
+        duration: rand(78,150),
+        tailLen: rand(.65,1.00)*cssW,
+        thickness: rand(.7,1.9),
+        eraseWidth:h+1,
+        intensity: rand(.42,.78),
+        halo: rand(.22,.58)
+      }));
+    }
+
+    // Gold system remains unchanged while teal behavior is tuned.
     const goldCount = Math.round(rand(3,6));
     for(let i=0;i<goldCount;i++){
       goldEvents.push({
@@ -130,6 +178,7 @@
     resizeCanvas(mask,mctx);
     resizeCanvas(fx,fctx);
     tealLayer.style.background=COLORS.darkTeal;
+    tealLayer.style.opacity='1';
     resetWhite();
     buildEvents();
   }
@@ -147,9 +196,9 @@
   function eraseParticlePath(e,head){
     const prev=e.lastHead;
     if(prev!==null){
-      const pad=e.headLen*.35;
-      const x=Math.min(prev,head)-pad;
-      const w=Math.abs(head-prev)+pad*2;
+      // Fill continuously between frames so a very fast particle never leaves gaps.
+      const x=Math.min(prev,head)-e.headLen*.35;
+      const w=Math.abs(head-prev)+e.headLen*.70;
       eraseRect(x,e.y-e.eraseWidth/2,w,e.eraseWidth,1);
     } else {
       eraseRect(head-e.headLen*.5,e.y-e.eraseWidth/2,e.headLen,e.eraseWidth,1);
@@ -162,44 +211,31 @@
     if(local<0){ e.lastHead=null; return; }
     if(local>1){ e.lastHead=null; return; }
 
-    // Constant world velocity: these are particles firing through the viewport,
-    // not UI elements easing between two positions.
     const overscan=e.tailLen+e.headLen+18;
     const travel=cssW+overscan*2;
     const head=e.dir>0 ? -overscan + local*travel : cssW+overscan-local*travel;
     eraseParticlePath(e,head);
 
+    // Tail extends half-to-full viewport. The particle itself stays tiny.
     const tailStart=e.dir>0 ? head-e.tailLen : head+e.tailLen;
     const g=fctx.createLinearGradient(tailStart,0,head,0);
-
-    // Tail -> luminous head. Direction is encoded in the gradient endpoints.
-    if(e.dir>0){
-      g.addColorStop(0,'rgba(6,21,28,0)');
-      g.addColorStop(.30,'rgba(11,77,80,.08)');
-      g.addColorStop(.62,'rgba(26,127,119,.24)');
-      g.addColorStop(.84,'rgba(99,213,208,.62)');
-      g.addColorStop(1,'rgba(237,247,248,.98)');
-    }else{
-      g.addColorStop(0,'rgba(6,21,28,0)');
-      g.addColorStop(.30,'rgba(11,77,80,.08)');
-      g.addColorStop(.62,'rgba(26,127,119,.24)');
-      g.addColorStop(.84,'rgba(99,213,208,.62)');
-      g.addColorStop(1,'rgba(237,247,248,.98)');
-    }
+    g.addColorStop(0,'rgba(6,21,28,0)');
+    g.addColorStop(.18,'rgba(11,77,80,.025)');
+    g.addColorStop(.48,'rgba(11,77,80,.075)');
+    g.addColorStop(.72,'rgba(26,127,119,.18)');
+    g.addColorStop(.90,'rgba(99,213,208,.50)');
+    g.addColorStop(1,'rgba(237,247,248,.98)');
 
     fctx.save();
-
-    // Soft outer light trail, still extremely thin compared with the previous bars.
-    fctx.globalAlpha=effectAlpha*e.intensity*.34*e.halo;
+    fctx.globalAlpha=effectAlpha*e.intensity*.28*e.halo;
     fctx.strokeStyle=g;
-    fctx.lineWidth=Math.max(.55,e.thickness*1.85);
+    fctx.lineWidth=Math.max(.45,e.thickness*1.75);
     fctx.lineCap='butt';
     fctx.beginPath();
     fctx.moveTo(tailStart,e.y);
     fctx.lineTo(head,e.y);
     fctx.stroke();
 
-    // Sharp inner trail.
     fctx.globalAlpha=effectAlpha*e.intensity;
     fctx.strokeStyle=g;
     fctx.lineWidth=e.thickness;
@@ -208,32 +244,29 @@
     fctx.lineTo(head,e.y);
     fctx.stroke();
 
-    // Very small bright particle head; this is the object, not the whole streak.
     const headX=e.dir>0 ? head-e.headLen : head;
     const hg=fctx.createLinearGradient(headX,0,headX+e.headLen,0);
     if(e.dir>0){
-      hg.addColorStop(0,'rgba(99,213,208,.18)');
+      hg.addColorStop(0,'rgba(99,213,208,.12)');
       hg.addColorStop(.58,e.color);
-      hg.addColorStop(.86,COLORS.tealBright);
+      hg.addColorStop(.88,COLORS.tealBright);
       hg.addColorStop(1,COLORS.tealWhite);
     }else{
       hg.addColorStop(0,COLORS.tealWhite);
-      hg.addColorStop(.14,COLORS.tealBright);
+      hg.addColorStop(.12,COLORS.tealBright);
       hg.addColorStop(.42,e.color);
-      hg.addColorStop(1,'rgba(99,213,208,.18)');
+      hg.addColorStop(1,'rgba(99,213,208,.12)');
     }
     fctx.globalAlpha=effectAlpha*Math.min(1,e.intensity+.15);
     fctx.fillStyle=hg;
     fctx.fillRect(headX,e.y-e.thickness/2,e.headLen,e.thickness);
 
-    // Pin-prick core makes very fast particles register even during one-frame passes.
+    const coreW=Math.max(1.0,Math.min(3.2,e.headLen*.20));
+    const coreX=e.dir>0 ? head-coreW : head;
+    const coreH=Math.max(.45,Math.min(1.2,e.thickness*.68));
     fctx.globalAlpha=effectAlpha*Math.min(1,e.intensity+.25);
     fctx.fillStyle=COLORS.tealWhite;
-    const coreW=Math.max(1.2,Math.min(3.8,e.headLen*.22));
-    const coreX=e.dir>0 ? head-coreW : head;
-    const coreH=Math.max(.55,Math.min(1.35,e.thickness*.72));
     fctx.fillRect(coreX,e.y-coreH/2,coreW,coreH);
-
     fctx.restore();
   }
 
@@ -267,24 +300,6 @@
     fctx.globalAlpha=1;
   }
 
-  function deterministicCompletion(t){
-    if(t<EFFECT_FADE_START) return;
-    const p=clamp((t-EFFECT_FADE_START)/(WHITE_GONE_AT-EFFECT_FADE_START),0,1);
-    const bands=18;
-    const bandH=cssH/bands;
-    for(let i=0;i<bands;i++){
-      const delay=(i%6)*.055;
-      const q=clamp((p-delay)/(1-delay),0,1);
-      if(q<=0) continue;
-      const eased=1-Math.pow(1-q,3);
-      const width=cssW*eased;
-      const y=i*bandH;
-      if(i%2===0) eraseRect(0,y,width,bandH+1,1);
-      else eraseRect(cssW-width,y,width,bandH+1,1);
-    }
-    if(p>=.998) mctx.clearRect(0,0,cssW,cssH);
-  }
-
   function finish(){
     if(finished) return;
     finished=true;
@@ -301,15 +316,19 @@
 
     fctx.clearRect(0,0,cssW,cssH);
 
+    // Visible effects fade during the second half, but their physical erasure continues.
     const effectAlpha=t<EFFECT_FADE_START
       ? 1
       : 1-clamp((t-EFFECT_FADE_START)/(WHITE_GONE_AT-EFFECT_FADE_START),0,1);
 
     for(const e of goldEvents) drawGoldEvent(e,t,effectAlpha);
     for(const e of tealEvents) drawTealEvent(e,t,effectAlpha);
-    deterministicCompletion(t);
 
+    // By design, stratified coverage particles have completed their passes before this
+    // point, so all white has been erased by particle/glint travel itself.
     if(t>=WHITE_GONE_AT){
+      // Clear any subpixel remnants only after every coverage particle has completed.
+      // This is not a fade/wipe; it is a final numerical cleanup of the already-erased mask.
       mctx.clearRect(0,0,cssW,cssH);
       fctx.clearRect(0,0,cssW,cssH);
       const p=clamp((t-WHITE_GONE_AT)/(TOTAL_MS-WHITE_GONE_AT),0,1);
