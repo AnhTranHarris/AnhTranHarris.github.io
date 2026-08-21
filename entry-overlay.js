@@ -27,6 +27,12 @@
   const mix=(a,b,t)=>a+(b-a)*t;
   const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
   const rand=(a,b)=>a+Math.random()*(b-a);
+  const gaussian=()=>{
+    let u=0,v=0;
+    while(!u)u=Math.random();
+    while(!v)v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  };
 
   const membrane=document.createElement('canvas');
   membrane.className='entry-membrane';
@@ -68,10 +74,8 @@
   let wipeBird=null;
   const dummy=new THREE.Object3D();
   const color=new THREE.Color();
-  const viewSize=new THREE.Vector2();
   const ndc=new THREE.Vector3();
   const rayDir=new THREE.Vector3();
-  const up=new THREE.Vector3(0,1,0);
 
   const isMobile=()=>Math.min(window.innerWidth,window.innerHeight)<620;
   const countForDevice=()=>isMobile()?280:500;
@@ -90,41 +94,40 @@
   }
 
   function buildLeaderCurve(){
-    // The GIF behaves like one flock moving through a looping 3D air corridor:
-    // tight/far -> sweeping turn -> near-camera expansion -> recede/tighten.
     const pts=[
-      screenToWorldAtZ(width*.88,height*.08,-7),
-      screenToWorldAtZ(width*.66,height*.17,-2),
-      screenToWorldAtZ(width*.79,height*.40,6),
-      screenToWorldAtZ(width*.55,height*.56,13),
-      screenToWorldAtZ(width*.22,height*.70,21),
-      screenToWorldAtZ(-width*.06,height*.82,25.0),
-      screenToWorldAtZ(width*.28,height*.62,15),
-      screenToWorldAtZ(width*.68,height*.45,5),
-      screenToWorldAtZ(width*.86,height*.24,-5)
+      screenToWorldAtZ(width*.91,height*.10,-7),
+      screenToWorldAtZ(width*.80,height*.15,-3),
+      screenToWorldAtZ(width*.74,height*.28,3),
+      screenToWorldAtZ(width*.68,height*.46,11),
+      screenToWorldAtZ(width*.52,height*.61,18),
+      screenToWorldAtZ(width*.28,height*.72,24),
+      screenToWorldAtZ(width*.12,height*.77,25.5),
+      screenToWorldAtZ(width*.32,height*.64,17),
+      screenToWorldAtZ(width*.63,height*.46,7),
+      screenToWorldAtZ(width*.84,height*.27,-3)
     ];
     leaderCurve=new THREE.CatmullRomCurve3(pts,false,'centripetal',.45);
-    leaderCurve.arcLengthDivisions=300;
+    leaderCurve.arcLengthDivisions=400;
     leaderCurve.updateArcLengths();
   }
 
-  function fibonacciOffset(i,n){
-    // Compact 3D cluster instead of independent border spawns.
-    const phi=Math.acos(1-2*(i+.5)/n);
-    const theta=Math.PI*(1+Math.sqrt(5))*i;
-    const shell=.35+.65*Math.pow((i+.5)/n,.42);
+  function compactOffset(i,total){
+    // Dense irregular ellipsoid around ONE origin, not a full shell.
+    // Most birds are close to the center; a few form a soft outer edge.
+    const radialBias=Math.pow((i+.5)/total,.70);
+    const spread=.30+.55*radialBias;
     return new THREE.Vector3(
-      Math.cos(theta)*Math.sin(phi),
-      Math.sin(theta)*Math.sin(phi),
-      Math.cos(phi)
-    ).multiplyScalar(shell);
+      gaussian()*.42*spread,
+      gaussian()*.31*spread,
+      gaussian()*.36*spread
+    );
   }
 
   function speedProfile(){
     const r=Math.random();
-    if(r<.18)return{cruise:7.7,max:10.5,maxForce:8.4};
-    if(r<.78)return{cruise:6.5,max:8.8,maxForce:7.2};
-    return{cruise:5.4,max:7.5,maxForce:6.4};
+    if(r<.14)return{cruise:7.45,max:9.6,maxForce:8.8};
+    if(r<.82)return{cruise:6.55,max:8.6,maxForce:8.1};
+    return{cruise:5.85,max:7.7,maxForce:7.4};
   }
 
   function buildWordTargets(){
@@ -189,16 +192,18 @@
     for(let i=0;i<total;i++){
       const group=i<g1?1:i<g1+g2?2:i<g1+g2+g3?3:4;
       const sp=speedProfile();
-      const offset=fibonacciOffset(i,total).multiply(new THREE.Vector3(2.7,2.1,2.4));
-      offset.add(new THREE.Vector3(rand(-.30,.30),rand(-.24,.24),rand(-.25,.25)));
+      const offset=compactOffset(i,total);
       const b={
         index:i,group,
         position:leader0.clone().add(offset),
-        velocity:tangent0.clone().multiplyScalar(sp.cruise).add(new THREE.Vector3(rand(-.22,.22),rand(-.18,.18),rand(-.18,.18))),
+        // Nearly identical initial heading/airspeed, like a real flock entering together.
+        velocity:tangent0.clone().multiplyScalar(sp.cruise).add(new THREE.Vector3(
+          rand(-.045,.045),rand(-.035,.035),rand(-.035,.035)
+        )),
         acceleration:new THREE.Vector3(),
         slot:offset.clone(),
         cruise:sp.cruise,maxSpeed:sp.max,maxForce:sp.maxForce,
-        scale:rand(.20,.36),tone:Math.random()<.06?'gold':(Math.random()<.10?'teal':'charcoal'),
+        scale:rand(.18,.31),tone:Math.random()<.05?'gold':(Math.random()<.08?'teal':'charcoal'),
         bank:0,phase:rand(0,Math.PI*2),trail:null
       };
       flock.push(b);
@@ -217,7 +222,7 @@
     buildLineTargets();
   }
 
-  const CELL=2.2;
+  const CELL=2.0;
   let grid=new Map();
   const keyFor=p=>`${Math.floor(p.x/CELL)},${Math.floor(p.y/CELL)},${Math.floor(p.z/CELL)}`;
   const neighborOffsets=[];
@@ -259,21 +264,22 @@
     for(const id of neighborsOf(b)){
       const o=flock[id];if(o===b)continue;
       const dvec=o.position.clone().sub(b.position),d2=dvec.lengthSq();
-      if(d2>.95* .95||d2<1e-7)continue;
+      // Much larger awareness radius so the compact flock actually behaves collectively.
+      if(d2>2.10*2.10||d2<1e-7)continue;
       count++;ali.add(o.velocity);coh.add(o.position);
-      if(d2<.36*.36){sep.addScaledVector(dvec,-1/Math.max(d2,.015));sepCount++;}
+      if(d2<.22*.22){sep.addScaledVector(dvec,-1/Math.max(d2,.006));sepCount++;}
     }
     const f=new THREE.Vector3();
     if(sepCount){
       sep.divideScalar(sepCount);
       if(sep.lengthSq()>0)sep.setLength(b.maxSpeed);
-      f.addScaledVector(steerToVelocity(b,sep),1.65);
+      f.addScaledVector(steerToVelocity(b,sep),1.15);
     }
     if(count){
       ali.divideScalar(count);if(ali.lengthSq()>0)ali.setLength(b.cruise);
-      f.addScaledVector(steerToVelocity(b,ali),1.18);
+      f.addScaledVector(steerToVelocity(b,ali),1.80);
       coh.divideScalar(count);
-      f.addScaledVector(seek(b,coh,b.cruise),.58);
+      f.addScaledVector(seek(b,coh,b.cruise),1.12);
     }
     return f;
   }
@@ -287,8 +293,6 @@
   }
 
   function leaderState(t){
-    // Arc-length progression keeps world speed smooth; perspective creates the
-    // dramatic acceleration when the flock approaches the camera, like the GIF.
     const p=clamp(t/(WIPE_START+120),0,1);
     const point=leaderCurve.getPointAt(p);
     const tangent=leaderCurve.getTangentAt(clamp(p+.002,0,1)).normalize();
@@ -296,17 +300,18 @@
   }
 
   function dynamicSlot(b,leader,t){
-    const near=clamp((leader.point.z-10)/15,0,1);
-    const breathe=1+.10*Math.sin(t*.003+b.phase)+near*.42;
+    // Tight at distance, widening only as the whole flock approaches the camera.
+    const near=clamp((leader.point.z-8)/17,0,1);
+    const breathe=.82 + .025*Math.sin(t*.0024+b.phase) + near*1.10;
     const turn=Math.atan2(leader.tangent.y,leader.tangent.x);
     const c=Math.cos(turn),s=Math.sin(turn);
     const x=b.slot.x*c-b.slot.y*s;
     const y=b.slot.x*s+b.slot.y*c;
-    const twist=.18*Math.sin(t*.0017)+near*.28;
+    const twist=.07*Math.sin(t*.0013)+near*.18;
     return leader.point.clone().add(new THREE.Vector3(
       (x-b.slot.z*twist)*breathe,
-      (y+b.slot.z*.14)*breathe,
-      b.slot.z*(1+near*.34)
+      (y+b.slot.z*.08)*breathe,
+      b.slot.z*(.88+near*.72)
     ));
   }
 
@@ -331,12 +336,9 @@
     buildGrid();
     for(const b of flock){
       let force=boidForce(b);
-
-      // Strong attraction to a moving slot keeps the flock behaving as one
-      // organism while still allowing Reynolds local interactions.
       const slotTarget=dynamicSlot(b,leader,t);
-      force.addScaledVector(seek(b,slotTarget,b.cruise*1.04),1.48);
-      force.addScaledVector(steerToVelocity(b,leader.tangent.clone().multiplyScalar(b.cruise)),1.12);
+      force.addScaledVector(seek(b,slotTarget,b.cruise*.98),2.10);
+      force.addScaledVector(steerToVelocity(b,leader.tangent.clone().multiplyScalar(b.cruise)),1.72);
 
       const formation=formationTarget(b,t);
       if(formation){
@@ -344,23 +346,23 @@
         force.addScaledVector(seek(b,formation.target,b.maxSpeed*.88),2.8*formation.strength);
       }
 
-      // Tiny steering noise bends headings; it never directly oscillates position.
+      // Tiny steering variation only; enough for life without dissolving the cluster.
       const noise=new THREE.Vector3(
-        Math.sin(t*.00115+b.phase),
-        Math.cos(t*.00093+b.phase*.67),
-        Math.sin(t*.00071+b.phase*.43)
-      ).multiplyScalar(.18);
+        Math.sin(t*.00105+b.phase),
+        Math.cos(t*.00087+b.phase*.67),
+        Math.sin(t*.00063+b.phase*.43)
+      ).multiplyScalar(.055);
       force.add(noise);
 
-      if(force.length()>b.maxForce*2.0)force.setLength(b.maxForce*2.0);
+      if(force.length()>b.maxForce*2.2)force.setLength(b.maxForce*2.2);
       b.acceleration.copy(force);
       b.velocity.addScaledVector(b.acceleration,dt);
       const speed=b.velocity.length();
       if(speed>b.maxSpeed)b.velocity.setLength(b.maxSpeed);
-      else if(speed<b.cruise*.74)b.velocity.setLength(b.cruise*.74);
+      else if(speed<b.cruise*.84)b.velocity.setLength(b.cruise*.84);
       b.position.addScaledVector(b.velocity,dt);
-      const targetBank=clamp(b.acceleration.x/(b.maxForce*1.6),-.70,.70);
-      b.bank=mix(b.bank,targetBank,clamp(dt*6.2,0,1));
+      const targetBank=clamp(b.acceleration.x/(b.maxForce*1.5),-.72,.72);
+      b.bank=mix(b.bank,targetBank,clamp(dt*6.5,0,1));
     }
   }
 
