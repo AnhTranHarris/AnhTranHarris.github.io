@@ -7,7 +7,7 @@ const TOTAL_MS=3200,SPAWN_CUTOFF_MS=1450,BRIDGE_FADE_START_MS=2450,FAILSAFE_MS=4
 const COLORS={darkTeal:'#06151c',tealDark:'#0b4d50',tealGreen:'#1a7f77',tealBright:'#63d5d0',tealWhite:'#edf7f8',gold:'#d8b86a',goldHi:'#fff0b0'};
 const rand=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));const easeInOut=t=>{t=clamp(t,0,1);return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;};const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 const tealLayer=document.createElement('div');tealLayer.className='entry-teal-layer';tealLayer.setAttribute('aria-hidden','true');const mask=document.createElement('canvas');mask.className='entry-mask-canvas';mask.setAttribute('aria-hidden','true');const fx=document.createElement('canvas');fx.className='entry-fx-canvas';fx.setAttribute('aria-hidden','true');overlay.append(tealLayer,mask,fx);
-const mctx=mask.getContext('2d',{alpha:true,desynchronized:true}),fctx=fx.getContext('2d',{alpha:true,desynchronized:true});if(!mctx||!fctx){finishImmediately();return;}
+const mctx=mask.getContext('2d',{alpha:true}),fctx=fx.getContext('2d',{alpha:true});if(!mctx||!fctx){finishImmediately();return;}
 let cssW=1,cssH=1,dpr=1,start=0,raf=0,watchdog=0,finished=false,tealEvents=[],goldEvents=[];
 let initialViewportW=0,initialViewportH=0;
 function resizeCanvas(c,ctx){c.width=Math.max(1,Math.round(cssW*dpr));c.height=Math.max(1,Math.round(cssH*dpr));c.style.width=`${cssW}px`;c.style.height=`${cssH}px`;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=true;}
