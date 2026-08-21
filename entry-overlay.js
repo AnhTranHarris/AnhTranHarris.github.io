@@ -1,6 +1,7 @@
-/* Harris Portfolio intro — clean tracer/glint erasure reveal.
-   White mask -> dark-teal bridge -> live portfolio.
-   Fast particles physically erase white; tracers drain by tail, not head. */
+/* Harris Portfolio intro — tracer-driven erasure reveal.
+   White first paint -> white canvas mask -> dark-teal bridge -> live portfolio.
+   The visible tracer body itself erodes the mask throughout pre-roll, head travel,
+   and tail drain. No full-width completion wipe is used. */
 (() => {
   'use strict';
 
@@ -21,7 +22,7 @@
   const TOTAL_MS=3200;
   const SPAWN_CUTOFF_MS=1450;
   const BRIDGE_FADE_START_MS=2450;
-  const FAILSAFE_MS=4400;
+  const FAILSAFE_MS=4600;
 
   const COLORS={
     darkTeal:'#06151c',tealDark:'#0b4d50',tealGreen:'#1a7f77',
@@ -31,7 +32,6 @@
   const rand=(a,b)=>a+Math.random()*(b-a);
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const easeInOut=t=>{t=clamp(t,0,1);return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;};
-
   const shuffle=array=>{
     for(let i=array.length-1;i>0;i--){
       const j=Math.floor(Math.random()*(i+1));
@@ -101,7 +101,6 @@
       glowIntensity:o.glowIntensity??rand(0,1),
       glowIntensity2:o.glowIntensity2??rand(0,1),
       eraseWidth:o.eraseWidth??Math.max(1,thickness*rand(.95,1.6)),
-      lastHead:null,
       coverage:!!o.coverage,
       coverageTop:o.coverageTop??null,
       coverageHeight:o.coverageHeight??null,
@@ -110,9 +109,6 @@
   }
 
   function buildCoverageClusters(){
-    // Divide the entire visible height into thin strips, then shuffle them before assigning
-    // them to staggered particle bursts. Every strip is represented exactly once, so white
-    // removal is guaranteed without a deterministic top-to-bottom scan.
     const stripH=clamp(cssH/96,3.5,8);
     const strips=[];
     for(let top=0;top<cssH;top+=stripH){
@@ -124,13 +120,10 @@
     let cursor=0;
     let clusterIndex=0;
     const clusterTotal=Math.ceil(strips.length/7);
-
     while(cursor<strips.length){
       const remaining=strips.length-cursor;
       const members=Math.min(remaining,Math.round(rand(4,9)));
       const progress=clusterTotal<=1?0:clusterIndex/Math.max(1,clusterTotal-1);
-
-      // Stagger clusters across the first ~1.35 seconds, with jitter so bursts overlap.
       const baseStart=90+progress*1220+rand(-55,70);
       const baseSpeed=rand(.0115,.0175);
       const baseDir=Math.random()<.5?1:-1;
@@ -138,8 +131,6 @@
 
       for(let j=0;j<members;j++){
         const s=strips[cursor+j];
-        // Most members fly with their cluster; a small minority reverse direction to avoid
-        // reading as synchronized horizontal bands.
         const dir=Math.random()<.84?baseDir:-baseDir;
         tealEvents.push(makeParticle({
           y:s.y,
@@ -156,7 +147,6 @@
           coverageHeight:s.height+0.8
         }));
       }
-
       cursor+=members;
       clusterIndex++;
     }
@@ -166,11 +156,9 @@
     tealEvents=[];
     goldEvents=[];
 
-    // Majority: independent fast particles.
     const independentCount=Math.round(rand(184,276));
     for(let i=0;i<independentCount;i++)tealEvents.push(makeParticle());
 
-    // Decorative burst clusters layered on top of the guaranteed coverage clusters.
     const clusterCount=Math.round(rand(10,18));
     for(let c=0;c<clusterCount;c++){
       const members=Math.round(rand(4,9));
@@ -227,6 +215,9 @@
     tealLayer.style.opacity='1';
     resetWhite();
     buildEvents();
+    // CSS paints the overlay white before JS can run. Only after the white canvas mask is
+    // fully initialized do we expose the layer stack beneath it.
+    overlay.style.background='transparent';
   }
 
   function eraseRect(x,y,w,h,a=1){
@@ -239,26 +230,26 @@
     mctx.restore();
   }
 
-  function eraseParticlePath(e,head){
-    const prev=e.lastHead;
-    if(prev!==null){
-      eraseRect(Math.min(prev,head)-e.headLen*.35,e.y-e.eraseWidth/2,Math.abs(head-prev)+e.headLen*.7,e.eraseWidth,1);
+  // The visible tracer body is the eraser. We skip only the transparent first 2% of the
+  // core gradient, then erase every on-screen pixel currently occupied by the tracer body.
+  // This naturally includes pre-roll and remains active after the particle head exits.
+  function eraseVisibleTracer(e,tailStart,head){
+    const opaqueTail=tailStart+e.dir*(e.tracerLen*.02);
+    const left=clamp(Math.min(opaqueTail,head),0,cssW);
+    const right=clamp(Math.max(opaqueTail,head),0,cssW);
+    if(right<=left)return;
+
+    if(e.coverage&&e.coverageTop!==null&&e.coverageHeight!==null){
+      eraseRect(left,e.coverageTop,right-left,e.coverageHeight,1);
     }else{
-      eraseRect(head-e.headLen*.5,e.y-e.eraseWidth/2,e.headLen,e.eraseWidth,1);
+      eraseRect(left,e.y-e.eraseWidth/2,right-left,e.eraseWidth,1);
     }
-    e.lastHead=head;
   }
 
-  function completeCoverage(e){
-    if(!e.coverage||e.completed)return;
-    // Commit only this particle's assigned strip after its actual tracer has drained.
-    // The strip assignment is shuffled, so completion remains spatially random.
-    if(e.coverageTop!==null&&e.coverageHeight!==null){
-      eraseRect(0,e.coverageTop,cssW,e.coverageHeight,1);
-    }else{
-      eraseRect(0,e.y-e.eraseWidth/2,cssW,e.eraseWidth,1);
-    }
-    e.completed=true;
+  // Completion is now state only. It never erases pixels. Every coverage strip must already
+  // have been physically traversed by its tracer before this flag can be reached.
+  function markCoverageComplete(e){
+    if(e.coverage)e.completed=true;
   }
 
   function makeTracerGradient(e,tailStart,head,mode){
@@ -330,7 +321,7 @@
 
   function drawTealEvent(e,t){
     const elapsed=t-e.start;
-    if(elapsed<0){e.lastHead=null;return false;}
+    if(elapsed<0)return false;
 
     const pad=Math.max(24,e.headLen*2);
     const startX=e.dir>0?-pad:cssW+pad;
@@ -339,16 +330,15 @@
     const tailGone=e.dir>0?tailStart>cssW+pad:tailStart<-pad;
 
     if(tailGone){
-      completeCoverage(e);
-      e.lastHead=null;
+      markCoverageComplete(e);
       return false;
     }
 
-    const headOnOrNearScreen=head>=-pad&&head<=cssW+pad;
-    if(headOnOrNearScreen)eraseParticlePath(e,head);
-
+    // Erase first, then draw the optical tracer above the newly exposed dark-teal bridge.
+    eraseVisibleTracer(e,tailStart,head);
     const halo=drawTracerStroke(e,tailStart,head);
 
+    const headOnOrNearScreen=head>=-pad&&head<=cssW+pad;
     if(headOnOrNearScreen){
       const headX=e.dir>0?head-e.headLen:head;
       const hg=fctx.createLinearGradient(headX,0,headX+e.headLen,0);
@@ -444,15 +434,15 @@
     for(const e of goldEvents)drawGoldEvent(e,t);
     for(const e of tealEvents)drawTealEvent(e,t);
 
-    // Bridge fade starts only after all randomized coverage particles have completed.
-    // If a very slow device misses the planned 2450ms point, the fade waits rather than
-    // deleting the white mask through a hidden fallback.
-    if(t>=BRIDGE_FADE_START_MS&&allCoverageComplete()){
+    const coverageComplete=allCoverageComplete();
+    if(t>=BRIDGE_FADE_START_MS&&coverageComplete){
       const p=clamp((t-BRIDGE_FADE_START_MS)/(TOTAL_MS-BRIDGE_FADE_START_MS),0,1);
       tealLayer.style.opacity=String(1-easeInOut(p));
     }
 
-    if(t>=TOTAL_MS){finish();return;}
+    // Never end the normal animation while guaranteed coverage tracers are unfinished.
+    // This prevents a late overlay removal from masquerading as white-mask erosion.
+    if(t>=TOTAL_MS&&coverageComplete){finish();return;}
     raf=requestAnimationFrame(frame);
   }
 
