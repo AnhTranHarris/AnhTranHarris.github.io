@@ -52,6 +52,6 @@ html[data-entry-state="running"] #portfolio-entry-overlay .entry-teal-layer{
 html[data-entry-state="complete"] #portfolio-entry-overlay{
   display:none!important;
 }
-@media(forced-colors:active), (prefers-reduced-motion:reduce){
+@media(forced-colors:active){
   #portfolio-entry-overlay{display:none!important}
 }
