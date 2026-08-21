@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en" data-effects="full">
+<html lang="en" data-effects="full" data-entry-state="pending">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#06151c">
   <title>Harris | AI + Technical Communication</title>
+  <link rel="stylesheet" href="entry-overlay.css">
   <style>
     :root{
       --bg:#06151c;--ink:#edf7f8;--muted:#9fb7bc;--line:rgba(174,225,230,.16);
@@ -64,6 +65,7 @@
   </style>
 </head>
 <body>
+  <div id="portfolio-entry-overlay" role="presentation" aria-hidden="true"></div>
   <div class="spotlight spotlight-large" data-spotlight="large" aria-hidden="true"></div>
   <div class="spotlight spotlight-medium" data-spotlight="medium" aria-hidden="true"></div>
   <div class="spotlight spotlight-small" data-spotlight="small" aria-hidden="true"></div>
@@ -91,6 +93,7 @@
     </main>
     <footer class="site-disclaimer" role="note"><strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span></footer>
   </div>
+  <script src="entry-overlay.js"></script>
   <script src="motion-policy.js"></script>
   <script src="carousel-touch.js"></script>
   <script src="resume-viewer.js"></script>
