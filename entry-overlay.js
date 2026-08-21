@@ -1,8 +1,6 @@
-/* Harris Portfolio entry: exact reference-GIF choreography.
-   The uploaded three-color animation is used as the temporal motion template,
-   recolored to the portfolio palette and stretched to the live viewport so
-   desktop and mobile receive the same frame sequence.
-   Portfolio systems underneath remain untouched. */
+/* Harris Portfolio entry: exact reference animation playback.
+   Plays the supplied 109-frame / 3.27s geometric animation as one full-screen
+   overlay. No procedural shapes, flocking, blobs, or viewport-specific choreography. */
 (() => {
   'use strict';
 
@@ -20,58 +18,82 @@
   };
   if (skip) { finishImmediately(); return; }
 
-  const WHITE_HOLD = 110;
-  const GIF_DURATION = 3270;
-  const FAILSAFE = 4700;
+  const PARTS = [0,1,2,3,4].map(i => `entry-media/v0${i}.txt?v=exact-reference-1`);
+  const WHITE_HOLD_MS = 90;
+  const FAILSAFE_MS = 5200;
 
   const stage = document.createElement('div');
   stage.className = 'entry-reference-stage';
   stage.setAttribute('aria-hidden', 'true');
   overlay.appendChild(stage);
 
-  const img = document.createElement('img');
-  img.className = 'entry-reference-gif';
-  img.alt = '';
-  img.decoding = 'async';
-
-  // Exact 109-frame reference sequence, recolored:
-  // source white -> white, source orange -> portfolio gold, source black -> deep teal/ink.
-  img.src = 'data:image/gif;base64,"+b64+"';
+  const video = document.createElement('video');
+  video.className = 'entry-reference-video';
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.controls = false;
+  video.disablePictureInPicture = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('aria-hidden', 'true');
 
   let finished = false;
-  let playbackTimer = 0;
-  const watchdog = setTimeout(finish, FAILSAFE);
+  let objectUrl = '';
+  let watchdog = 0;
 
   function finish() {
     if (finished) return;
     finished = true;
-    clearTimeout(playbackTimer);
     clearTimeout(watchdog);
+    try { video.pause(); } catch (_) {}
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
     document.documentElement.dataset.entryState = 'complete';
     overlay.classList.add('entry-complete');
-    setTimeout(() => overlay.remove(), 140);
+    setTimeout(() => overlay.remove(), 130);
   }
 
-  function beginPlayback() {
-    if (finished) return;
-    document.documentElement.dataset.entryState = 'running';
-    setTimeout(() => {
-      if (finished) return;
-      stage.appendChild(img);
-      stage.classList.add('entry-reference-playing');
-      playbackTimer = setTimeout(finish, GIF_DURATION);
-    }, WHITE_HOLD);
+  watchdog = setTimeout(finish, FAILSAFE_MS);
+  window.addEventListener('pageshow', e => { if (e.persisted) finish(); }, { passive:true });
+
+  async function loadExactAnimation() {
+    try {
+      const texts = await Promise.all(PARTS.map(async url => {
+        const response = await fetch(url, { cache:'no-store' });
+        if (!response.ok) throw new Error(`entry media ${response.status}`);
+        return (await response.text()).trim();
+      }));
+
+      const encoded = texts.join('');
+      const binary = atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type:'video/mp4' }));
+      video.src = objectUrl;
+      stage.appendChild(video);
+
+      await new Promise((resolve, reject) => {
+        if (video.readyState >= 3) return resolve();
+        video.addEventListener('canplay', resolve, { once:true });
+        video.addEventListener('error', reject, { once:true });
+      });
+
+      video.currentTime = 0;
+      video.addEventListener('ended', finish, { once:true });
+      document.documentElement.dataset.entryState = 'running';
+
+      setTimeout(async () => {
+        if (finished) return;
+        stage.classList.add('entry-reference-playing');
+        try { await video.play(); }
+        catch (_) { finish(); }
+      }, WHITE_HOLD_MS);
+    } catch (_) {
+      finish();
+    }
   }
 
-  // The flat white entry frame is visible immediately. We wait for the embedded
-  // image to decode before starting so slow mobile decoding cannot skip the opening.
-  const ready = () => beginPlayback();
-  if (img.decode) {
-    img.decode().then(ready).catch(ready);
-  } else {
-    img.onload = ready;
-    img.onerror = finish;
-  }
-
-  window.addEventListener('pageshow', e => { if (e.persisted) finish(); }, { passive: true });
+  loadExactAnimation();
 })();
