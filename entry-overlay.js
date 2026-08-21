@@ -1,8 +1,7 @@
-/* Harris Portfolio entry — mathematical constructive/destructive field reveal.
-   FULL REWRITE: Canvas 2D only, no WebGL, no video, no procedural moving blobs.
-   The animation is a low-resolution categorical wave field scaled with nearest-neighbor
-   sampling so stepped edges remain razor crisp on desktop and mobile.
-   The live portfolio remains untouched underneath this isolated overlay. */
+/* Harris Portfolio entry — randomized constructive/destructive field reveal.
+   FULL REWRITE: Canvas 2D only. No video, WebGL, Three.js, or moving blob sprites.
+   Each load generates a bounded random wave profile. Hard categorical cells are drawn
+   with nearest-neighbor scaling so boundaries stay crisp on desktop and mobile. */
 (() => {
   'use strict';
 
@@ -21,229 +20,247 @@
   if (shouldSkip) { finishImmediately(); return; }
 
   const TOTAL_MS = 3270;
-  const WHITE_HOLD_MS = 95;
-  const FAILSAFE_MS = 4600;
-
+  const WHITE_HOLD_MS = 90;
+  const FAILSAFE_MS = 4700;
+  const TAU = Math.PI * 2;
   const COLORS = {
     white: [255,255,255,255],
     ink:   [6,21,28,255],
     gold:  [216,184,106,255]
   };
 
-  const canvas = document.createElement('canvas');
-  canvas.className = 'entry-field-canvas';
-  canvas.setAttribute('aria-hidden', 'true');
-  overlay.appendChild(canvas);
-
-  const ctx = canvas.getContext('2d', { alpha:true, desynchronized:true });
-  if (!ctx) { finishImmediately(); return; }
-  ctx.imageSmoothingEnabled = false;
-
-  const fieldCanvas = document.createElement('canvas');
-  const fieldCtx = fieldCanvas.getContext('2d', { alpha:true, willReadFrequently:false });
-  if (!fieldCtx) { finishImmediately(); return; }
-
-  let cssW = 1;
-  let cssH = 1;
-  let cols = 44;
-  let rows = 44;
-  let imageData = null;
-  let data = null;
-  let uCoord = null;
-  let vCoord = null;
-  let start = 0;
-  let raf = 0;
-  let watchdog = 0;
-  let finished = false;
-
+  const rand = (a,b) => a + Math.random() * (b-a);
+  const randSign = () => Math.random() < .5 ? -1 : 1;
   const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
   const smoothstep = (a,b,x) => {
     const q = clamp((x-a)/(b-a),0,1);
     return q*q*(3-2*q);
   };
 
-  function resize() {
-    cssW = Math.max(1, window.innerWidth);
-    cssH = Math.max(1, window.innerHeight);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // One random but bounded profile per page load. These ranges deliberately keep the
+  // animation in the same visual family while changing its exact growth/decay pattern.
+  const RUN = {
+    cellCss: rand(6.5,11.5),
+    waves: [
+      {kx:rand(.85,1.55)*randSign(), ky:rand(.28,.82)*randSign(), speed:rand(2.8,5.3)*randSign(), phase:rand(0,TAU)},
+      {kx:rand(.45,1.20)*randSign(), ky:rand(.90,1.60)*randSign(), speed:rand(2.5,4.9)*randSign(), phase:rand(0,TAU)},
+      {kx:rand(.70,1.45)*randSign(), ky:rand(.65,1.35)*randSign(), speed:rand(3.3,5.8)*randSign(), phase:rand(0,TAU)},
+      {kx:rand(1.05,1.80)*randSign(), ky:rand(.35,1.05)*randSign(), speed:rand(2.9,5.5)*randSign(), phase:rand(0,TAU)}
+    ],
+    pressure: [
+      {x:rand(.18,.38),y:rand(.18,.42),dx:rand(.16,.31)*randSign(),dy:rand(.16,.31)*randSign(),driftX:rand(.55,1.05),driftY:rand(.62,1.12),freq:rand(1.7,2.8),speed:rand(3.7,6.2)*randSign(),phase:rand(0,TAU)},
+      {x:rand(.62,.82),y:rand(.58,.82),dx:rand(.16,.31)*randSign(),dy:rand(.16,.31)*randSign(),driftX:rand(.58,1.08),driftY:rand(.54,1.02),freq:rand(1.9,3.0),speed:rand(3.5,6.0)*randSign(),phase:rand(0,TAU)}
+    ],
+    goldGrowth: rand(1.35,2.35),
+    inkGrowth: rand(1.20,2.25),
+    whiteGrowth: rand(1.35,2.55),
+    fastGold: rand(3.7,6.3),
+    fastInk: rand(3.5,6.0),
+    fastWhite: rand(3.8,6.5),
+    territorySpeed: rand(1.25,2.45),
+    territoryCross: rand(2.4,4.0),
+    revealStart: rand(.61,.70),
+    finalStart: rand(.945,.968),
+    revealPhase: rand(0,TAU)
+  };
 
-    canvas.width = Math.max(1, Math.round(cssW*dpr));
-    canvas.height = Math.max(1, Math.round(cssH*dpr));
-    canvas.style.width = `${cssW}px`;
-    canvas.style.height = `${cssH}px`;
-    ctx.imageSmoothingEnabled = false;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'entry-field-canvas';
+  canvas.setAttribute('aria-hidden','true');
+  overlay.appendChild(canvas);
+  const ctx = canvas.getContext('2d',{alpha:true,desynchronized:true});
+  if (!ctx) { finishImmediately(); return; }
+  ctx.imageSmoothingEnabled = false;
 
-    // Same visual cell density on portrait and landscape: the short viewport axis
-    // always contains 44 mathematical cells. This keeps mobile/desktop choreography
-    // equivalent while preserving hard geometric edges.
-    const aspect = cssW/cssH;
-    if (aspect >= 1) {
-      rows = 44;
-      cols = clamp(Math.round(44*aspect),44,104);
-    } else {
-      cols = 44;
-      rows = clamp(Math.round(44/aspect),44,104);
+  const fieldCanvas = document.createElement('canvas');
+  const fieldCtx = fieldCanvas.getContext('2d',{alpha:true});
+  if (!fieldCtx) { finishImmediately(); return; }
+  fieldCtx.imageSmoothingEnabled = false;
+
+  let cssW=1,cssH=1,cols=1,rows=1,imageData=null,data=null;
+  let uCoord=null,vCoord=null,waveBase=[],start=0,raf=0,watchdog=0,finished=false;
+
+  function setPixel(index,rgba){
+    const o=index*4;
+    data[o]=rgba[0];data[o+1]=rgba[1];data[o+2]=rgba[2];data[o+3]=rgba[3];
+  }
+
+  function resize(){
+    cssW=Math.max(1,window.innerWidth);
+    cssH=Math.max(1,window.innerHeight);
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.round(cssW*dpr);
+    canvas.height=Math.round(cssH*dpr);
+    canvas.style.width=`${cssW}px`;
+    canvas.style.height=`${cssH}px`;
+    ctx.imageSmoothingEnabled=false;
+
+    // Cell size is defined in CSS pixels, not viewport count. This makes the stair-step
+    // edge scale visually consistent across portrait, landscape, desktop and mobile.
+    cols=clamp(Math.ceil(cssW/RUN.cellCss),34,220);
+    rows=clamp(Math.ceil(cssH/RUN.cellCss),34,160);
+    fieldCanvas.width=cols;
+    fieldCanvas.height=rows;
+    imageData=fieldCtx.createImageData(cols,rows);
+    data=imageData.data;
+    uCoord=new Float32Array(cols);
+    vCoord=new Float32Array(rows);
+    for(let x=0;x<cols;x++)uCoord[x]=(x+.5)/cols;
+    for(let y=0;y<rows;y++)vCoord[y]=(y+.5)/rows;
+
+    // Precompute spatial dot products for each directional oscillator. Only time phase
+    // changes every frame, keeping the higher-resolution grid fast enough on mobile.
+    waveBase=RUN.waves.map(()=>new Float32Array(cols*rows));
+    let i=0;
+    for(let y=0;y<rows;y++){
+      const py=(vCoord[y]-.5)*TAU;
+      for(let x=0;x<cols;x++,i++){
+        const px=(uCoord[x]-.5)*TAU;
+        for(let n=0;n<RUN.waves.length;n++){
+          const w=RUN.waves[n];
+          waveBase[n][i]=w.kx*px+w.ky*py+w.phase;
+        }
+      }
     }
-
-    fieldCanvas.width = cols;
-    fieldCanvas.height = rows;
-    imageData = fieldCtx.createImageData(cols,rows);
-    data = imageData.data;
-    uCoord = new Float32Array(cols);
-    vCoord = new Float32Array(rows);
-    for (let x=0;x<cols;x++) uCoord[x]=(x+.5)/cols;
-    for (let y=0;y<rows;y++) vCoord[y]=(y+.5)/rows;
   }
 
-  function setPixel(index, rgba) {
-    const o = index*4;
-    data[o] = rgba[0];
-    data[o+1] = rgba[1];
-    data[o+2] = rgba[2];
-    data[o+3] = rgba[3];
-  }
-
-  function renderWhite() {
-    for (let i=0;i<cols*rows;i++) setPixel(i,COLORS.white);
+  function renderWhite(){
+    for(let i=0;i<cols*rows;i++)setPixel(i,COLORS.white);
     fieldCtx.putImageData(imageData,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled=false;
     ctx.drawImage(fieldCanvas,0,0,canvas.width,canvas.height);
   }
 
-  function renderField(seconds, progress) {
-    const TAU = Math.PI*2;
-    const t = seconds;
+  function renderField(seconds,progress){
+    const t=seconds;
+    const w0=RUN.waves[0],w1=RUN.waves[1],w2=RUN.waves[2],w3=RUN.waves[3];
+    const p0=RUN.pressure[0],p1=RUN.pressure[1];
 
-    // Slowly moving centers for angular pressure waves. Manhattan distance is used
-    // intentionally: unlike circular ripples, it generates the stepped diamond/block
-    // fronts visible in the reference animation once the field is quantized.
-    const c1x = .30 + .24*Math.sin(t*.73);
-    const c1y = .34 + .27*Math.cos(t*.91);
-    const c2x = .71 + .22*Math.cos(t*.82+1.2);
-    const c2y = .65 + .25*Math.sin(t*.64+1.7);
+    const c1x=p0.x+p0.dx*Math.sin(t*p0.driftX+p0.phase);
+    const c1y=p0.y+p0.dy*Math.cos(t*p0.driftY+p0.phase*.73);
+    const c2x=p1.x+p1.dx*Math.cos(t*p1.driftX+p1.phase);
+    const c2y=p1.y+p1.dy*Math.sin(t*p1.driftY+p1.phase*.61);
 
-    // Whole-field dominance envelopes. These make gold, ink and white take turns
-    // occupying large portions of the viewport instead of behaving like little blobs.
-    const goldBias = .34*Math.sin(t*2.55) + .24*Math.sin(t*5.10+.7);
-    const inkBias  = .32*Math.sin(t*2.18+2.05) + .23*Math.sin(t*4.72+1.35);
-    const whiteBias= .29*Math.sin(t*2.91+3.95) + .20*Math.sin(t*5.58+2.65);
+    // Independent growth/decay clocks. These are randomized each visit, so gold, ink
+    // and white do not repeat the same dominance timing from one load to the next.
+    const goldBias=.38*Math.sin(t*RUN.goldGrowth+RUN.revealPhase)+.24*Math.sin(t*RUN.fastGold+.7);
+    const inkBias =.36*Math.sin(t*RUN.inkGrowth +RUN.revealPhase+2.1)+.23*Math.sin(t*RUN.fastInk+1.35);
+    const whiteBias=.33*Math.sin(t*RUN.whiteGrowth+RUN.revealPhase+4.0)+.21*Math.sin(t*RUN.fastWhite+2.65);
 
-    const revealRamp = smoothstep(.66,.985,progress);
-    const finalRamp = smoothstep(.955,1,progress);
+    const revealRamp=smoothstep(RUN.revealStart,.985,progress);
+    const finalRamp=smoothstep(RUN.finalStart,1,progress);
 
-    let idx = 0;
-    for (let y=0;y<rows;y++) {
-      const v = vCoord[y];
-      const py = (v-.5)*TAU;
-      for (let x=0;x<cols;x++,idx++) {
-        const u = uCoord[x];
-        const px = (u-.5)*TAU;
+    let idx=0;
+    for(let y=0;y<rows;y++){
+      const v=vCoord[y];
+      for(let x=0;x<cols;x++,idx++){
+        const u=uCoord[x];
 
-        // Four directional waves. Different axes, frequencies and opposing temporal
-        // directions create constructive/destructive interference over the full frame.
-        const d1 = Math.sin( 1.18*px + .46*py + t*3.90 + .20);
-        const d2 = Math.sin(-.63*px +1.36*py - t*3.10 +1.70);
-        const d3 = Math.sin( .82*px +1.02*py + t*4.70 +3.10);
-        const d4 = Math.sin( 1.54*px -.72*py - t*4.15 +4.35);
+        const d1=Math.sin(waveBase[0][idx]+t*w0.speed);
+        const d2=Math.sin(waveBase[1][idx]+t*w1.speed);
+        const d3=Math.sin(waveBase[2][idx]+t*w2.speed);
+        const d4=Math.sin(waveBase[3][idx]+t*w3.speed);
 
-        // Constructive/destructive angular fronts. Because coordinates are normalized,
-        // these flex with any viewport while keeping identical timing and topology.
-        const m1 = Math.abs(u-c1x)+Math.abs(v-c1y);
-        const m2 = Math.abs(u-c2x)+Math.abs(v-c2y);
-        const r1 = Math.cos(m1*TAU*2.22 - t*5.20 + .45);
-        const r2 = Math.cos(m2*TAU*2.58 + t*4.62 +2.20);
+        // Manhattan pressure fronts create the sharp 45-degree/stair-step growth edges
+        // seen in the reference rather than soft circular metaball boundaries.
+        const m1=Math.abs(u-c1x)+Math.abs(v-c1y);
+        const m2=Math.abs(u-c2x)+Math.abs(v-c2y);
+        const r1=Math.cos(m1*TAU*p0.freq-t*p0.speed+p0.phase);
+        const r2=Math.cos(m2*TAU*p1.freq-t*p1.speed+p1.phase);
 
-        let gold = 1.03*d1 + .73*d3 - .61*d2 + .79*r1 - .46*r2 + goldBias;
-        let ink  =-.80*d1 +1.04*d2 + .70*d4 + .68*r2 - .38*r1 + inkBias;
-        let white= .63*d1 - .57*d3 + .85*d4 - .40*r1 + .49*r2 + whiteBias;
+        let gold=1.08*d1+.68*d3-.57*d2+.88*r1-.42*r2+goldBias;
+        let ink =-.74*d1+1.08*d2+.72*d4+.82*r2-.34*r1+inkBias;
+        let white=.62*d1-.53*d3+.92*d4-.37*r1+.45*r2+whiteBias;
 
-        // A slower constructive wave periodically swells an entire color territory,
-        // then reverses and lets the competing field eat it away.
-        const territory = Math.sin((u+v)*TAU*1.18 - t*2.72) +
-                          .72*Math.sin((u-v)*TAU*.91 + t*3.18+.8);
-        gold += territory*.22*Math.sin(t*1.77+.3);
-        ink  -= territory*.24*Math.sin(t*1.77+.3);
+        // Large territorial constructive/destructive waves. Different speeds make some
+        // regions explode outward while others decay more slowly during the same run.
+        const territoryA=Math.sin((u+v)*TAU*randlessA - t*RUN.territorySpeed);
+        const territoryB=Math.sin((u-v)*TAU*randlessB + t*RUN.territoryCross+.8);
+        const territory=territoryA+.70*territoryB;
+        const breathe=Math.sin(t*(RUN.territorySpeed*.72)+RUN.revealPhase);
+        gold+=territory*.30*breathe;
+        ink -=territory*.27*breathe;
+        white+=territory*.17*Math.sin(t*(RUN.territorySpeed*.91)+2.2);
 
-        // Hard categorical winner. No interpolation between colors: boundaries stay
-        // perfectly sharp at every display resolution.
-        let rgba = COLORS.white;
-        let best = white;
-        const threshold = .015 + .095*Math.sin(t*1.86);
-        if (ink > best + threshold) { best = ink; rgba = COLORS.ink; }
-        if (gold > best + threshold) { rgba = COLORS.gold; }
+        let rgba=COLORS.white;
+        let best=white;
+        const threshold=.005+.075*Math.sin(t*randThreshold+RUN.revealPhase);
+        if(ink>best+threshold){best=ink;rgba=COLORS.ink;}
+        if(gold>best+threshold){rgba=COLORS.gold;}
 
-        // Late-stage destructive cancellation reveals the live portfolio below using
-        // the same wave vocabulary rather than a separate opacity fade.
-        let transparent = false;
-        if (revealRamp > 0) {
-          const reveal =
-            .74*Math.sin(.93*px-1.11*py+t*5.22+.2) +
-            .58*Math.cos((Math.abs(u-.58)+Math.abs(v-.43))*TAU*1.72-t*5.86+1.0) +
-            .44*Math.sin(-1.46*px-.39*py-t*4.18+2.6);
-          const revealThreshold = 1.43 + (-2.72*revealRamp);
-          transparent = reveal > revealThreshold;
+        let transparent=false;
+        if(revealRamp>0){
+          const px=(u-.5)*TAU,py=(v-.5)*TAU;
+          const reveal=.78*Math.sin(.90*px-1.14*py+t*randRevealSpeed+RUN.revealPhase)+
+            .61*Math.cos((Math.abs(u-.56)+Math.abs(v-.45))*TAU*randRevealFreq-t*randRevealPressure+1.0)+
+            .39*Math.sin(-1.48*px-.36*py-t*4.0+2.6);
+          transparent=reveal>1.47-2.82*revealRamp;
         }
 
-        // Guaranteed final diagonal destruction of every remaining overlay cell.
-        if (finalRamp > 0) {
-          const sweep = u + .58*v;
-          const cut = -.12 + 1.82*finalRamp;
-          if (sweep < cut) transparent = true;
+        if(finalRamp>0){
+          const direction=randFinalDirection;
+          const sweep=direction===0?u+.58*v:direction===1?(1-u)+.58*v:direction===2?u+.58*(1-v):(1-u)+.58*(1-v);
+          if(sweep<-.10+1.82*finalRamp)transparent=true;
         }
 
-        if (transparent) setPixel(idx,[0,0,0,0]);
-        else setPixel(idx,rgba);
+        setPixel(idx,transparent?[0,0,0,0]:rgba);
       }
     }
 
     fieldCtx.putImageData(imageData,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled=false;
     ctx.drawImage(fieldCanvas,0,0,canvas.width,canvas.height);
   }
 
-  function finish() {
-    if (finished) return;
-    finished = true;
+  // Additional per-run constants used inside the hot pixel loop. Generated once only.
+  const randlessA=rand(.72,1.36);
+  const randlessB=rand(.66,1.22);
+  const randThreshold=rand(1.35,2.35);
+  const randRevealSpeed=rand(4.6,6.1);
+  const randRevealFreq=rand(1.45,2.05);
+  const randRevealPressure=rand(4.7,6.3);
+  const randFinalDirection=Math.floor(rand(0,4));
+
+  function finish(){
+    if(finished)return;
+    finished=true;
     clearTimeout(watchdog);
     cancelAnimationFrame(raf);
-    document.documentElement.dataset.entryState = 'complete';
+    document.documentElement.dataset.entryState='complete';
     overlay.classList.add('entry-complete');
-    setTimeout(() => overlay.remove(),100);
+    setTimeout(()=>overlay.remove(),90);
   }
 
-  function frame(now) {
-    if (!start) start = now;
-    const elapsedTotal = now-start;
-
-    if (elapsedTotal < WHITE_HOLD_MS) {
+  function frame(now){
+    if(!start)start=now;
+    const elapsedTotal=now-start;
+    if(elapsedTotal<WHITE_HOLD_MS){
       renderWhite();
-    } else {
-      const elapsed = elapsedTotal-WHITE_HOLD_MS;
-      const progress = clamp(elapsed/TOTAL_MS,0,1);
+    }else{
+      const elapsed=elapsedTotal-WHITE_HOLD_MS;
+      const progress=clamp(elapsed/TOTAL_MS,0,1);
       renderField(elapsed/1000,progress);
-      if (progress >= 1) { finish(); return; }
+      if(progress>=1){finish();return;}
     }
-    raf = requestAnimationFrame(frame);
+    raf=requestAnimationFrame(frame);
   }
 
-  let resizeTimer = 0;
-  window.addEventListener('resize',() => {
+  let resizeTimer=0;
+  window.addEventListener('resize',()=>{
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      if (!finished) resize();
-    },90);
+    resizeTimer=setTimeout(()=>{if(!finished)resize();},90);
   },{passive:true});
-  window.addEventListener('pageshow',e => { if (e.persisted) finish(); },{passive:true});
+  window.addEventListener('pageshow',e=>{if(e.persisted)finish();},{passive:true});
 
-  try {
+  try{
     resize();
     renderWhite();
-    document.documentElement.dataset.entryState = 'running';
-    watchdog = setTimeout(finish,FAILSAFE_MS);
-    raf = requestAnimationFrame(frame);
-  } catch (error) {
+    document.documentElement.dataset.entryState='running';
+    watchdog=setTimeout(finish,FAILSAFE_MS);
+    raf=requestAnimationFrame(frame);
+  }catch(error){
     console.error('Entry overlay failed safely:',error);
     finishImmediately();
   }
