@@ -1,8 +1,7 @@
 /* Harris Portfolio intro — scanline/glint erasure reveal.
-   FULL REWRITE. No legacy cellular, wave, video, WebGL, Three.js or flock code.
    Layer stack: white mask -> solid dark teal -> live portfolio.
    Fast teal streaks and slow gold glints permanently erase the white mask.
-   At 75% elapsed, white is guaranteed gone. Final 25% fades dark teal to portfolio. */
+   Teal streaks use native-resolution subpixel gradients rather than block bars. */
 (() => {
   'use strict';
 
@@ -21,8 +20,8 @@
   if (skip) { finishImmediately(); return; }
 
   const TOTAL_MS = 3200;
-  const EFFECT_FADE_START = 1600; // half remaining
-  const WHITE_GONE_AT = 2400;    // quarter remaining
+  const EFFECT_FADE_START = 1600;
+  const WHITE_GONE_AT = 2400;
   const FAILSAFE_MS = 4300;
 
   const COLORS = {
@@ -36,7 +35,6 @@
 
   const rand = (a,b) => a + Math.random() * (b-a);
   const clamp = (v,a,b) => Math.max(a, Math.min(b,v));
-  const easeOut = t => 1 - Math.pow(1-clamp(t,0,1),3);
   const easeInOut = t => { t=clamp(t,0,1); return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2; };
 
   const tealLayer = document.createElement('div');
@@ -59,7 +57,6 @@
 
   let cssW=1, cssH=1, dpr=1, start=0, raf=0, watchdog=0, finished=false;
   let tealEvents=[], goldEvents=[];
-  let whiteInitialized=false;
 
   function resizeCanvas(canvas, ctx){
     canvas.width = Math.max(1, Math.round(cssW*dpr));
@@ -67,37 +64,41 @@
     canvas.style.width = `${cssW}px`;
     canvas.style.height = `${cssH}px`;
     ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled = true;
   }
 
   function buildEvents(){
     tealEvents=[];
     goldEvents=[];
 
-    // Numerous fast independent teal streaks. Each run gets new timing, Y, width,
-    // thickness and direction. They cross in a fraction of the total intro time.
-    const tealCount = Math.round(rand(28,42));
+    // Fast streaks: each event gets a long dim tail plus a short bright leading core.
+    // Durations are intentionally short compared with the 3.2s intro.
+    const tealCount = Math.round(rand(34,52));
     for(let i=0;i<tealCount;i++){
       const thickness = rand(1,7);
-      const len = rand(.16,.52) * cssW;
+      const bodyLen = rand(.10,.31) * cssW;
+      const tailLen = bodyLen * rand(.55,1.8);
       const dir = Math.random()<.5 ? 1 : -1;
-      const duration = rand(120,390);
-      const launch = rand(80, WHITE_GONE_AT-260);
+      const duration = rand(95,285);
+      const launch = rand(45, WHITE_GONE_AT-220);
+      const color = Math.random()<.52 ? COLORS.tealDark : COLORS.tealGreen;
       tealEvents.push({
-        y: rand(0,cssH),
+        y: rand(1,Math.max(2,cssH-1)),
         thickness,
-        len,
+        bodyLen,
+        tailLen,
         dir,
         start: launch,
         duration,
-        color: Math.random()<.55 ? COLORS.tealDark : COLORS.tealGreen,
-        intensity: rand(.58,1),
-        tail: rand(.35,.75)
+        color,
+        intensity: rand(.62,1),
+        core: rand(.08,.22),
+        erasePad: rand(.5,1.35),
+        lastHead: null
       });
     }
 
-    // Fewer slow gold glints. Each takes most/all of the active erosion phase to
-    // traverse. The line is not a perfect bar: several rectangular specular patches
-    // ride along one straight horizontal path with unequal brightness.
+    // Gold system intentionally unchanged in this pass.
     const goldCount = Math.round(rand(3,6));
     for(let i=0;i<goldCount;i++){
       goldEvents.push({
@@ -118,13 +119,13 @@
     mctx.globalAlpha=1;
     mctx.fillStyle='#fff';
     mctx.fillRect(0,0,cssW,cssH);
-    whiteInitialized=true;
   }
 
   function resize(){
     cssW=Math.max(1,window.innerWidth);
     cssH=Math.max(1,window.innerHeight);
-    dpr=Math.min(window.devicePixelRatio||1,2);
+    // Preserve thin 1px–7px scanlines sharply on modern high-density phones.
+    dpr=Math.min(window.devicePixelRatio||1,3);
     resizeCanvas(mask,mctx);
     resizeCanvas(fx,fctx);
     tealLayer.style.background=COLORS.darkTeal;
@@ -133,6 +134,7 @@
   }
 
   function eraseRect(x,y,w,h,alpha=1){
+    if(w<=0||h<=0) return;
     mctx.save();
     mctx.globalCompositeOperation='destination-out';
     mctx.globalAlpha=alpha;
@@ -141,33 +143,76 @@
     mctx.restore();
   }
 
+  function eraseContinuousStreak(e,head){
+    const half=(e.thickness+e.erasePad)/2;
+    const prev=e.lastHead;
+    if(prev===null){
+      const start=e.dir>0 ? Math.max(0,head-e.bodyLen*.16) : Math.min(cssW,head+e.bodyLen*.16);
+      const x=Math.min(start,head), w=Math.abs(head-start);
+      eraseRect(x,e.y-half,w,e.thickness+e.erasePad,1);
+    }else{
+      const x=Math.min(prev,head)-e.bodyLen*.06;
+      const w=Math.abs(head-prev)+e.bodyLen*.12;
+      eraseRect(x,e.y-half,w,e.thickness+e.erasePad,1);
+    }
+    e.lastHead=head;
+  }
+
   function drawTealEvent(e,t,effectAlpha){
     const local=(t-e.start)/e.duration;
-    if(local<0||local>1) return;
-    const p=easeOut(local);
-    const travel=cssW+e.len*1.4;
-    const head=e.dir>0 ? -e.len + p*travel : cssW+e.len-p*travel;
-    const x=e.dir>0 ? head-e.len : head;
+    if(local<0){ e.lastHead=null; return; }
+    if(local>1){ e.lastHead=null; return; }
 
-    // Permanent erasure trail along the streak's travelled path.
-    const erased = e.dir>0
-      ? {x:0,w:clamp(head,0,cssW)}
-      : {x:clamp(head,0,cssW),w:cssW-clamp(head,0,cssW)};
-    if(erased.w>0) eraseRect(erased.x,e.y-e.thickness/2,erased.w,e.thickness,1);
+    // Linear travel is intentional: the reference reads as a hard zip, not eased UI motion.
+    const totalLen=e.bodyLen+e.tailLen;
+    const travel=cssW+totalLen*2;
+    const head=e.dir>0 ? -totalLen + local*travel : cssW+totalLen-local*travel;
+    eraseContinuousStreak(e,head);
 
-    // Visible streak: rectangular, sharp, no blur.
-    fctx.globalAlpha=effectAlpha*e.intensity;
-    fctx.fillStyle=e.color;
-    fctx.fillRect(x,e.y-e.thickness/2,e.len,e.thickness);
+    const x0=e.dir>0 ? head-totalLen : head;
+    const x1=e.dir>0 ? head : head+totalLen;
+    const grad=fctx.createLinearGradient(x0,0,x1,0);
 
-    // Occasional bright leading edge for speed perception.
-    if(e.thickness>=3){
-      fctx.globalAlpha=effectAlpha*.55*e.intensity;
-      fctx.fillStyle=COLORS.tealBright;
-      const cap=Math.max(2,Math.min(18,e.len*.08));
-      fctx.fillRect(e.dir>0?head-cap:head,e.y-e.thickness/2,cap,e.thickness);
+    // Direction-aware brightness profile: transparent/dim tail -> colored body -> bright head.
+    if(e.dir>0){
+      grad.addColorStop(0,'rgba(99,213,208,0)');
+      grad.addColorStop(.22,'rgba(11,77,80,.12)');
+      grad.addColorStop(.52,e.color);
+      grad.addColorStop(.82,e.color);
+      grad.addColorStop(.94,COLORS.tealBright);
+      grad.addColorStop(1,'rgba(237,247,248,.92)');
+    }else{
+      grad.addColorStop(0,'rgba(237,247,248,.92)');
+      grad.addColorStop(.06,COLORS.tealBright);
+      grad.addColorStop(.18,e.color);
+      grad.addColorStop(.48,e.color);
+      grad.addColorStop(.78,'rgba(11,77,80,.12)');
+      grad.addColorStop(1,'rgba(99,213,208,0)');
     }
-    fctx.globalAlpha=1;
+
+    fctx.save();
+    fctx.globalAlpha=effectAlpha*e.intensity;
+    fctx.fillStyle=grad;
+    fctx.fillRect(x0,e.y-e.thickness/2,totalLen,e.thickness);
+
+    // Razor-thin luminous core rides at the leading edge and creates the visual 'zip'.
+    const coreLen=Math.max(5,e.bodyLen*e.core);
+    const coreX=e.dir>0 ? head-coreLen : head;
+    const coreGrad=fctx.createLinearGradient(coreX,0,coreX+coreLen,0);
+    if(e.dir>0){
+      coreGrad.addColorStop(0,'rgba(99,213,208,0)');
+      coreGrad.addColorStop(.72,'rgba(99,213,208,.70)');
+      coreGrad.addColorStop(1,'rgba(237,247,248,1)');
+    }else{
+      coreGrad.addColorStop(0,'rgba(237,247,248,1)');
+      coreGrad.addColorStop(.28,'rgba(99,213,208,.70)');
+      coreGrad.addColorStop(1,'rgba(99,213,208,0)');
+    }
+    fctx.globalAlpha=effectAlpha*Math.min(1,e.intensity+.12);
+    fctx.fillStyle=coreGrad;
+    const coreH=Math.max(.65,Math.min(e.thickness,1.35));
+    fctx.fillRect(coreX,e.y-coreH/2,coreLen,coreH);
+    fctx.restore();
   }
 
   function drawGoldEvent(e,t,effectAlpha){
@@ -176,25 +221,18 @@
     const p=easeInOut(local);
     const center=e.dir>0 ? -e.glintWidth + p*(cssW+2*e.glintWidth) : cssW+e.glintWidth-p*(cssW+2*e.glintWidth);
 
-    // Slow erosion follows the glint path, permanently exposing dark teal.
     const trailEnd=clamp(center,0,cssW);
     if(e.dir>0) eraseRect(0,e.y-e.thickness/2,trailEnd,e.thickness,1);
     else eraseRect(trailEnd,e.y-e.thickness/2,cssW-trailEnd,e.thickness,1);
 
-    // Dim imperfect metallic baseline only around the active region.
     const baseW=Math.min(cssW,e.glintWidth*1.55);
     const bx=center-baseW/2;
     fctx.globalAlpha=effectAlpha*e.baseAlpha;
     fctx.fillStyle=COLORS.gold;
     fctx.fillRect(bx,e.y-e.thickness/2,baseW,e.thickness);
 
-    // Uneven specular patches: hard-edged rectangular shines, different widths/alpha.
     const patches=[
-      {o:-.34,w:.18,a:.28},
-      {o:-.13,w:.24,a:.58},
-      {o:.04,w:.12,a:1.0},
-      {o:.19,w:.20,a:.68},
-      {o:.39,w:.10,a:.34}
+      {o:-.34,w:.18,a:.28},{o:-.13,w:.24,a:.58},{o:.04,w:.12,a:1.0},{o:.19,w:.20,a:.68},{o:.39,w:.10,a:.34}
     ];
     for(let i=0;i<patches.length;i++){
       const q=patches[i];
@@ -210,22 +248,19 @@
   function deterministicCompletion(t){
     if(t<EFFECT_FADE_START) return;
     const p=clamp((t-EFFECT_FADE_START)/(WHITE_GONE_AT-EFFECT_FADE_START),0,1);
-    // Hidden completion mechanism: horizontal bands are erased from alternating sides.
-    // This preserves the scanline vocabulary while guaranteeing zero white at 2400 ms.
     const bands=18;
     const bandH=cssH/bands;
     for(let i=0;i<bands;i++){
       const delay=(i%6)*.055;
       const q=clamp((p-delay)/(1-delay),0,1);
       if(q<=0) continue;
-      const width=cssW*easeOut(q);
+      const eased=1-Math.pow(1-q,3);
+      const width=cssW*eased;
       const y=i*bandH;
       if(i%2===0) eraseRect(0,y,width,bandH+1,1);
       else eraseRect(cssW-width,y,width,bandH+1,1);
     }
-    if(p>=.998){
-      mctx.clearRect(0,0,cssW,cssH);
-    }
+    if(p>=.998) mctx.clearRect(0,0,cssW,cssH);
   }
 
   function finish(){
@@ -244,8 +279,6 @@
 
     fctx.clearRect(0,0,cssW,cssH);
 
-    // Visible teal/gold effects begin fading with half of intro time remaining,
-    // reaching zero exactly when the white mask must be fully erased.
     const effectAlpha=t<EFFECT_FADE_START
       ? 1
       : 1-clamp((t-EFFECT_FADE_START)/(WHITE_GONE_AT-EFFECT_FADE_START),0,1);
@@ -254,8 +287,6 @@
     for(const e of tealEvents) drawTealEvent(e,t,effectAlpha);
     deterministicCompletion(t);
 
-    // Final quarter: white is gone. Fade only the solid dark-teal bridge layer,
-    // exposing the already-loaded live portfolio underneath.
     if(t>=WHITE_GONE_AT){
       mctx.clearRect(0,0,cssW,cssH);
       fctx.clearRect(0,0,cssW,cssH);
