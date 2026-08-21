@@ -1,5 +1,6 @@
-/* Harris Portfolio intro — scanline erasure transition.
-   Three isolated layers: white mask, solid dark-teal bridge, live portfolio underneath. */
+/* Harris Portfolio intro — tracer erasure transition.
+   The overlay itself is white for synchronous first paint. JavaScript switches this
+   background transparent only after the white mask canvas has been initialized. */
 #portfolio-entry-overlay{
   position:fixed;
   inset:0;
@@ -13,6 +14,7 @@
   visibility:visible;
   isolation:isolate;
   contain:strict;
+  background:#fff;
 }
 #portfolio-entry-overlay .entry-teal-layer,
 #portfolio-entry-overlay .entry-mask-canvas,
