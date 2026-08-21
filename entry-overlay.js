@@ -1,324 +1,235 @@
-/* Harris Portfolio entry: Three.js flock / panic / regroup simulation.
-   Individual triangle agents use persistent 3D position, velocity and acceleration.
-   State machine: FLOCK -> PANIC -> REGROUP -> FORMATION/REVEAL.
-   Modular overlay only; portfolio systems underneath remain untouched. */
-(async()=>{
+/* Harris Portfolio entry: modular geometric wipe reveal.
+   Inspired by layered stepped-mask motion: white -> charcoal/teal/gold -> live portfolio.
+   Pure Canvas 2D, viewport-normalized, no WebGL/Three.js dependency.
+   Portfolio systems underneath remain untouched. */
+(() => {
   'use strict';
 
-  const overlay=document.getElementById('portfolio-entry-overlay');
-  if(!overlay)return;
-  const nav=performance.getEntriesByType?.('navigation')?.[0];
-  const finishImmediately=()=>{document.documentElement.dataset.entryState='complete';overlay.remove();};
-  if(nav?.type==='back_forward'||window.matchMedia?.('(forced-colors: active)').matches){finishImmediately();return;}
+  const overlay = document.getElementById('portfolio-entry-overlay');
+  if (!overlay) return;
 
-  let THREE;
-  try{THREE=await import('https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js');}
-  catch(_){finishImmediately();return;}
+  const nav = performance.getEntriesByType?.('navigation')?.[0];
+  const skip = nav?.type === 'back_forward' ||
+    window.matchMedia?.('(forced-colors: active)').matches ||
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  const TOTAL=3220;
-  const FLOCK_END=760;
-  const PANIC_END=1620;
-  const REGROUP_END=2300;
-  const WIPE_START=2700;
-  const WIPE_END=3090;
-  const BIRDS=360;
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const mix=(a,b,t)=>a+(b-a)*t;
-  const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
-  const rand=(a,b)=>a+Math.random()*(b-a);
-  const gaussian=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+  const finishImmediately = () => {
+    document.documentElement.dataset.entryState = 'complete';
+    overlay.remove();
+  };
+  if (skip) { finishImmediately(); return; }
 
-  const membrane=document.createElement('canvas');
-  membrane.className='entry-membrane';membrane.setAttribute('aria-hidden','true');overlay.appendChild(membrane);
-  const mctx=membrane.getContext('2d');
-  if(!mctx){finishImmediately();return;}
+  const canvas = document.createElement('canvas');
+  canvas.className = 'entry-geometric-canvas';
+  canvas.setAttribute('aria-hidden', 'true');
+  overlay.appendChild(canvas);
 
-  const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
-  renderer.setClearColor(0x000000,0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));
-  renderer.domElement.className='entry-three-canvas';renderer.domElement.setAttribute('aria-hidden','true');overlay.appendChild(renderer.domElement);
+  const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+  if (!ctx) { finishImmediately(); return; }
 
-  const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(58,1,.1,100);
-  camera.position.set(0,0,30);camera.lookAt(0,0,0);
+  const TOTAL = 3180;
+  const FINAL_CLEAR_START = 2820;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const mix = (a, b, t) => a + (b - a) * t;
+  const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+  const smoother = t => { t = clamp(t, 0, 1); return t*t*t*(t*(t*6-15)+10); };
 
-  const geometry=new THREE.BufferGeometry();
-  geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,.88,0,-.74,-.54,0,.74,-.54,0],3));
-  const material=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,transparent:true,opacity:.96,depthWrite:false});
-  const mesh=new THREE.InstancedMesh(geometry,material,BIRDS);
-  mesh.frustumCulled=false;scene.add(mesh);
+  let w = 1, h = 1, dpr = 1, start = 0, raf = 0, finished = false;
 
-  const dummy=new THREE.Object3D(),color=new THREE.Color(),ndc=new THREE.Vector3(),rayDir=new THREE.Vector3();
-  let width=1,height=1,dpr=1,start=0,last=0,raf=0,finished=false;
-  let birds=[],grid=new Map(),flockCenter=new THREE.Vector3(),leaderVelocity=new THREE.Vector3();
-  let entrySide=0,exitSide=2,threatPoint=new THREE.Vector3();
+  const COLORS = {
+    white: '#ffffff',
+    ink: '#08171d',
+    teal: '#123f45',
+    teal2: '#1c6467',
+    gold: '#a78a4f',
+    gold2: '#d0b56f'
+  };
 
-  function viewAtZ(z){
-    const d=Math.max(.25,camera.position.z-z);
-    const vh=2*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*d;
-    return{w:vh*camera.aspect,h:vh};
-  }
-  function screenToWorldAtZ(sx,sy,z){
-    ndc.set((sx/width)*2-1,-((sy/height)*2-1),.5).unproject(camera);
-    rayDir.copy(ndc).sub(camera.position).normalize();
-    const denom=Math.abs(rayDir.z)<1e-6?-1e-6:rayDir.z;
-    return camera.position.clone().add(rayDir.multiplyScalar((z-camera.position.z)/denom));
-  }
-  function worldToScreen(v){const p=v.clone().project(camera);return{x:(p.x*.5+.5)*width,y:(-.5*p.y+.5)*height,visible:p.z>-1&&p.z<1};}
+  // Irregular stepped silhouette, intentionally blocky rather than smooth.
+  const SHAPE = [
+    [-.58,-.28],[-.43,-.28],[-.43,-.42],[-.18,-.42],[-.18,-.54],[.02,-.54],[.02,-.40],
+    [.28,-.40],[.28,-.25],[.46,-.25],[.46,-.08],[.58,-.08],[.58,.16],[.43,.16],[.43,.31],
+    [.18,.31],[.18,.46],[-.04,.46],[-.04,.36],[-.28,.36],[-.28,.22],[-.48,.22],[-.48,.06],[-.58,.06]
+  ];
 
-  function borderWorld(side,z,pad=.05){
-    if(side===0)return screenToWorldAtZ(rand(.15,.85)*width,-pad*height,z);
-    if(side===1)return screenToWorldAtZ((1+pad)*width,rand(.15,.85)*height,z);
-    if(side===2)return screenToWorldAtZ(rand(.15,.85)*width,(1+pad)*height,z);
-    return screenToWorldAtZ(-pad*width,rand(.15,.85)*height,z);
-  }
+  // Each block is described entirely in normalized viewport coordinates so desktop/mobile
+  // receive the same choreography rather than separate animations.
+  const blocks = [
+    {c:'ink',   s:120,  e:820,  x0:-.28,y0:.78,x1:.22,y1:.48, sc0:.16,sc1:.92, r0:-.18,r1:.06},
+    {c:'teal',  s:260,  e:980,  x0:1.20,y0:.18,x1:.73,y1:.36, sc0:.18,sc1:.88, r0:.26,r1:-.08},
+    {c:'gold',  s:430,  e:1100, x0:.48,y0:-.26,x1:.52,y1:.26, sc0:.12,sc1:.74, r0:.06,r1:.18},
+    {c:'white', s:610,  e:1240, x0:-.22,y0:.12,x1:.28,y1:.24, sc0:.14,sc1:.66, r0:-.20,r1:.03},
+    {c:'ink',   s:760,  e:1430, x0:1.16,y0:.86,x1:.72,y1:.66, sc0:.16,sc1:.96, r0:-.12,r1:.08},
+    {c:'teal2', s:930,  e:1570, x0:.10,y0:1.18,x1:.35,y1:.70, sc0:.12,sc1:.80, r0:.22,r1:-.05},
+    {c:'gold2', s:1080, e:1730, x0:.92,y0:-.18,x1:.68,y1:.31, sc0:.13,sc1:.70, r0:-.22,r1:.12},
+    {c:'ink',   s:1240, e:1880, x0:-.20,y0:.52,x1:.34,y1:.55, sc0:.12,sc1:.78, r0:.20,r1:-.10},
+    {c:'white', s:1410, e:2030, x0:.45,y0:1.18,x1:.48,y1:.71, sc0:.10,sc1:.66, r0:-.10,r1:.08},
+    {c:'teal',  s:1530, e:2200, x0:1.15,y0:.46,x1:.69,y1:.52, sc0:.13,sc1:.82, r0:.18,r1:-.14},
+    {c:'gold',  s:1690, e:2320, x0:-.15,y0:.92,x1:.27,y1:.69, sc0:.11,sc1:.69, r0:-.16,r1:.12},
+    {c:'ink',   s:1870, e:2470, x0:.40,y0:-.14,x1:.52,y1:.33, sc0:.12,sc1:.86, r0:.12,r1:-.05},
+    {c:'teal2', s:2040, e:2600, x0:1.12,y0:.16,x1:.78,y1:.36, sc0:.12,sc1:.72, r0:-.14,r1:.06},
+    {c:'gold2', s:2200, e:2730, x0:-.12,y0:.22,x1:.23,y1:.39, sc0:.10,sc1:.58, r0:.14,r1:-.08}
+  ];
 
-  function chooseEntryExit(){
-    entrySide=Math.floor(rand(0,4));
-    exitSide=(entrySide+2)%4;
-    flockCenter=borderWorld(entrySide,-7,.06);
-    const target=borderWorld(exitSide,4,.10);
-    leaderVelocity.copy(target).sub(flockCenter).normalize().multiplyScalar(15.5);
-  }
+  // Smaller fragments add the chopped, restless edge behavior visible in the reference GIF.
+  const chips = [
+    {c:'ink',s:510,e:930,x0:.96,y0:.58,x1:.73,y1:.52,sc:.12,r:.14},
+    {c:'gold',s:690,e:1110,x0:.02,y0:.07,x1:.20,y1:.22,sc:.10,r:-.08},
+    {c:'teal2',s:860,e:1280,x0:.82,y0:.98,x1:.66,y1:.78,sc:.11,r:.16},
+    {c:'ink',s:1040,e:1450,x0:.18,y0:-.10,x1:.30,y1:.12,sc:.09,r:-.16},
+    {c:'gold2',s:1260,e:1660,x0:1.05,y0:.74,x1:.82,y1:.63,sc:.10,r:.10},
+    {c:'teal',s:1460,e:1870,x0:-.08,y0:.73,x1:.14,y1:.65,sc:.11,r:-.10},
+    {c:'ink',s:1640,e:2050,x0:.77,y0:-.08,x1:.69,y1:.15,sc:.09,r:.16},
+    {c:'gold',s:1840,e:2260,x0:.08,y0:1.06,x1:.26,y1:.82,sc:.10,r:-.12},
+    {c:'teal2',s:2070,e:2470,x0:1.07,y0:.88,x1:.84,y1:.70,sc:.10,r:.13},
+    {c:'ink',s:2260,e:2670,x0:-.06,y0:.12,x1:.17,y1:.24,sc:.09,r:-.14}
+  ];
 
-  function stateFor(t){
-    if(t<FLOCK_END)return'flock';
-    if(t<PANIC_END)return'panic';
-    if(t<REGROUP_END)return'regroup';
-    return'calm';
-  }
+  // Transparent cutouts reveal the real portfolio below. They begin modestly, then increasingly
+  // dominate the frame instead of fading the overlay as one flat layer.
+  const reveals = [
+    {s:1450,e:2040,x0:.92,y0:.14,x1:.70,y1:.34,sc0:.06,sc1:.42,r0:.12,r1:-.05},
+    {s:1650,e:2210,x0:.06,y0:.88,x1:.30,y1:.68,sc0:.05,sc1:.46,r0:-.15,r1:.08},
+    {s:1850,e:2400,x0:.94,y0:.86,x1:.72,y1:.66,sc0:.05,sc1:.54,r0:.10,r1:-.10},
+    {s:2020,e:2520,x0:.08,y0:.12,x1:.28,y1:.31,sc0:.05,sc1:.58,r0:-.08,r1:.12},
+    {s:2200,e:2700,x0:.50,y0:1.06,x1:.50,y1:.70,sc0:.05,sc1:.72,r0:.14,r1:-.06},
+    {s:2360,e:2820,x0:.50,y0:-.08,x1:.52,y1:.28,sc0:.05,sc1:.78,r0:-.12,r1:.05}
+  ];
 
-  function initialOffset(){
-    return new THREE.Vector3(gaussian()*.38,gaussian()*.30,gaussian()*.34);
-  }
-
-  function initBirds(){
-    chooseEntryExit();birds=[];
-    const dir=leaderVelocity.clone().normalize();
-    for(let i=0;i<BIRDS;i++){
-      const offset=initialOffset();
-      const speed=rand(11.8,16.8);
-      const b={
-        i,
-        position:flockCenter.clone().add(offset),
-        velocity:dir.clone().multiplyScalar(speed).add(new THREE.Vector3(rand(-.28,.28),rand(-.22,.22),rand(-.22,.22))),
-        acceleration:new THREE.Vector3(),
-        maxSpeed:rand(15.0,21.0),
-        cruise:rand(12.4,16.4),
-        maxForce:rand(18,27),
-        scale:rand(.17,.31),
-        bank:0,
-        panicBias:new THREE.Vector3(gaussian(),gaussian(),gaussian()).normalize(),
-        nearPass:Math.random()<.055,
-        nearKick:rand(16,28),
-        tone:Math.random()<.04?'gold':(Math.random()<.07?'teal':'charcoal'),
-        trail:null
-      };
-      birds.push(b);
-      color.set(b.tone==='gold'?0x8b7448:b.tone==='teal'?0x2f7778:0x202427);mesh.setColorAt(i,color);
-    }
-    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+  function drawStepped(cx, cy, scale, rotation, fill) {
+    const base = Math.max(w, h);
+    ctx.save();
+    ctx.translate(cx * w, cy * h);
+    ctx.rotate(rotation);
+    ctx.scale(base * scale, base * scale);
+    ctx.beginPath();
+    SHAPE.forEach(([x,y], i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.restore();
   }
 
-  const CELL=2.4;
-  const OFF=[];for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++)for(let z=-1;z<=1;z++)OFF.push([x,y,z]);
-  const key=p=>`${Math.floor(p.x/CELL)},${Math.floor(p.y/CELL)},${Math.floor(p.z/CELL)}`;
-  function buildGrid(){
-    grid=new Map();
-    birds.forEach((b,i)=>{const k=key(b.position);let a=grid.get(k);if(!a)grid.set(k,a=[]);a.push(i);});
-  }
-  function neighbors(b){
-    const cx=Math.floor(b.position.x/CELL),cy=Math.floor(b.position.y/CELL),cz=Math.floor(b.position.z/CELL),out=[];
-    for(const [dx,dy,dz] of OFF){const a=grid.get(`${cx+dx},${cy+dy},${cz+dz}`);if(a)out.push(...a);}
-    return out;
+  function blockProgress(item, t) {
+    return smoother((t - item.s) / Math.max(1, item.e - item.s));
   }
 
-  function limit(v,m){if(v.length()>m)v.setLength(m);return v;}
-  function steerTowardVelocity(b,desired){return limit(desired.clone().sub(b.velocity),b.maxForce);}
-  function seek(b,target,speed=b.maxSpeed){
-    const d=target.clone().sub(b.position);if(d.lengthSq()<1e-8)return new THREE.Vector3();
-    d.setLength(speed);return steerTowardVelocity(b,d);
+  function drawBlock(item, t) {
+    if (t < item.s || t > item.e + 220) return;
+    let p = blockProgress(item, t);
+    // After reaching its destination, let the mass hold briefly then peel away/expand.
+    const tail = clamp((t - item.e) / 220, 0, 1);
+    const x = mix(item.x0, item.x1, p) + (tail ? (item.x1 - .5) * tail * .18 : 0);
+    const y = mix(item.y0, item.y1, p) + (tail ? (item.y1 - .5) * tail * .18 : 0);
+    const sc = mix(item.sc0, item.sc1, p) * (1 + tail * .16);
+    const r = mix(item.r0, item.r1, p);
+    ctx.globalAlpha = 1 - tail * .48;
+    drawStepped(x, y, sc, r, COLORS[item.c]);
+    ctx.globalAlpha = 1;
   }
 
-  function reynolds(b,state){
-    const sep=new THREE.Vector3(),ali=new THREE.Vector3(),coh=new THREE.Vector3();
-    let count=0,sepCount=0;
-    const radius=state==='panic'?3.2:2.7;
-    const sepRadius=state==='panic'?1.25:.48;
-    for(const id of neighbors(b)){
-      const o=birds[id];if(o===b)continue;
-      const d=o.position.clone().sub(b.position),d2=d.lengthSq();
-      if(d2>radius*radius||d2<1e-8)continue;
-      count++;ali.add(o.velocity);coh.add(o.position);
-      if(d2<sepRadius*sepRadius){sep.addScaledVector(d,-1/Math.max(d2,.02));sepCount++;}
-    }
-    const f=new THREE.Vector3();
-    if(sepCount){sep.divideScalar(sepCount);if(sep.lengthSq())sep.setLength(b.maxSpeed);f.addScaledVector(steerTowardVelocity(b,sep),state==='panic'?3.8:1.7);}
-    if(count){
-      ali.divideScalar(count);if(ali.lengthSq())ali.setLength(b.cruise);
-      coh.divideScalar(count);
-      if(state==='flock'){f.addScaledVector(steerTowardVelocity(b,ali),2.5);f.addScaledVector(seek(b,coh,b.cruise),1.8);}
-      else if(state==='panic'){f.addScaledVector(steerTowardVelocity(b,ali),.18);f.addScaledVector(seek(b,coh,b.cruise),.08);}
-      else {f.addScaledVector(steerTowardVelocity(b,ali),3.0);f.addScaledVector(seek(b,coh,b.cruise),2.8);}
-    }
-    return f;
+  function drawChip(item, t) {
+    if (t < item.s || t > item.e) return;
+    const p = smoother((t - item.s) / (item.e - item.s));
+    const x = mix(item.x0, item.x1, p);
+    const y = mix(item.y0, item.y1, p);
+    const pop = Math.sin(Math.PI * p);
+    drawStepped(x, y, item.sc * (.60 + pop * .55), item.r + p * .22, COLORS[item.c]);
   }
 
-  function leaderTarget(t,state){
-    const p=clamp(t/REGROUP_END,0,1);
-    const z=-6+Math.sin(p*Math.PI*2.4)*10+Math.sin(p*Math.PI*5.2)*4;
-    const sweepX=.5+.43*Math.sin(p*Math.PI*2.1+(entrySide%2?1.2:0));
-    const sweepY=.5+.40*Math.sin(p*Math.PI*2.8+1.1);
-    return screenToWorldAtZ(sweepX*width,sweepY*height,z);
+  function cutReveal(item, t) {
+    if (t < item.s) return;
+    const p = smoother((t - item.s) / Math.max(1, item.e - item.s));
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = .30 + p * .70;
+    drawStepped(
+      mix(item.x0,item.x1,p),
+      mix(item.y0,item.y1,p),
+      mix(item.sc0,item.sc1,p),
+      mix(item.r0,item.r1,p),
+      '#000'
+    );
+    ctx.restore();
   }
 
-  function updateLeader(t,dt,state){
-    const target=leaderTarget(t,state);
-    const desired=target.clone().sub(flockCenter);
-    if(desired.lengthSq())desired.setLength(state==='panic'?22:state==='regroup'?18:15.5);
-    const steer=desired.sub(leaderVelocity);
-    limit(steer,state==='panic'?26:18);
-    leaderVelocity.addScaledVector(steer,dt);
-    limit(leaderVelocity,state==='panic'?23:19);
-    flockCenter.addScaledVector(leaderVelocity,dt);
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 1.6);
+    w = Math.max(1, window.innerWidth);
+    h = Math.max(1, window.innerHeight);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function panicForce(b,t){
-    const q=smooth((t-FLOCK_END)/(PANIC_END-FLOCK_END));
-    const away=b.position.clone().sub(threatPoint);
-    if(away.lengthSq()<1e-6)away.copy(b.panicBias);
-    away.normalize();
-    const chaotic=b.panicBias.clone().multiplyScalar(8+10*Math.sin(q*Math.PI));
-    const force=away.multiplyScalar(24+28*Math.sin(q*Math.PI)).add(chaotic);
-    if(b.nearPass){
-      const towardCamera=new THREE.Vector3(0,0,1).multiplyScalar(b.nearKick*Math.sin(q*Math.PI));
-      force.add(towardCamera);
-    }
-    return force;
+  function finish() {
+    if (finished) return;
+    finished = true;
+    cancelAnimationFrame(raf);
+    document.documentElement.dataset.entryState = 'complete';
+    overlay.classList.add('entry-complete');
+    setTimeout(() => overlay.remove(), 150);
   }
 
-  function boundaryForce(b){
-    const view=viewAtZ(b.position.z),hx=view.w*.62,hy=view.h*.62,f=new THREE.Vector3();
-    if(b.position.x>hx)f.x-=20;if(b.position.x<-hx)f.x+=20;
-    if(b.position.y>hy)f.y-=20;if(b.position.y<-hy)f.y+=20;
-    if(b.position.z>28)f.z-=28;if(b.position.z<-14)f.z+=20;
-    return f;
-  }
+  const watchdog = setTimeout(finish, 4300);
 
-  function updateBirds(t,dt){
-    const state=stateFor(t);
-    updateLeader(t,dt,state);
-    if(state==='panic'){
-      const wobble=Math.sin((t-FLOCK_END)*.011);
-      threatPoint.copy(flockCenter).add(new THREE.Vector3(wobble*2.4,Math.cos((t-FLOCK_END)*.009)*1.8,-1.5));
-    }
-    buildGrid();
-    for(const b of birds){
-      let force=reynolds(b,state);
-      force.add(boundaryForce(b));
+  function frame(now) {
+    if (!start) start = now;
+    const t = now - start;
 
-      if(state==='flock'){
-        force.addScaledVector(seek(b,flockCenter,b.cruise),1.55);
-        force.addScaledVector(steerTowardVelocity(b,leaderVelocity.clone().setLength(b.cruise)),2.0);
-      }else if(state==='panic'){
-        force.add(panicForce(b,t));
-      }else if(state==='regroup'){
-        force.addScaledVector(seek(b,flockCenter,b.maxSpeed),3.7);
-        force.addScaledVector(steerTowardVelocity(b,leaderVelocity.clone().setLength(b.cruise)),2.8);
-      }else{
-        force.addScaledVector(seek(b,flockCenter,b.cruise),2.4);
+    ctx.clearRect(0, 0, w, h);
+
+    // The white starting membrane is a flat first frame, exactly as requested.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = COLORS.white;
+    ctx.fillRect(0, 0, w, h);
+
+    // Layered full-screen exchanges, ordered so later masses can aggressively overtake earlier ones.
+    for (const item of blocks) drawBlock(item, t);
+    for (const chip of chips) drawChip(chip, t);
+
+    // Portfolio exposure is performed after the color masses, cutting all overlay layers at once.
+    for (const reveal of reveals) cutReveal(reveal, t);
+
+    // Final act: instead of a conventional fade, a rapidly enlarging stepped transparent aperture
+    // consumes the remaining overlay until the live portfolio owns the entire frame.
+    if (t >= FINAL_CLEAR_START) {
+      const p = smoother((t - FINAL_CLEAR_START) / (TOTAL - FINAL_CLEAR_START));
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.globalAlpha = 1;
+      drawStepped(.50, .50, mix(.18, 1.62, p), mix(-.08, .04, p), '#000');
+      if (p > .78) {
+        ctx.globalAlpha = smoother((p - .78) / .22);
+        ctx.fillRect(0, 0, w, h);
       }
-
-      limit(force,b.maxForce*(state==='panic'?2.7:2.1));
-      b.acceleration.copy(force);
-      b.velocity.addScaledVector(b.acceleration,dt);
-      const min=state==='panic'?b.cruise*1.15:b.cruise*.78;
-      const max=state==='panic'?b.maxSpeed*1.22:b.maxSpeed;
-      const speed=b.velocity.length();
-      if(speed<min)b.velocity.setLength(min);else if(speed>max)b.velocity.setLength(max);
-      b.position.addScaledVector(b.velocity,dt);
-      const targetBank=clamp(b.acceleration.x/(b.maxForce*.72),-1.24,1.24);
-      b.bank=mix(b.bank,targetBank,clamp(dt*(state==='panic'?15:10),0,1));
+      ctx.restore();
     }
-  }
 
-  function erasePanicTrails(t){
-    if(t<FLOCK_END||t>REGROUP_END)return;
-    for(let i=0;i<birds.length;i+=5){
-      const b=birds[i],s=worldToScreen(b.position);
-      if(!s.visible){b.trail=null;continue;}
-      if(!b.trail){b.trail={x:s.x,y:s.y};continue;}
-      mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=.09;mctx.lineCap='round';mctx.lineWidth=clamp(b.scale*20,3,9);
-      mctx.beginPath();mctx.moveTo(b.trail.x,b.trail.y);mctx.lineTo(s.x,s.y);mctx.stroke();mctx.restore();
-      b.trail={x:s.x,y:s.y};
+    if (t >= TOTAL) {
+      clearTimeout(watchdog);
+      finish();
+      return;
     }
+    raf = requestAnimationFrame(frame);
   }
 
-  function renderBirds(t){
-    for(const b of birds){
-      const heading=Math.atan2(b.velocity.y,b.velocity.x)-Math.PI/2;
-      const cameraNear=clamp((b.position.z-18)/10,0,1);
-      dummy.position.copy(b.position);
-      dummy.rotation.set(0,0,heading+b.bank);
-      dummy.scale.setScalar(b.scale*(1+cameraNear*.72));
-      dummy.updateMatrix();mesh.setMatrixAt(b.i,dummy.matrix);
-    }
-    mesh.instanceMatrix.needsUpdate=true;
-    renderer.render(scene,camera);
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resize, 100);
+  }, { passive: true });
+  window.addEventListener('pageshow', e => { if (e.persisted) finish(); }, { passive: true });
+
+  try {
+    resize();
+    document.documentElement.dataset.entryState = 'running';
+    raf = requestAnimationFrame(frame);
+  } catch (_) {
+    clearTimeout(watchdog);
+    finish();
   }
-
-  function foregroundOcclusion(t){
-    if(t<FLOCK_END||t>PANIC_END)return;
-    const q=(t-FLOCK_END)/(PANIC_END-FLOCK_END);
-    const pulses=[.18,.46,.73];
-    for(const center of pulses){
-      const d=Math.abs(q-center);if(d>.11)continue;
-      const near=1-d/.11;
-      const alpha=Math.pow(near,2.2)*.88;
-      mctx.save();mctx.globalCompositeOperation='source-over';mctx.fillStyle=`rgba(14,16,18,${alpha})`;mctx.fillRect(0,0,width,height);mctx.restore();
-    }
-  }
-
-  function wipe(t){
-    if(t<WIPE_START)return;
-    const q=smooth((t-WIPE_START)/(WIPE_END-WIPE_START));
-    const x=mix(-.18,1.18,q)*width,y=height*(.72-Math.sin(q*Math.PI)*.34);
-    const size=mix(24,Math.hypot(width,height)*1.30,smooth(clamp((q-.08)/.68,0,1)));
-    mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=clamp(.28+q,0,1);mctx.translate(x,y);mctx.rotate(-.68+q*.96);
-    mctx.beginPath();mctx.moveTo(0,-size);mctx.lineTo(size*.98,size*.78);mctx.lineTo(-size*.98,size*.78);mctx.closePath();mctx.fill();mctx.restore();
-    if(q>.80){mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=smooth((q-.80)/.20);mctx.fillRect(0,0,width,height);mctx.restore();}
-  }
-
-  function resize(){
-    width=Math.max(1,window.innerWidth);height=Math.max(1,window.innerHeight);dpr=Math.min(window.devicePixelRatio||1,1.35);
-    camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setPixelRatio(dpr);renderer.setSize(width,height,false);
-    membrane.width=Math.round(width*dpr);membrane.height=Math.round(height*dpr);membrane.style.width=`${width}px`;membrane.style.height=`${height}px`;
-    mctx.setTransform(dpr,0,0,dpr,0,0);mctx.globalCompositeOperation='source-over';mctx.fillStyle='#fff';mctx.fillRect(0,0,width,height);
-    initBirds();
-  }
-
-  function finish(){
-    if(finished)return;finished=true;cancelAnimationFrame(raf);renderer.dispose();
-    document.documentElement.dataset.entryState='complete';overlay.classList.add('entry-complete');setTimeout(()=>overlay.remove(),160);
-  }
-
-  const watchdog=setTimeout(finish,4600);
-  function frame(now){
-    if(!start){start=now;last=now;}
-    const t=now-start,dt=clamp((now-last)/1000,0,.024);last=now;
-    updateBirds(t,dt);
-    erasePanicTrails(t);
-    foregroundOcclusion(t);
-    wipe(t);
-    renderBirds(t);
-    if(t>=TOTAL){clearTimeout(watchdog);finish();return;}
-    raf=requestAnimationFrame(frame);
-  }
-
-  let resizeTimer=0;
-  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(resize,120);},{passive:true});
-  window.addEventListener('pageshow',e=>{if(e.persisted)finish();},{passive:true});
-
-  try{resize();document.documentElement.dataset.entryState='running';raf=requestAnimationFrame(frame);}
-  catch(_){clearTimeout(watchdog);finish();}
 })();
