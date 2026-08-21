@@ -1,7 +1,7 @@
-/* Harris Portfolio intro — scanline/glint erasure reveal.
+/* Harris Portfolio intro — particle streak/glint erasure reveal.
    Layer stack: white mask -> solid dark teal -> live portfolio.
-   Fast teal streaks and slow gold glints permanently erase the white mask.
-   Teal streaks use native-resolution subpixel gradients rather than block bars. */
+   Fast teal micro-particles with luminous tails and slow gold glints erase the white mask.
+   Teal particles render at native DPR with subpixel motion for crisp high-speed streaks. */
 (() => {
   'use strict';
 
@@ -29,6 +29,7 @@
     tealDark: '#0b4d50',
     tealGreen: '#1a7f77',
     tealBright: '#63d5d0',
+    tealWhite: '#edf7f8',
     gold: '#d8b86a',
     goldHi: '#fff0b0'
   };
@@ -71,34 +72,35 @@
     tealEvents=[];
     goldEvents=[];
 
-    // Fast streaks: each event gets a long dim tail plus a short bright leading core.
-    // Durations are intentionally short compared with the 3.2s intro.
-    const tealCount = Math.round(rand(34,52));
+    // Teal particles are deliberately tiny. The visible horizontal line is mostly
+    // their fading light trail, not a long rectangular body.
+    const tealCount = Math.round(rand(72,112));
     for(let i=0;i<tealCount;i++){
-      const thickness = rand(1,7);
-      const bodyLen = rand(.10,.31) * cssW;
-      const tailLen = bodyLen * rand(.55,1.8);
+      const thickness = Math.random()<.82 ? rand(.6,2.35) : rand(2.35,3.4);
+      const headLen = rand(3,16);
+      const tailLen = rand(20,110);
       const dir = Math.random()<.5 ? 1 : -1;
-      const duration = rand(95,285);
-      const launch = rand(45, WHITE_GONE_AT-220);
-      const color = Math.random()<.52 ? COLORS.tealDark : COLORS.tealGreen;
+      const duration = rand(55,175);
+      const launch = rand(30, WHITE_GONE_AT-170);
+      const family = Math.random();
+      const color = family<.42 ? COLORS.tealDark : family<.84 ? COLORS.tealGreen : COLORS.tealBright;
       tealEvents.push({
-        y: rand(1,Math.max(2,cssH-1)),
+        y: rand(.5,Math.max(1,cssH-.5)),
         thickness,
-        bodyLen,
+        headLen,
         tailLen,
         dir,
         start: launch,
         duration,
         color,
-        intensity: rand(.62,1),
-        core: rand(.08,.22),
-        erasePad: rand(.5,1.35),
+        intensity: rand(.52,1),
+        halo: rand(.35,.95),
+        eraseWidth: Math.max(1, thickness*rand(.85,1.45)),
         lastHead: null
       });
     }
 
-    // Gold system intentionally unchanged in this pass.
+    // Gold system intentionally unchanged while the fast particle vocabulary is tuned.
     const goldCount = Math.round(rand(3,6));
     for(let i=0;i<goldCount;i++){
       goldEvents.push({
@@ -124,7 +126,6 @@
   function resize(){
     cssW=Math.max(1,window.innerWidth);
     cssH=Math.max(1,window.innerHeight);
-    // Preserve thin 1px–7px scanlines sharply on modern high-density phones.
     dpr=Math.min(window.devicePixelRatio||1,3);
     resizeCanvas(mask,mctx);
     resizeCanvas(fx,fctx);
@@ -143,17 +144,15 @@
     mctx.restore();
   }
 
-  function eraseContinuousStreak(e,head){
-    const half=(e.thickness+e.erasePad)/2;
+  function eraseParticlePath(e,head){
     const prev=e.lastHead;
-    if(prev===null){
-      const start=e.dir>0 ? Math.max(0,head-e.bodyLen*.16) : Math.min(cssW,head+e.bodyLen*.16);
-      const x=Math.min(start,head), w=Math.abs(head-start);
-      eraseRect(x,e.y-half,w,e.thickness+e.erasePad,1);
-    }else{
-      const x=Math.min(prev,head)-e.bodyLen*.06;
-      const w=Math.abs(head-prev)+e.bodyLen*.12;
-      eraseRect(x,e.y-half,w,e.thickness+e.erasePad,1);
+    if(prev!==null){
+      const pad=e.headLen*.35;
+      const x=Math.min(prev,head)-pad;
+      const w=Math.abs(head-prev)+pad*2;
+      eraseRect(x,e.y-e.eraseWidth/2,w,e.eraseWidth,1);
+    } else {
+      eraseRect(head-e.headLen*.5,e.y-e.eraseWidth/2,e.headLen,e.eraseWidth,1);
     }
     e.lastHead=head;
   }
@@ -163,55 +162,78 @@
     if(local<0){ e.lastHead=null; return; }
     if(local>1){ e.lastHead=null; return; }
 
-    // Linear travel is intentional: the reference reads as a hard zip, not eased UI motion.
-    const totalLen=e.bodyLen+e.tailLen;
-    const travel=cssW+totalLen*2;
-    const head=e.dir>0 ? -totalLen + local*travel : cssW+totalLen-local*travel;
-    eraseContinuousStreak(e,head);
+    // Constant world velocity: these are particles firing through the viewport,
+    // not UI elements easing between two positions.
+    const overscan=e.tailLen+e.headLen+18;
+    const travel=cssW+overscan*2;
+    const head=e.dir>0 ? -overscan + local*travel : cssW+overscan-local*travel;
+    eraseParticlePath(e,head);
 
-    const x0=e.dir>0 ? head-totalLen : head;
-    const x1=e.dir>0 ? head : head+totalLen;
-    const grad=fctx.createLinearGradient(x0,0,x1,0);
+    const tailStart=e.dir>0 ? head-e.tailLen : head+e.tailLen;
+    const g=fctx.createLinearGradient(tailStart,0,head,0);
 
-    // Direction-aware brightness profile: transparent/dim tail -> colored body -> bright head.
+    // Tail -> luminous head. Direction is encoded in the gradient endpoints.
     if(e.dir>0){
-      grad.addColorStop(0,'rgba(99,213,208,0)');
-      grad.addColorStop(.22,'rgba(11,77,80,.12)');
-      grad.addColorStop(.52,e.color);
-      grad.addColorStop(.82,e.color);
-      grad.addColorStop(.94,COLORS.tealBright);
-      grad.addColorStop(1,'rgba(237,247,248,.92)');
+      g.addColorStop(0,'rgba(6,21,28,0)');
+      g.addColorStop(.30,'rgba(11,77,80,.08)');
+      g.addColorStop(.62,'rgba(26,127,119,.24)');
+      g.addColorStop(.84,'rgba(99,213,208,.62)');
+      g.addColorStop(1,'rgba(237,247,248,.98)');
     }else{
-      grad.addColorStop(0,'rgba(237,247,248,.92)');
-      grad.addColorStop(.06,COLORS.tealBright);
-      grad.addColorStop(.18,e.color);
-      grad.addColorStop(.48,e.color);
-      grad.addColorStop(.78,'rgba(11,77,80,.12)');
-      grad.addColorStop(1,'rgba(99,213,208,0)');
+      g.addColorStop(0,'rgba(6,21,28,0)');
+      g.addColorStop(.30,'rgba(11,77,80,.08)');
+      g.addColorStop(.62,'rgba(26,127,119,.24)');
+      g.addColorStop(.84,'rgba(99,213,208,.62)');
+      g.addColorStop(1,'rgba(237,247,248,.98)');
     }
 
     fctx.save();
-    fctx.globalAlpha=effectAlpha*e.intensity;
-    fctx.fillStyle=grad;
-    fctx.fillRect(x0,e.y-e.thickness/2,totalLen,e.thickness);
 
-    // Razor-thin luminous core rides at the leading edge and creates the visual 'zip'.
-    const coreLen=Math.max(5,e.bodyLen*e.core);
-    const coreX=e.dir>0 ? head-coreLen : head;
-    const coreGrad=fctx.createLinearGradient(coreX,0,coreX+coreLen,0);
+    // Soft outer light trail, still extremely thin compared with the previous bars.
+    fctx.globalAlpha=effectAlpha*e.intensity*.34*e.halo;
+    fctx.strokeStyle=g;
+    fctx.lineWidth=Math.max(.55,e.thickness*1.85);
+    fctx.lineCap='butt';
+    fctx.beginPath();
+    fctx.moveTo(tailStart,e.y);
+    fctx.lineTo(head,e.y);
+    fctx.stroke();
+
+    // Sharp inner trail.
+    fctx.globalAlpha=effectAlpha*e.intensity;
+    fctx.strokeStyle=g;
+    fctx.lineWidth=e.thickness;
+    fctx.beginPath();
+    fctx.moveTo(tailStart,e.y);
+    fctx.lineTo(head,e.y);
+    fctx.stroke();
+
+    // Very small bright particle head; this is the object, not the whole streak.
+    const headX=e.dir>0 ? head-e.headLen : head;
+    const hg=fctx.createLinearGradient(headX,0,headX+e.headLen,0);
     if(e.dir>0){
-      coreGrad.addColorStop(0,'rgba(99,213,208,0)');
-      coreGrad.addColorStop(.72,'rgba(99,213,208,.70)');
-      coreGrad.addColorStop(1,'rgba(237,247,248,1)');
+      hg.addColorStop(0,'rgba(99,213,208,.18)');
+      hg.addColorStop(.58,e.color);
+      hg.addColorStop(.86,COLORS.tealBright);
+      hg.addColorStop(1,COLORS.tealWhite);
     }else{
-      coreGrad.addColorStop(0,'rgba(237,247,248,1)');
-      coreGrad.addColorStop(.28,'rgba(99,213,208,.70)');
-      coreGrad.addColorStop(1,'rgba(99,213,208,0)');
+      hg.addColorStop(0,COLORS.tealWhite);
+      hg.addColorStop(.14,COLORS.tealBright);
+      hg.addColorStop(.42,e.color);
+      hg.addColorStop(1,'rgba(99,213,208,.18)');
     }
-    fctx.globalAlpha=effectAlpha*Math.min(1,e.intensity+.12);
-    fctx.fillStyle=coreGrad;
-    const coreH=Math.max(.65,Math.min(e.thickness,1.35));
-    fctx.fillRect(coreX,e.y-coreH/2,coreLen,coreH);
+    fctx.globalAlpha=effectAlpha*Math.min(1,e.intensity+.15);
+    fctx.fillStyle=hg;
+    fctx.fillRect(headX,e.y-e.thickness/2,e.headLen,e.thickness);
+
+    // Pin-prick core makes very fast particles register even during one-frame passes.
+    fctx.globalAlpha=effectAlpha*Math.min(1,e.intensity+.25);
+    fctx.fillStyle=COLORS.tealWhite;
+    const coreW=Math.max(1.2,Math.min(3.8,e.headLen*.22));
+    const coreX=e.dir>0 ? head-coreW : head;
+    const coreH=Math.max(.55,Math.min(1.35,e.thickness*.72));
+    fctx.fillRect(coreX,e.y-coreH/2,coreW,coreH);
+
     fctx.restore();
   }
 
