@@ -16,7 +16,7 @@ const mctx=mask.getContext('2d',{alpha:true,desynchronized:true}),fctx=fx.getCon
 let cssW=1,cssH=1,dpr=1,start=0,raf=0,watchdog=0,finished=false,tealEvents=[],goldEvents=[];
 function resizeCanvas(c,ctx){c.width=Math.max(1,Math.round(cssW*dpr));c.height=Math.max(1,Math.round(cssH*dpr));c.style.width=`${cssW}px`;c.style.height=`${cssH}px`;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.imageSmoothingEnabled=true;}
 function chooseSpeedVwPerMs(){const r=Math.random();if(r<.20)return rand(.014,.022);if(r<.90)return rand(.008,.014);return rand(.005,.008);}
-function makeParticle(o={}){const thickness=o.thickness??(Math.random()<.84?rand(.55,2.1):rand(2.1,3)),dir=o.dir??(Math.random()<.5?1:-1),family=Math.random(),color=family<.42?COLORS.tealDark:family<.84?COLORS.tealGreen:COLORS.tealBright,headLen=o.headLen??rand(2.5,13),speedVwMs=o.speedVwMs??chooseSpeedVwPerMs();return{y:o.y??rand(.5,Math.max(1,cssH-.5)),thickness,headLen,tracerLen:o.tracerLen??rand(2.40,3.60)*cssW,dir,start:o.start??rand(25,WHITE_GONE_AT-220),speedPxMs:speedVwMs*cssW,color,intensity:o.intensity??rand(.5,1),halo:o.halo??rand(.28,.88),glowPct:o.glowPct??rand(.04,.20),glowIntensity:o.glowIntensity??rand(0,1),eraseWidth:o.eraseWidth??Math.max(1,thickness*rand(.95,1.6)),lastHead:null,coverage:!!o.coverage,completed:false};}
+function makeParticle(o={}){const thickness=o.thickness??(Math.random()<.84?rand(.55,2.1):rand(2.1,3)),dir=o.dir??(Math.random()<.5?1:-1),family=Math.random(),color=family<.42?COLORS.tealDark:family<.84?COLORS.tealGreen:COLORS.tealBright,headLen=o.headLen??rand(2.5,13),speedVwMs=o.speedVwMs??chooseSpeedVwPerMs();return{y:o.y??rand(.5,Math.max(1,cssH-.5)),thickness,headLen,tracerLen:o.tracerLen??rand(2.40,3.60)*cssW,dir,start:o.start??rand(25,WHITE_GONE_AT-220),speedPxMs:speedVwMs*cssW,color,intensity:o.intensity??rand(.5,1),halo:o.halo??rand(.28,.88),glowPct:o.glowPct??rand(.04,.20),glowIntensity:o.glowIntensity??rand(0,1),glowIntensity2:o.glowIntensity2??rand(0,1),eraseWidth:o.eraseWidth??Math.max(1,thickness*rand(.95,1.6)),lastHead:null,coverage:!!o.coverage,completed:false};}
 function buildEvents(){tealEvents=[];goldEvents=[];
 const independentCount=Math.round(rand(184,276));for(let i=0;i<independentCount;i++)tealEvents.push(makeParticle());
 const clusterCount=Math.round(rand(10,18));for(let c=0;c<clusterCount;c++){const members=Math.round(rand(4,9)),dir=Math.random()<.5?1:-1,baseY=rand(cssH*.05,cssH*.95),baseStart=rand(80,WHITE_GONE_AT-420),baseSpeed=chooseSpeedVwPerMs(),spread=rand(5,28);for(let j=0;j<members;j++)tealEvents.push(makeParticle({y:clamp(baseY+rand(-spread,spread),.5,cssH-.5),dir,start:baseStart+rand(-18,34),speedVwMs:baseSpeed*rand(.92,1.08),tracerLen:rand(3.00,4.00)*cssW,intensity:rand(.62,1),halo:rand(.35,.92)}));}
@@ -49,20 +49,24 @@ function drawTealEvent(e,t,a){
   g.addColorStop(1,'rgba(237,247,248,1)');
 
   fctx.save();
-  // Per-particle halo size is 4%-20% of line thickness. Halo intensity is separately
-  // randomized from 0%-100%, so some particles remain nearly crisp while others bloom.
+  // Two independent randomized glow intensities drive two halo passes.
   const glowRadius=e.thickness*e.glowPct;
   const glowWidth=e.thickness*(1+2*e.glowPct);
   const glowAlpha=e.glowIntensity;
+  const glowAlpha2=e.glowIntensity2;
+
+  // Primary tighter halo.
   fctx.globalAlpha=a*e.intensity*.30*e.halo*glowAlpha;
-  fctx.strokeStyle=e.color;
-  fctx.lineWidth=glowWidth;
-  fctx.lineCap='butt';
-  fctx.shadowColor=e.color;
-  fctx.shadowBlur=glowRadius;
+  fctx.strokeStyle=e.color;fctx.lineWidth=glowWidth;fctx.lineCap='butt';
+  fctx.shadowColor=e.color;fctx.shadowBlur=glowRadius;
   fctx.beginPath();fctx.moveTo(tailStart,e.y);fctx.lineTo(head,e.y);fctx.stroke();
 
-  // Core tracer remains unchanged by halo intensity.
+  // Secondary softer halo with its own independent 0%-100% intensity.
+  fctx.globalAlpha=a*e.intensity*.22*e.halo*glowAlpha2;
+  fctx.lineWidth=e.thickness*(1+4*e.glowPct);
+  fctx.shadowBlur=glowRadius*2.25;
+  fctx.beginPath();fctx.moveTo(tailStart,e.y);fctx.lineTo(head,e.y);fctx.stroke();
+
   fctx.shadowBlur=0;
   fctx.globalAlpha=a*e.intensity*.42*e.halo;fctx.strokeStyle=g;fctx.lineWidth=Math.max(.45,e.thickness*1.75);fctx.beginPath();fctx.moveTo(tailStart,e.y);fctx.lineTo(head,e.y);fctx.stroke();
   fctx.globalAlpha=a*e.intensity;fctx.strokeStyle=g;fctx.lineWidth=e.thickness;fctx.beginPath();fctx.moveTo(tailStart,e.y);fctx.lineTo(head,e.y);fctx.stroke();
@@ -71,14 +75,16 @@ function drawTealEvent(e,t,a){
     const headX=e.dir>0?head-e.headLen:head,hg=fctx.createLinearGradient(headX,0,headX+e.headLen,0);
     if(e.dir>0){hg.addColorStop(0,'rgba(99,213,208,.12)');hg.addColorStop(.58,e.color);hg.addColorStop(.88,COLORS.tealBright);hg.addColorStop(1,COLORS.tealWhite);}else{hg.addColorStop(0,COLORS.tealWhite);hg.addColorStop(.12,COLORS.tealBright);hg.addColorStop(.42,e.color);hg.addColorStop(1,'rgba(99,213,208,.12)');}
 
-    // Separate head-halo pass so randomized glow intensity never dims the actual head.
-    fctx.shadowColor=e.color;
-    fctx.shadowBlur=glowRadius;
+    // Primary head halo.
+    fctx.shadowColor=e.color;fctx.shadowBlur=glowRadius;
     fctx.globalAlpha=a*Math.min(1,e.intensity+.15)*glowAlpha;
-    fctx.fillStyle=e.color;
+    fctx.fillStyle=e.color;fctx.fillRect(headX,e.y-e.thickness/2,e.headLen,e.thickness);
+
+    // Secondary head halo uses the second independent intensity.
+    fctx.shadowBlur=glowRadius*2.25;
+    fctx.globalAlpha=a*Math.min(1,e.intensity+.15)*.72*glowAlpha2;
     fctx.fillRect(headX,e.y-e.thickness/2,e.headLen,e.thickness);
 
-    // Draw the normal particle head cleanly over its halo.
     fctx.shadowBlur=0;
     fctx.globalAlpha=a*Math.min(1,e.intensity+.15);fctx.fillStyle=hg;fctx.fillRect(headX,e.y-e.thickness/2,e.headLen,e.thickness);
     const coreW=Math.max(1,Math.min(3.2,e.headLen*.2)),coreX=e.dir>0?head-coreW:head,coreH=Math.max(.45,Math.min(1.2,e.thickness*.68));
