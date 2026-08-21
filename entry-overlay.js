@@ -1,7 +1,8 @@
-/* Harris Portfolio entry: mathematical interference-field reveal.
-   Full-screen WebGL2 fragment shader: directional waves + radial pressure waves +
-   quantized coordinates + hard thresholds. Resolution-independent and crisp.
-   The previous exact-reference media remains in entry-media/ as rollback fallback. */
+/* Harris Portfolio entry — mathematical constructive/destructive field reveal.
+   FULL REWRITE: Canvas 2D only, no WebGL, no video, no procedural moving blobs.
+   The animation is a low-resolution categorical wave field scaled with nearest-neighbor
+   sampling so stepped edges remain razor crisp on desktop and mobile.
+   The live portfolio remains untouched underneath this isolated overlay. */
 (() => {
   'use strict';
 
@@ -9,7 +10,7 @@
   if (!overlay) return;
 
   const nav = performance.getEntriesByType?.('navigation')?.[0];
-  const skip = nav?.type === 'back_forward' ||
+  const shouldSkip = nav?.type === 'back_forward' ||
     window.matchMedia?.('(forced-colors: active)').matches ||
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -17,172 +18,189 @@
     document.documentElement.dataset.entryState = 'complete';
     overlay.remove();
   };
-  if (skip) { finishImmediately(); return; }
+  if (shouldSkip) { finishImmediately(); return; }
 
-  const TOTAL_MS = 3180;
-  const WHITE_HOLD_MS = 80;
-  const FAILSAFE_MS = 4300;
+  const TOTAL_MS = 3270;
+  const WHITE_HOLD_MS = 95;
+  const FAILSAFE_MS = 4600;
+
+  const COLORS = {
+    white: [255,255,255,255],
+    ink:   [6,21,28,255],
+    gold:  [216,184,106,255]
+  };
 
   const canvas = document.createElement('canvas');
-  canvas.className = 'entry-math-canvas';
+  canvas.className = 'entry-field-canvas';
   canvas.setAttribute('aria-hidden', 'true');
   overlay.appendChild(canvas);
 
-  const gl = canvas.getContext('webgl2', {
-    alpha: true,
-    antialias: false,
-    premultipliedAlpha: false,
-    depth: false,
-    stencil: false,
-    preserveDrawingBuffer: false,
-    powerPreference: 'high-performance'
-  });
-  if (!gl) { finishImmediately(); return; }
+  const ctx = canvas.getContext('2d', { alpha:true, desynchronized:true });
+  if (!ctx) { finishImmediately(); return; }
+  ctx.imageSmoothingEnabled = false;
 
-  const vert = `#version 300 es
-  precision highp float;
-  const vec2 P[3] = vec2[3](vec2(-1.0,-1.0),vec2(3.0,-1.0),vec2(-1.0,3.0));
-  out vec2 vUv;
-  void main(){
-    vec2 p=P[gl_VertexID];
-    vUv=p*0.5+0.5;
-    gl_Position=vec4(p,0.0,1.0);
-  }`;
+  const fieldCanvas = document.createElement('canvas');
+  const fieldCtx = fieldCanvas.getContext('2d', { alpha:true, willReadFrequently:false });
+  if (!fieldCtx) { finishImmediately(); return; }
 
-  const frag = `#version 300 es
-  precision highp float;
-  in vec2 vUv;
-  out vec4 outColor;
-  uniform vec2 uResolution;
-  uniform float uTime;
-  uniform float uProgress;
-
-  const vec3 WHITE=vec3(1.0);
-  const vec3 INK=vec3(0.031,0.090,0.114);
-  const vec3 TEAL=vec3(0.075,0.247,0.271);
-  const vec3 GOLD=vec3(0.843,0.722,0.416);
-
-  float wave(vec2 p, vec2 k, float speed, float phase){
-    return sin(dot(p,k)+uTime*speed+phase);
-  }
-  float radial(vec2 p, vec2 c, float freq, float speed, float phase){
-    return cos(length(p-c)*freq-uTime*speed+phase);
-  }
-
-  void main(){
-    vec2 res=max(uResolution,vec2(1.0));
-    float blockPx=mix(19.0,9.0,0.5+0.5*sin(uTime*1.35));
-    vec2 qpx=floor((vUv*res)/blockPx)*blockPx+blockPx*0.5;
-    vec2 uv=qpx/res;
-
-    float aspect=res.x/res.y;
-    vec2 p=(uv-0.5)*vec2(aspect,1.0)*6.2831853;
-    float t=uTime;
-
-    float d1=wave(p,vec2( 1.18, 0.46), 3.85, 0.20);
-    float d2=wave(p,vec2(-0.63, 1.36),-3.05, 1.70);
-    float d3=wave(p,vec2( 0.82, 1.02), 4.65, 3.10);
-    float d4=wave(p,vec2( 1.54,-0.72),-4.10, 4.35);
-
-    vec2 c1=vec2(-1.55+2.85*sin(t*0.71),1.10*cos(t*0.93));
-    vec2 c2=vec2( 1.45*cos(t*0.83+1.4),-1.20+2.10*sin(t*0.59));
-    float r1=radial(p,c1,2.18,5.15,0.45);
-    float r2=radial(p,c2,2.63,-4.55,2.20);
-
-    float goldField= 1.04*d1 + 0.72*d3 - 0.63*d2 + 0.77*r1 - 0.45*r2;
-    float inkField =-0.78*d1 + 1.02*d2 + 0.69*d4 + 0.66*r2 - 0.37*r1;
-    float whiteField= 0.62*d1 - 0.58*d3 + 0.84*d4 - 0.39*r1 + 0.48*r2;
-
-    goldField+=0.33*sin(t*2.55)+0.21*sin(t*5.20+0.7);
-    inkField +=0.30*sin(t*2.16+2.1)+0.22*sin(t*4.78+1.3);
-    whiteField+=0.26*sin(t*2.88+4.0)+0.18*sin(t*5.64+2.7);
-
-    float threshold=0.02+0.11*sin(t*1.82);
-    vec3 color=WHITE;
-    float best=whiteField;
-    int winner=0;
-    if(inkField>best+threshold){best=inkField;color=INK;winner=1;}
-    if(goldField>best+threshold){best=goldField;color=GOLD;winner=2;}
-
-    float competition=abs(goldField-inkField);
-    if(winner!=0 && competition<0.16 && sin((p.x-p.y)*1.4+t*5.8)>0.05){color=TEAL;}
-
-    if(uProgress<0.028){outColor=vec4(WHITE,1.0);return;}
-
-    float revealRamp=smoothstep(0.63,0.98,uProgress);
-    float revealWave=
-      0.70*wave(p,vec2(0.91,-1.13),5.30,0.2)+
-      0.56*radial(p,vec2(0.25,-0.20),1.74,5.90,1.0)+
-      0.42*wave(p,vec2(-1.48,-0.38),-4.20,2.6);
-    float revealThreshold=mix(1.42,-1.52,revealRamp);
-    bool transparent=revealRamp>0.0 && revealWave>revealThreshold;
-
-    if(uProgress>0.965){
-      float finalCut=smoothstep(0.965,1.0,uProgress);
-      float sweep=(uv.x+uv.y*0.58)-mix(-0.35,1.62,finalCut);
-      if(sweep<0.0) transparent=true;
-    }
-
-    outColor=transparent?vec4(0.0):vec4(color,1.0);
-  }`;
-
-  function compile(type, source) {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, source);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      console.error('Entry shader compile failed:', gl.getShaderInfoLog(s));
-      gl.deleteShader(s);
-      return null;
-    }
-    return s;
-  }
-
-  const vs = compile(gl.VERTEX_SHADER, vert);
-  const fs = compile(gl.FRAGMENT_SHADER, frag);
-  if (!vs || !fs) { finishImmediately(); return; }
-
-  const program = gl.createProgram();
-  gl.attachShader(program, vs);
-  gl.attachShader(program, fs);
-  gl.linkProgram(program);
-  gl.deleteShader(vs);
-  gl.deleteShader(fs);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.error('Entry shader link failed:', gl.getProgramInfoLog(program));
-    gl.deleteProgram(program);
-    finishImmediately();
-    return;
-  }
-
-  gl.useProgram(program);
-  const uResolution = gl.getUniformLocation(program, 'uResolution');
-  const uTime = gl.getUniformLocation(program, 'uTime');
-  const uProgress = gl.getUniformLocation(program, 'uProgress');
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-  gl.disable(gl.DEPTH_TEST);
-  gl.disable(gl.CULL_FACE);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
+  let cssW = 1;
+  let cssH = 1;
+  let cols = 44;
+  let rows = 44;
+  let imageData = null;
+  let data = null;
+  let uCoord = null;
+  let vCoord = null;
   let start = 0;
   let raf = 0;
-  let finished = false;
   let watchdog = 0;
+  let finished = false;
+
+  const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+  const smoothstep = (a,b,x) => {
+    const q = clamp((x-a)/(b-a),0,1);
+    return q*q*(3-2*q);
+  };
 
   function resize() {
+    cssW = Math.max(1, window.innerWidth);
+    cssH = Math.max(1, window.innerHeight);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.max(1, Math.round(window.innerWidth * dpr));
-    const height = Math.max(1, Math.round(window.innerHeight * dpr));
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
+
+    canvas.width = Math.max(1, Math.round(cssW*dpr));
+    canvas.height = Math.max(1, Math.round(cssH*dpr));
+    canvas.style.width = `${cssW}px`;
+    canvas.style.height = `${cssH}px`;
+    ctx.imageSmoothingEnabled = false;
+
+    // Same visual cell density on portrait and landscape: the short viewport axis
+    // always contains 44 mathematical cells. This keeps mobile/desktop choreography
+    // equivalent while preserving hard geometric edges.
+    const aspect = cssW/cssH;
+    if (aspect >= 1) {
+      rows = 44;
+      cols = clamp(Math.round(44*aspect),44,104);
+    } else {
+      cols = 44;
+      rows = clamp(Math.round(44/aspect),44,104);
     }
-    canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight}px`;
-    gl.viewport(0, 0, width, height);
-    gl.uniform2f(uResolution, width, height);
+
+    fieldCanvas.width = cols;
+    fieldCanvas.height = rows;
+    imageData = fieldCtx.createImageData(cols,rows);
+    data = imageData.data;
+    uCoord = new Float32Array(cols);
+    vCoord = new Float32Array(rows);
+    for (let x=0;x<cols;x++) uCoord[x]=(x+.5)/cols;
+    for (let y=0;y<rows;y++) vCoord[y]=(y+.5)/rows;
+  }
+
+  function setPixel(index, rgba) {
+    const o = index*4;
+    data[o] = rgba[0];
+    data[o+1] = rgba[1];
+    data[o+2] = rgba[2];
+    data[o+3] = rgba[3];
+  }
+
+  function renderWhite() {
+    for (let i=0;i<cols*rows;i++) setPixel(i,COLORS.white);
+    fieldCtx.putImageData(imageData,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fieldCanvas,0,0,canvas.width,canvas.height);
+  }
+
+  function renderField(seconds, progress) {
+    const TAU = Math.PI*2;
+    const t = seconds;
+
+    // Slowly moving centers for angular pressure waves. Manhattan distance is used
+    // intentionally: unlike circular ripples, it generates the stepped diamond/block
+    // fronts visible in the reference animation once the field is quantized.
+    const c1x = .30 + .24*Math.sin(t*.73);
+    const c1y = .34 + .27*Math.cos(t*.91);
+    const c2x = .71 + .22*Math.cos(t*.82+1.2);
+    const c2y = .65 + .25*Math.sin(t*.64+1.7);
+
+    // Whole-field dominance envelopes. These make gold, ink and white take turns
+    // occupying large portions of the viewport instead of behaving like little blobs.
+    const goldBias = .34*Math.sin(t*2.55) + .24*Math.sin(t*5.10+.7);
+    const inkBias  = .32*Math.sin(t*2.18+2.05) + .23*Math.sin(t*4.72+1.35);
+    const whiteBias= .29*Math.sin(t*2.91+3.95) + .20*Math.sin(t*5.58+2.65);
+
+    const revealRamp = smoothstep(.66,.985,progress);
+    const finalRamp = smoothstep(.955,1,progress);
+
+    let idx = 0;
+    for (let y=0;y<rows;y++) {
+      const v = vCoord[y];
+      const py = (v-.5)*TAU;
+      for (let x=0;x<cols;x++,idx++) {
+        const u = uCoord[x];
+        const px = (u-.5)*TAU;
+
+        // Four directional waves. Different axes, frequencies and opposing temporal
+        // directions create constructive/destructive interference over the full frame.
+        const d1 = Math.sin( 1.18*px + .46*py + t*3.90 + .20);
+        const d2 = Math.sin(-.63*px +1.36*py - t*3.10 +1.70);
+        const d3 = Math.sin( .82*px +1.02*py + t*4.70 +3.10);
+        const d4 = Math.sin( 1.54*px -.72*py - t*4.15 +4.35);
+
+        // Constructive/destructive angular fronts. Because coordinates are normalized,
+        // these flex with any viewport while keeping identical timing and topology.
+        const m1 = Math.abs(u-c1x)+Math.abs(v-c1y);
+        const m2 = Math.abs(u-c2x)+Math.abs(v-c2y);
+        const r1 = Math.cos(m1*TAU*2.22 - t*5.20 + .45);
+        const r2 = Math.cos(m2*TAU*2.58 + t*4.62 +2.20);
+
+        let gold = 1.03*d1 + .73*d3 - .61*d2 + .79*r1 - .46*r2 + goldBias;
+        let ink  =-.80*d1 +1.04*d2 + .70*d4 + .68*r2 - .38*r1 + inkBias;
+        let white= .63*d1 - .57*d3 + .85*d4 - .40*r1 + .49*r2 + whiteBias;
+
+        // A slower constructive wave periodically swells an entire color territory,
+        // then reverses and lets the competing field eat it away.
+        const territory = Math.sin((u+v)*TAU*1.18 - t*2.72) +
+                          .72*Math.sin((u-v)*TAU*.91 + t*3.18+.8);
+        gold += territory*.22*Math.sin(t*1.77+.3);
+        ink  -= territory*.24*Math.sin(t*1.77+.3);
+
+        // Hard categorical winner. No interpolation between colors: boundaries stay
+        // perfectly sharp at every display resolution.
+        let rgba = COLORS.white;
+        let best = white;
+        const threshold = .015 + .095*Math.sin(t*1.86);
+        if (ink > best + threshold) { best = ink; rgba = COLORS.ink; }
+        if (gold > best + threshold) { rgba = COLORS.gold; }
+
+        // Late-stage destructive cancellation reveals the live portfolio below using
+        // the same wave vocabulary rather than a separate opacity fade.
+        let transparent = false;
+        if (revealRamp > 0) {
+          const reveal =
+            .74*Math.sin(.93*px-1.11*py+t*5.22+.2) +
+            .58*Math.cos((Math.abs(u-.58)+Math.abs(v-.43))*TAU*1.72-t*5.86+1.0) +
+            .44*Math.sin(-1.46*px-.39*py-t*4.18+2.6);
+          const revealThreshold = 1.43 + (-2.72*revealRamp);
+          transparent = reveal > revealThreshold;
+        }
+
+        // Guaranteed final diagonal destruction of every remaining overlay cell.
+        if (finalRamp > 0) {
+          const sweep = u + .58*v;
+          const cut = -.12 + 1.82*finalRamp;
+          if (sweep < cut) transparent = true;
+        }
+
+        if (transparent) setPixel(idx,[0,0,0,0]);
+        else setPixel(idx,rgba);
+      }
+    }
+
+    fieldCtx.putImageData(imageData,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fieldCanvas,0,0,canvas.width,canvas.height);
   }
 
   function finish() {
@@ -190,36 +208,43 @@
     finished = true;
     clearTimeout(watchdog);
     cancelAnimationFrame(raf);
-    try { gl.deleteVertexArray(vao); gl.deleteProgram(program); } catch (_) {}
     document.documentElement.dataset.entryState = 'complete';
     overlay.classList.add('entry-complete');
-    setTimeout(() => overlay.remove(), 100);
+    setTimeout(() => overlay.remove(),100);
   }
 
   function frame(now) {
     if (!start) start = now;
-    const elapsed = Math.max(0, now - start - WHITE_HOLD_MS);
-    const progress = Math.min(1, elapsed / TOTAL_MS);
-    gl.uniform1f(uTime, elapsed / 1000);
-    gl.uniform1f(uProgress, progress);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (progress >= 1) { finish(); return; }
+    const elapsedTotal = now-start;
+
+    if (elapsedTotal < WHITE_HOLD_MS) {
+      renderWhite();
+    } else {
+      const elapsed = elapsedTotal-WHITE_HOLD_MS;
+      const progress = clamp(elapsed/TOTAL_MS,0,1);
+      renderField(elapsed/1000,progress);
+      if (progress >= 1) { finish(); return; }
+    }
     raf = requestAnimationFrame(frame);
   }
 
   let resizeTimer = 0;
-  window.addEventListener('resize', () => {
+  window.addEventListener('resize',() => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(resize, 80);
-  }, { passive: true });
-  window.addEventListener('pageshow', e => { if (e.persisted) finish(); }, { passive: true });
+    resizeTimer = setTimeout(() => {
+      if (!finished) resize();
+    },90);
+  },{passive:true});
+  window.addEventListener('pageshow',e => { if (e.persisted) finish(); },{passive:true});
 
   try {
     resize();
+    renderWhite();
     document.documentElement.dataset.entryState = 'running';
-    watchdog = setTimeout(finish, FAILSAFE_MS);
+    watchdog = setTimeout(finish,FAILSAFE_MS);
     raf = requestAnimationFrame(frame);
-  } catch (_) {
+  } catch (error) {
+    console.error('Entry overlay failed safely:',error);
     finishImmediately();
   }
 })();
