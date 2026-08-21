@@ -1,377 +1,315 @@
 /* Harris Portfolio: modular 3.1s flock entry choreography.
-   Four triangle groups fly through a true 3D white-space volume.
-   Paths use continuous airspeed, directional depth travel, and off-screen recycling.
+   Stateful 3D steering/boids engine: position + velocity + acceleration.
+   Four groups: words, portfolio alignment, membrane erasure, and free flight.
    Isolated from carousel/resume systems; watchdog always releases the page. */
 (() => {
   'use strict';
 
-  const overlay = document.getElementById('portfolio-entry-overlay');
-  if (!overlay) return;
-
-  const nav = performance.getEntriesByType?.('navigation')?.[0];
-  if (nav?.type === 'back_forward' || window.matchMedia?.('(forced-colors: active)').matches) {
-    document.documentElement.dataset.entryState = 'complete';
-    overlay.remove();
-    return;
+  const overlay=document.getElementById('portfolio-entry-overlay');
+  if(!overlay)return;
+  const nav=performance.getEntriesByType?.('navigation')?.[0];
+  if(nav?.type==='back_forward'||window.matchMedia?.('(forced-colors: active)').matches){
+    document.documentElement.dataset.entryState='complete';overlay.remove();return;
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.setAttribute('aria-hidden', 'true');
-  overlay.appendChild(canvas);
-  const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
-  if (!ctx) {
-    document.documentElement.dataset.entryState = 'complete';
-    overlay.remove();
-    return;
-  }
+  const canvas=document.createElement('canvas');
+  canvas.setAttribute('aria-hidden','true');overlay.appendChild(canvas);
+  const ctx=canvas.getContext('2d',{alpha:true,desynchronized:true});
+  if(!ctx){document.documentElement.dataset.entryState='complete';overlay.remove();return;}
 
-  const TOTAL = 3100;
-  const WIPE_START = 2160;
-  const WIPE_END = 2970;
-  const TAU = Math.PI * 2;
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const mix = (a, b, t) => a + (b - a) * t;
-  const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
-  const smoother = t => { t = clamp(t, 0, 1); return t*t*t*(t*(t*6-15)+10); };
-  const rand = (a, b) => a + Math.random() * (b - a);
+  const membrane=document.createElement('canvas');
+  const mctx=membrane.getContext('2d');
+  if(!mctx){document.documentElement.dataset.entryState='complete';overlay.remove();return;}
 
-  let w = 1, h = 1, dpr = 1, focal = 700, start = 0, raf = 0, finished = false;
-  let wordTargets = new Map();
+  const TOTAL=3100,WIPE_START=2200,WIPE_END=2980,TAU=Math.PI*2;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const mix=(a,b,t)=>a+(b-a)*t;
+  const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
+  const rand=(a,b)=>a+Math.random()*(b-a);
+  const V=(x=0,y=0,z=0)=>({x,y,z});
+  const add=(a,b)=>V(a.x+b.x,a.y+b.y,a.z+b.z);
+  const sub=(a,b)=>V(a.x-b.x,a.y-b.y,a.z-b.z);
+  const mul=(a,s)=>V(a.x*s,a.y*s,a.z*s);
+  const mag=a=>Math.hypot(a.x,a.y,a.z);
+  const norm=a=>{const m=mag(a)||1;return mul(a,1/m);};
+  const limit=(a,m)=>{const n=mag(a);return n>m?mul(a,m/n):a;};
 
-  const V = (x=0,y=0,z=1) => ({x,y,z});
-  const lerpV = (a,b,t) => V(mix(a.x,b.x,t), mix(a.y,b.y,t), mix(a.z,b.z,t));
-
-  function cubic(a,b,c,d,t){
-    const u=1-t, uu=u*u, tt=t*t;
-    return uu*u*a + 3*uu*t*b + 3*u*tt*c + tt*t*d;
-  }
-  function cubicD(a,b,c,d,t){
-    const u=1-t;
-    return 3*u*u*(b-a)+6*u*t*(c-b)+3*t*t*(d-c);
-  }
+  let w=1,h=1,dpr=1,focal=650,start=0,last=0,raf=0,finished=false;
+  let birds=[],group1=[],group2=[],group3=[],group4=[],wordTargets=new Map(),wipeBird=null;
 
   function project(p){
-    const z = Math.max(85, p.z);
-    const s = focal / z;
-    return { x:w*.5 + p.x*s, y:h*.5 + p.y*s, scale:s, z };
+    const z=Math.max(90,p.z),s=focal/z;
+    return{x:w*.5+p.x*s,y:h*.5+p.y*s,scale:s,z};
   }
-
   function screenToWorld(x,y,z){
-    const s = focal / z;
-    return V((x-w*.5)/s, (y-h*.5)/s, z);
+    const s=focal/z;return V((x-w*.5)/s,(y-h*.5)/s,z);
   }
 
-  function projectedEdgePoint(side,pad=18){
-    if(side===0) return {x:rand(-pad,w+pad),y:-pad};
-    if(side===1) return {x:w+pad,y:rand(-pad,h+pad)};
-    if(side===2) return {x:rand(-pad,w+pad),y:h+pad};
-    return {x:-pad,y:rand(-pad,h+pad)};
+  function edgePoint(side,pad=16){
+    if(side===0)return{x:rand(0,w),y:-pad};
+    if(side===1)return{x:w+pad,y:rand(0,h)};
+    if(side===2)return{x:rand(0,w),y:h+pad};
+    return{x:-pad,y:rand(0,h)};
+  }
+  function innerAim(side){
+    const marginX=w*.12,marginY=h*.12;
+    if(side===0)return{x:rand(marginX,w-marginX),y:rand(h*.42,h*.86)};
+    if(side===1)return{x:rand(w*.08,w*.58),y:rand(marginY,h-marginY)};
+    if(side===2)return{x:rand(marginX,w-marginX),y:rand(h*.10,h*.58)};
+    return{x:rand(w*.42,w*.92),y:rand(marginY,h-marginY)};
   }
 
-  function chooseExitSide(entry){
-    // Prefer a different edge, with opposite and adjacent exits both possible.
-    const choices=[0,1,2,3].filter(s=>s!==entry);
-    const opposite=(entry+2)%4;
-    return Math.random()<.48 ? opposite : choices[Math.floor(rand(0,choices.length))];
+  function speedProfile(){
+    const r=Math.random();
+    if(r<.22)return{min:560,max:840,cruise:rand(620,800)};
+    if(r<.76)return{min:330,max:560,cruise:rand(380,520)};
+    return{min:190,max:360,cruise:rand(220,330)};
   }
 
-  function make3DPath(group,i){
-    const side0=Math.floor(rand(0,4));
-    const side1=chooseExitSide(side0);
-    const startScreen=projectedEdgePoint(side0,rand(10,30));
-    const endScreen=projectedEdgePoint(side1,rand(26,70));
-
-    // Depth travels mainly in one direction. This avoids the old far->near->far visual bounce.
-    const depthMode=Math.random();
-    let z0,z3;
-    if(depthMode<.46){
-      z0=rand(1350,2500); z3=rand(330,900);       // approaching camera
-    }else if(depthMode<.76){
-      z0=rand(420,950); z3=rand(1300,2450);       // receding into field
-    }else{
-      z0=rand(800,1800); z3=clamp(z0+rand(-260,260),520,2100); // lateral depth band
-    }
-
-    const p0=screenToWorld(startScreen.x,startScreen.y,z0);
-    const p3=screenToWorld(endScreen.x,endScreen.y,z3);
-
-    // Construct the curve from the route vector itself, not from screen-centered waypoints.
-    const dx=p3.x-p0.x, dy=p3.y-p0.y, dz=p3.z-p0.z;
-    const planar=Math.max(1,Math.hypot(dx,dy));
-    const nx=-dy/planar, ny=dx/planar;
-    const curve=rand(-1,1)*Math.min(420,Math.max(90,planar*.24));
-    const lift=rand(-80,80);
-
-    const p1=V(
-      p0.x+dx*.31+nx*curve*.72,
-      p0.y+dy*.31+ny*curve*.72+lift,
-      p0.z+dz*.31
-    );
-    const p2=V(
-      p0.x+dx*.68+nx*curve,
-      p0.y+dy*.68+ny*curve-lift*.35,
-      p0.z+dz*.68
-    );
-
-    // Deliberately wide speed distribution: some birds dart, some cruise.
-    const speedClass=Math.random();
-    const duration=speedClass<.22 ? rand(850,1300)
-      : speedClass<.72 ? rand(1350,2050)
-      : rand(2100,2850);
-
-    return {
-      group,i,p0,p1,p2,p3,
-      delay:rand(-420,380), duration,
-      base:rand(5.5,12.5), phase:rand(0,TAU),
-      bankPhase:rand(0,TAU),
-      tone:Math.random()<.10?'gold':(Math.random()<.18?'teal':'charcoal')
-    };
+  function spawnBird(group,index,bird=null){
+    const side=Math.floor(rand(0,4)),screen=edgePoint(side,rand(8,26));
+    const z=rand(650,2200),pos=screenToWorld(screen.x,screen.y,z);
+    const aim=innerAim(side),aimZ=clamp(z+rand(-650,520),280,2300);
+    const target=screenToWorld(aim.x,aim.y,aimZ);
+    const speed=speedProfile();
+    let dir=norm(sub(target,pos));
+    // Give each bird a slightly different climb/dive and lateral intent.
+    dir=norm(add(dir,V(rand(-.16,.16),rand(-.13,.13),rand(-.10,.10))));
+    const obj=bird||{};
+    Object.assign(obj,{
+      group,index,pos,vel:mul(dir,speed.cruise),acc:V(),
+      minSpeed:speed.min,maxSpeed:speed.max,cruise:speed.cruise,
+      maxForce:rand(210,390),base:rand(5.2,11.8),phase:rand(0,TAU),
+      bank:0,tone:Math.random()<.09?'gold':(Math.random()<.17?'teal':'charcoal'),
+      age:0,eraseX:null,eraseY:null
+    });
+    return obj;
   }
-
-  const group1=Array.from({length:78},(_,i)=>make3DPath(1,i));
-  const group2=Array.from({length:64},(_,i)=>make3DPath(2,i));
-  const group3=Array.from({length:52},(_,i)=>make3DPath(3,i));
-  const group4=Array.from({length:70},(_,i)=>make3DPath(4,i));
-
-  const wipeBird=group3[Math.floor(group3.length*.63)];
-  wipeBird.delay=WIPE_START;
-  wipeBird.duration=WIPE_END-WIPE_START;
 
   const WORDS=[
-    {text:'BUILD',start:560,peak:820,release:1040},
-    {text:'EXPLORE',start:970,peak:1240,release:1460},
-    {text:'IMPROVE',start:1390,peak:1660,release:1890}
+    {text:'BUILD',start:520,peak:800,release:1040},
+    {text:'EXPLORE',start:940,peak:1230,release:1480},
+    {text:'IMPROVE',start:1360,peak:1660,release:1910}
   ];
-
-  function resize(){
-    dpr=Math.min(window.devicePixelRatio||1,1.75);
-    w=Math.max(1,window.innerWidth); h=Math.max(1,window.innerHeight);
-    // Wider FOV on narrow screens prevents the mobile flock from collapsing into the center.
-    focal=clamp(w*.82,300,900);
-    canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
-    canvas.style.width=`${w}px`; canvas.style.height=`${h}px`;
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    buildWordTargets();
-  }
 
   function buildWordTargets(){
     wordTargets=new Map();
-    const off=document.createElement('canvas');
-    const octx=off.getContext('2d');
-    const ow=Math.min(920,Math.max(340,w*.78));
-    const oh=Math.min(220,Math.max(130,h*.22));
-    off.width=Math.round(ow); off.height=Math.round(oh);
-    octx.textAlign='center'; octx.textBaseline='middle'; octx.fillStyle='#000';
-    octx.font=`800 ${Math.max(44,Math.min(128,ow/7))}px Inter, Arial, sans-serif`;
+    const off=document.createElement('canvas'),octx=off.getContext('2d');
+    const ow=Math.min(920,Math.max(320,w*.80)),oh=Math.min(220,Math.max(125,h*.23));
+    off.width=Math.round(ow);off.height=Math.round(oh);
+    octx.textAlign='center';octx.textBaseline='middle';octx.fillStyle='#000';
+    octx.font=`800 ${Math.max(42,Math.min(126,ow/7))}px Inter,Arial,sans-serif`;
     for(const spec of WORDS){
-      octx.clearRect(0,0,off.width,off.height);
-      octx.fillText(spec.text,off.width/2,off.height/2);
-      const img=octx.getImageData(0,0,off.width,off.height).data, pts=[];
+      octx.clearRect(0,0,off.width,off.height);octx.fillText(spec.text,off.width/2,off.height/2);
+      const data=octx.getImageData(0,0,off.width,off.height).data,pts=[];
       const step=Math.max(7,Math.round(off.width/105));
-      for(let y=2;y<off.height-2;y+=step){
-        for(let x=2;x<off.width-2;x+=step){
-          if(img[(y*off.width+x)*4+3]>100) pts.push([x/off.width,y/off.height]);
-        }
+      for(let y=2;y<off.height-2;y+=step)for(let x=2;x<off.width-2;x+=step){
+        if(data[(y*off.width+x)*4+3]>100)pts.push([x/off.width,y/off.height]);
       }
       for(let i=pts.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pts[i],pts[j]]=[pts[j],pts[i]];}
       wordTargets.set(spec.text,pts.slice(0,group1.length));
     }
   }
-
   function activeWord(t){return WORDS.find(s=>t>=s.start&&t<=s.release)||null;}
   function wordStrength(spec,t){
     if(!spec)return 0;
-    if(t<=spec.peak)return smoother((t-spec.start)/(spec.peak-spec.start));
-    return 1-smoother((t-spec.peak)/(spec.release-spec.peak));
-  }
-
-  function flight3D(p,t){
-    const raw=(t-p.delay)/p.duration;
-    const cycle=Math.floor(raw);
-    const q=raw-cycle;
-
-    // Constant progression through the cubic: no ease-in/ease-out, so no visual bouncing.
-    const pos=V(
-      cubic(p.p0.x,p.p1.x,p.p2.x,p.p3.x,q),
-      cubic(p.p0.y,p.p1.y,p.p2.y,p.p3.y,q),
-      cubic(p.p0.z,p.p1.z,p.p2.z,p.p3.z,q)
-    );
-    const vel=V(
-      cubicD(p.p0.x,p.p1.x,p.p2.x,p.p3.x,q),
-      cubicD(p.p0.y,p.p1.y,p.p2.y,p.p3.y,q),
-      cubicD(p.p0.z,p.p1.z,p.p2.z,p.p3.z,q)
-    );
-
-    // Tiny aerodynamic drift only; no positional sine-wave oscillation.
-    const drift=Math.sin((t*.0017)+p.phase+cycle*.73);
-    pos.x += drift*5;
-    pos.y += Math.cos((t*.0013)+p.phase*.61+cycle*.47)*3.5;
-
-    const projected=project(pos);
-    const heading=Math.atan2(vel.y,vel.x)+Math.PI/2;
-    const turn=Math.atan2(vel.x,Math.max(220,Math.abs(vel.z)));
-    const bank=clamp(turn,-.62,.62)+Math.sin(t*.0025+p.bankPhase)*.055;
-    return {...projected,world:pos,vel,rot:heading+bank,q};
-  }
-
-  function colorFor(p,z,alpha){
-    const near=clamp(1-(z-150)/1800,0,1);
-    if(p.tone==='gold') return `rgba(124,101,58,${alpha})`;
-    if(p.tone==='teal') return `rgba(42,102,104,${alpha})`;
-    const c=Math.round(mix(78,20,near));
-    return `rgba(${c},${c+2},${c+4},${alpha})`;
-  }
-
-  function drawTriangle(x,y,size,rot,fill,alpha,stretch=1){
-    ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.globalAlpha=alpha; ctx.fillStyle=fill;
-    ctx.beginPath();
-    ctx.moveTo(0,-size*1.08*stretch);
-    ctx.lineTo(size*.98,size*.76);
-    ctx.lineTo(-size*.98,size*.76);
-    ctx.closePath(); ctx.fill(); ctx.restore();
-  }
-
-  function drawWhiteVolume(){
-    ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+    if(t<=spec.peak)return smooth((t-spec.start)/(spec.peak-spec.start));
+    return 1-smooth((t-spec.peak)/(spec.release-spec.peak));
   }
 
   function portfolioTarget(i){
-    const topY=86, cardW=Math.min(610,w*.56), cardH=Math.min(430,h*.48), cx=w*.66, cy=h*.51;
-    if(i<18)return{x:mix(w*.31,w*.69,i/17),y:topY};
-    const j=i-18, perimeter=2*(cardW+cardH), d=(j/Math.max(1,group2.length-19))*perimeter;
+    const topY=86,cardW=Math.min(610,w*.56),cardH=Math.min(430,h*.48),cx=w*.66,cy=h*.51;
+    if(i<16)return{x:mix(w*.31,w*.69,i/15),y:topY};
+    const j=i-16,per=2*(cardW+cardH),d=(j/Math.max(1,group2.length-17))*per;
     if(d<cardW)return{x:cx-cardW/2+d,y:cy-cardH/2};
-    if(d<cardW+cardH)return{x:cx+cardW/2,y:cy-cardH/2+(d-cardW)};
+    if(d<cardW+cardH)return{x:cx+cardW/2,y:cy-cardH/2+d-cardW};
     if(d<cardW*2+cardH)return{x:cx+cardW/2-(d-cardW-cardH),y:cy+cardH/2};
     return{x:cx-cardW/2,y:cy+cardH/2-(d-cardW*2-cardH)};
   }
 
-  function drawGroup1(t){
-    const spec=activeWord(t), strength=wordStrength(spec,t), targets=spec?wordTargets.get(spec.text)||[]:[];
-    group1.forEach((p,i)=>{
-      const f=flight3D(p,t); let x=f.x,y=f.y,z=f.z,rot=f.rot,scale=f.scale;
-      if(strength>0&&targets[i]){
-        const [tx,ty]=targets[i];
-        const sx=w*.5+(tx-.5)*Math.min(w*.76,880);
-        const sy=h*.49+(ty-.5)*Math.min(h*.22,210);
-        const targetZ=650;
-        const wp=screenToWorld(sx,sy,targetZ), merged=lerpV(f.world,wp,strength);
-        const pr=project(merged); x=pr.x;y=pr.y;z=pr.z;scale=pr.scale;
-        rot=mix(rot,0,strength*.85);
+  function initFlock(){
+    birds=[];
+    group1=Array.from({length:64},(_,i)=>spawnBird(1,i));
+    group2=Array.from({length:48},(_,i)=>spawnBird(2,i));
+    group3=Array.from({length:38},(_,i)=>spawnBird(3,i));
+    group4=Array.from({length:58},(_,i)=>spawnBird(4,i));
+    birds=[...group1,...group2,...group3,...group4];
+    wipeBird=group3[Math.floor(group3.length*.61)];
+    buildWordTargets();
+  }
+
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,1.65);
+    w=Math.max(1,window.innerWidth);h=Math.max(1,window.innerHeight);
+    focal=clamp(Math.min(w,h)*1.05,320,850);
+    canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
+    canvas.style.width=`${w}px`;canvas.style.height=`${h}px`;ctx.setTransform(dpr,0,0,dpr,0,0);
+    membrane.width=Math.round(w*dpr);membrane.height=Math.round(h*dpr);mctx.setTransform(dpr,0,0,dpr,0,0);
+    mctx.globalCompositeOperation='source-over';mctx.fillStyle='#fff';mctx.fillRect(0,0,w,h);
+    initFlock();
+  }
+
+  function seek(b,target,maxSpeed=null){
+    const desired=sub(target,b.pos),d=mag(desired);
+    if(d<1)return V();
+    const speed=maxSpeed||b.maxSpeed;
+    return limit(sub(mul(norm(desired),speed),b.vel),b.maxForce);
+  }
+
+  function flockForce(b,index){
+    let sep=V(),ali=V(),coh=V(),count=0;
+    // Sample neighbors rather than O(n^2) full scan; enough for murmuration coherence.
+    const samples=12,stride=17;
+    for(let k=1;k<=samples;k++){
+      const other=birds[(index+k*stride)%birds.length];
+      if(!other||other===b)continue;
+      const delta=sub(other.pos,b.pos),d=mag(delta);
+      if(d>520)continue;
+      count++;
+      if(d<150)sep=add(sep,mul(norm(sub(b.pos,other.pos)),(150-d)/150));
+      ali=add(ali,other.vel);coh=add(coh,other.pos);
+    }
+    if(!count)return V();
+    ali=seek(b,add(b.pos,mul(ali,1/count)),b.cruise);
+    coh=seek(b,mul(coh,1/count),b.cruise);
+    sep=mul(norm(sep),b.maxForce);
+    return add(add(mul(ali,.22),mul(coh,.085)),mul(sep,.62));
+  }
+
+  function formationForce(b,t){
+    if(b.group===1){
+      const spec=activeWord(t),strength=wordStrength(spec,t);
+      if(spec&&strength>0){
+        const pts=wordTargets.get(spec.text)||[],pt=pts[b.index];
+        if(pt){
+          const sx=w*.5+(pt[0]-.5)*Math.min(w*.78,900);
+          const sy=h*.49+(pt[1]-.5)*Math.min(h*.23,215);
+          const target=screenToWorld(sx,sy,650);
+          return mul(seek(b,target,b.maxSpeed*.82),1.15*strength);
+        }
       }
-      const size=clamp(p.base*scale*1.9,2.2,56)*(1-strength*.2);
-      const stretch=1+Math.abs(f.vel.z)/1800*.14;
-      drawTriangle(x,y,size,rot,colorFor(p,z,.88),.88,stretch);
-    });
+    }
+    if(b.group===2){
+      const strength=smooth((t-1500)/620)*(1-smooth((t-2580)/260));
+      if(strength>0){
+        const pt=portfolioTarget(b.index),target=screenToWorld(pt.x,pt.y,720);
+        return mul(seek(b,target,b.maxSpeed*.74),1.10*strength);
+      }
+    }
+    return V();
   }
 
-  function drawGroup2(t){
-    const align=smoother((t-1500)/760)*(1-smoother((t-2590)/260));
-    group2.forEach((p,i)=>{
-      const f=flight3D(p,t), target=portfolioTarget(i), targetZ=720;
-      const wp=screenToWorld(target.x,target.y,targetZ), merged=lerpV(f.world,wp,align), pr=project(merged);
-      const size=clamp(p.base*pr.scale*1.8,2.1,48)*(1-align*.24);
-      drawTriangle(pr.x,pr.y,size,mix(f.rot,0,align*.85),colorFor(p,pr.z,.8),.8);
-    });
+  function airCurrent(b,t){
+    // Noise changes acceleration/heading; it never directly teleports position.
+    const a=Math.sin(t*.00072+b.phase),c=Math.cos(t*.00051+b.phase*.73);
+    return V(a*24,c*18,Math.sin(t*.00039+b.phase*.41)*16);
   }
 
-  function eraseGroup3(t){
-    if(t<480)return;
-    ctx.save(); ctx.globalCompositeOperation='destination-out';
-    group3.forEach(p=>{
-      if(p===wipeBird)return;
-      const f=flight3D(p,t), life=clamp((t-480)/1750,0,1);
-      const size=clamp(p.base*f.scale*2.6,3,85)*life;
-      ctx.save();ctx.translate(f.x,f.y);ctx.rotate(f.rot);ctx.globalAlpha=.08+clamp(f.scale/3,0,.28);
-      ctx.beginPath();ctx.moveTo(0,-size*1.8);ctx.lineTo(size*1.5,size*1.35);ctx.lineTo(-size*1.5,size*1.35);ctx.closePath();ctx.fill();ctx.restore();
-    });
-    ctx.restore();
+  function outOfFrustum(b){
+    const p=project(b.pos),pad=150;
+    return b.pos.z<100||b.pos.z>2700||p.x<-pad||p.x>w+pad||p.y<-pad||p.y>h+pad;
   }
 
-  function drawGroup3(t){
-    group3.forEach(p=>{
-      if(p===wipeBird)return;
-      const f=flight3D(p,t), fade=1-smoother((t-2300)/430);
-      if(fade<=0)return;
-      const size=clamp(p.base*f.scale*2.05,2.5,72);
-      drawTriangle(f.x,f.y,size,f.rot,colorFor(p,f.z,.72),.72*fade,1.05);
-    });
+  function updateBird(b,index,t,dt){
+    b.age+=dt;
+    let force=flockForce(b,index);
+    force=add(force,formationForce(b,t));
+    force=add(force,airCurrent(b,t));
+
+    // Mild forward persistence toward current heading keeps birds flying rather than hovering.
+    const desired=mul(norm(b.vel),b.cruise);
+    force=add(force,mul(limit(sub(desired,b.vel),b.maxForce),.32));
+    b.acc=limit(force,b.maxForce*1.45);
+    b.vel=add(b.vel,mul(b.acc,dt));
+
+    const speed=mag(b.vel);
+    if(speed<b.minSpeed)b.vel=mul(norm(b.vel),b.minSpeed);
+    else if(speed>b.maxSpeed)b.vel=mul(norm(b.vel),b.maxSpeed);
+
+    b.pos=add(b.pos,mul(b.vel,dt));
+    const targetBank=clamp(b.acc.x/Math.max(120,b.maxForce),-.72,.72);
+    b.bank=mix(b.bank,targetBank,clamp(dt*5.5,0,1));
+
+    if(outOfFrustum(b)&&b.age>.22)spawnBird(b.group,b.index,b);
   }
 
-  function drawGroup4(t){
-    group4.forEach(p=>{
-      const f=flight3D(p,t), fade=1-smoother((t-2750)/260);
-      if(fade<=0)return;
-      const size=clamp(p.base*f.scale*1.85,1.8,64);
-      drawTriangle(f.x,f.y,size,f.rot,colorFor(p,f.z,.66),.66*fade);
-    });
+  function colorFor(b,z,alpha){
+    const near=clamp(1-(z-150)/1900,0,1);
+    if(b.tone==='gold')return`rgba(124,101,58,${alpha})`;
+    if(b.tone==='teal')return`rgba(42,102,104,${alpha})`;
+    const c=Math.round(mix(82,20,near));return`rgba(${c},${c+2},${c+4},${alpha})`;
+  }
+
+  function drawTriangle(b,alpha=1){
+    const p=project(b.pos);if(p.z<90)return;
+    const size=clamp(b.base*p.scale*1.9,1.8,72);
+    const heading=Math.atan2(b.vel.y,b.vel.x)+Math.PI/2;
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(heading+b.bank);ctx.globalAlpha=alpha;ctx.fillStyle=colorFor(b,p.z,alpha);
+    ctx.beginPath();ctx.moveTo(0,-size*1.08);ctx.lineTo(size*.98,size*.76);ctx.lineTo(-size*.98,size*.76);ctx.closePath();ctx.fill();ctx.restore();
+    return p;
+  }
+
+  function eraseTrail(b,p){
+    if(!p)return;
+    if(b.eraseX==null){b.eraseX=p.x;b.eraseY=p.y;return;}
+    const size=clamp(b.base*p.scale*2.2,4,85);
+    mctx.save();mctx.globalCompositeOperation='destination-out';mctx.lineCap='round';
+    mctx.globalAlpha=.16+clamp(p.scale*.11,0,.32);mctx.lineWidth=size*1.45;
+    mctx.beginPath();mctx.moveTo(b.eraseX,b.eraseY);mctx.lineTo(p.x,p.y);mctx.stroke();
+    mctx.restore();b.eraseX=p.x;b.eraseY=p.y;
   }
 
   function nearCameraWipe(t){
     if(t<WIPE_START)return;
-    const q=clamp((t-WIPE_START)/(WIPE_END-WIPE_START),0,1);
+    const q=smooth((t-WIPE_START)/(WIPE_END-WIPE_START));
+    const sx=mix(-w*.12,w*1.12,q),sy=h*(.68-Math.sin(q*Math.PI)*.34);
+    const size=mix(40,Math.hypot(w,h)*1.18,smooth(clamp((q-.18)/.62,0,1)));
+    const rot=-.55+q*.85;
 
-    // Deliberate one-way swoop: far-left -> near camera -> exit right.
-    const z0=1350,z1=430,z2=115,z3=260;
-    const p0=screenToWorld(-48,h*.72,z0);
-    const p3=screenToWorld(w+110,h*.12,z3);
-    const dx=p3.x-p0.x,dy=p3.y-p0.y,dz=p3.z-p0.z;
-    const p1=V(p0.x+dx*.34,p0.y+dy*.18-120,p0.z+dz*.34);
-    const p2=V(p0.x+dx*.72,p0.y+dy*.78-60,p0.z+dz*.78);
-    const world=V(
-      cubic(p0.x,p1.x,p2.x,p3.x,q),
-      cubic(p0.y,p1.y,p2.y,p3.y,q),
-      cubic(p0.z,p1.z,p2.z,p3.z,q)
-    );
-    const vel=V(
-      cubicD(p0.x,p1.x,p2.x,p3.x,q),
-      cubicD(p0.y,p1.y,p2.y,p3.y,q),
-      cubicD(p0.z,p1.z,p2.z,p3.z,q)
-    );
-    const pr=project(world), rot=Math.atan2(vel.y,vel.x)+Math.PI/2;
-    const near=clamp((500-pr.z)/410,0,1);
-    const size=mix(34,Math.hypot(w,h)*1.28,smoother(near));
+    mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=clamp(.25+q*1.1,0,1);
+    mctx.translate(sx,sy);mctx.rotate(rot);mctx.beginPath();mctx.moveTo(0,-size);mctx.lineTo(size*.98,size*.78);mctx.lineTo(-size*.98,size*.78);mctx.closePath();mctx.fill();mctx.restore();
 
-    ctx.save(); ctx.globalCompositeOperation='destination-out';
-    ctx.translate(pr.x,pr.y); ctx.rotate(rot); ctx.globalAlpha=clamp(.20+near,0,1);
-    ctx.beginPath();ctx.moveTo(0,-size);ctx.lineTo(size*.98,size*.78);ctx.lineTo(-size*.98,size*.78);ctx.closePath();ctx.fill();ctx.restore();
-
-    if(near<.96){
-      drawTriangle(pr.x,pr.y,Math.min(size,Math.hypot(w,h)*.92),rot,'rgba(27,31,34,.92)',.92,1.08);
+    if(q<.86){
+      ctx.save();ctx.translate(sx,sy);ctx.rotate(rot);ctx.globalAlpha=.92;ctx.fillStyle='rgba(27,31,34,.92)';
+      ctx.beginPath();ctx.moveTo(0,-Math.min(size,Math.hypot(w,h)*.9));ctx.lineTo(Math.min(size,Math.hypot(w,h)*.9)*.98,Math.min(size,Math.hypot(w,h)*.9)*.78);ctx.lineTo(-Math.min(size,Math.hypot(w,h)*.9)*.98,Math.min(size,Math.hypot(w,h)*.9)*.78);ctx.closePath();ctx.fill();ctx.restore();
     }
-
-    if(q>.84){
-      ctx.save();ctx.globalCompositeOperation='destination-out';ctx.globalAlpha=smoother((q-.84)/.16);ctx.fillRect(0,0,w,h);ctx.restore();
-    }
+    if(q>.80){mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=smooth((q-.80)/.20);mctx.fillRect(0,0,w,h);mctx.restore();}
   }
 
   function finish(){
-    if(finished)return; finished=true; cancelAnimationFrame(raf);
-    document.documentElement.dataset.entryState='complete'; overlay.classList.add('entry-complete');
+    if(finished)return;finished=true;cancelAnimationFrame(raf);
+    document.documentElement.dataset.entryState='complete';overlay.classList.add('entry-complete');
     setTimeout(()=>overlay.remove(),180);
   }
 
   const watchdog=setTimeout(finish,4300);
   function frame(now){
-    if(!start)start=now;
-    const t=now-start;
+    if(!start){start=now;last=now;}
+    const t=now-start,dt=clamp((now-last)/1000,0,.033);last=now;
+
+    // Physics first.
+    birds.forEach((b,i)=>updateBird(b,i,t,dt));
+
     ctx.clearRect(0,0,w,h);
-    drawWhiteVolume();
-    eraseGroup3(t);
-    drawGroup1(t);
-    drawGroup2(t);
-    drawGroup3(t);
-    drawGroup4(t);
+    ctx.drawImage(membrane,0,0,membrane.width,membrane.height,0,0,w,h);
+
+    // Render and let Group 3 permanently erode the white membrane along its flight.
+    birds.forEach(b=>{
+      if(b===wipeBird)return;
+      const fade=b.group===4?1-smooth((t-2740)/280):1;
+      if(fade<=0)return;
+      const p=drawTriangle(b,(b.group===3?.72:b.group===4?.66:.86)*fade);
+      if(b.group===3&&t>420&&t<2320)eraseTrail(b,p);
+    });
+
     nearCameraWipe(t);
 
     if(t>=TOTAL){clearTimeout(watchdog);finish();return;}
     raf=requestAnimationFrame(frame);
   }
 
-  const onVisibility=()=>{if(document.hidden)return;};
-  const onPageShow=e=>{if(e.persisted)finish();};
   window.addEventListener('resize',resize,{passive:true});
-  document.addEventListener('visibilitychange',onVisibility,{passive:true});
-  window.addEventListener('pageshow',onPageShow,{passive:true});
+  window.addEventListener('pageshow',e=>{if(e.persisted)finish();},{passive:true});
 
   try{resize();document.documentElement.dataset.entryState='running';raf=requestAnimationFrame(frame);}catch(_){clearTimeout(watchdog);finish();}
 })();
