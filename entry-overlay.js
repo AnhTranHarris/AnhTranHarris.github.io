@@ -1,6 +1,6 @@
 /* Harris Portfolio: modular 3.1s flock entry choreography.
-   True 3D white-space flight volume with four triangle groups:
-   words, portfolio alignment, membrane erasure, and free flight.
+   Four triangle groups fly through a true 3D white-space volume.
+   Paths use continuous airspeed, directional depth travel, and off-screen recycling.
    Isolated from carousel/resume systems; watchdog always releases the page. */
 (() => {
   'use strict';
@@ -51,7 +51,7 @@
   }
 
   function project(p){
-    const z = Math.max(70, p.z);
+    const z = Math.max(85, p.z);
     const s = focal / z;
     return { x:w*.5 + p.x*s, y:h*.5 + p.y*s, scale:s, z };
   }
@@ -61,42 +61,69 @@
     return V((x-w*.5)/s, (y-h*.5)/s, z);
   }
 
-  function projectedEdgePoint(side, pad=14){
+  function projectedEdgePoint(side,pad=18){
     if(side===0) return {x:rand(-pad,w+pad),y:-pad};
     if(side===1) return {x:w+pad,y:rand(-pad,h+pad)};
     if(side===2) return {x:rand(-pad,w+pad),y:h+pad};
     return {x:-pad,y:rand(-pad,h+pad)};
   }
 
+  function chooseExitSide(entry){
+    // Prefer a different edge, with opposite and adjacent exits both possible.
+    const choices=[0,1,2,3].filter(s=>s!==entry);
+    const opposite=(entry+2)%4;
+    return Math.random()<.48 ? opposite : choices[Math.floor(rand(0,choices.length))];
+  }
+
   function make3DPath(group,i){
     const side0=Math.floor(rand(0,4));
-    let side1=Math.floor(rand(0,4));
-    if(side1===side0) side1=(side1+2)%4;
+    const side1=chooseExitSide(side0);
+    const startScreen=projectedEdgePoint(side0,rand(10,30));
+    const endScreen=projectedEdgePoint(side1,rand(26,70));
 
-    const startScreen=projectedEdgePoint(side0,rand(8,22));
-    const endScreen=projectedEdgePoint(side1,rand(18,46));
-    const z0=rand(1050,2200);
-    const z3=rand(800,2100);
+    // Depth travels mainly in one direction. This avoids the old far->near->far visual bounce.
+    const depthMode=Math.random();
+    let z0,z3;
+    if(depthMode<.46){
+      z0=rand(1350,2500); z3=rand(330,900);       // approaching camera
+    }else if(depthMode<.76){
+      z0=rand(420,950); z3=rand(1300,2450);       // receding into field
+    }else{
+      z0=rand(800,1800); z3=clamp(z0+rand(-260,260),520,2100); // lateral depth band
+    }
 
-    // Most birds move toward camera before veering away again. A minority remain distant.
-    const nearPass = Math.random() < .72;
-    const zNear = nearPass ? rand(180,620) : rand(700,1250);
     const p0=screenToWorld(startScreen.x,startScreen.y,z0);
     const p3=screenToWorld(endScreen.x,endScreen.y,z3);
 
-    const bend1={x:rand(w*.16,w*.84), y:rand(h*.08,h*.92)};
-    const bend2={x:rand(w*.12,w*.88), y:rand(h*.06,h*.94)};
-    const p1=screenToWorld(bend1.x,bend1.y,mix(z0,zNear,rand(.48,.78)));
-    const p2=screenToWorld(bend2.x,bend2.y,mix(zNear,z3,rand(.22,.58)));
-    p1.x += rand(-260,260); p1.y += rand(-180,180);
-    p2.x += rand(-260,260); p2.y += rand(-180,180);
+    // Construct the curve from the route vector itself, not from screen-centered waypoints.
+    const dx=p3.x-p0.x, dy=p3.y-p0.y, dz=p3.z-p0.z;
+    const planar=Math.max(1,Math.hypot(dx,dy));
+    const nx=-dy/planar, ny=dx/planar;
+    const curve=rand(-1,1)*Math.min(420,Math.max(90,planar*.24));
+    const lift=rand(-80,80);
+
+    const p1=V(
+      p0.x+dx*.31+nx*curve*.72,
+      p0.y+dy*.31+ny*curve*.72+lift,
+      p0.z+dz*.31
+    );
+    const p2=V(
+      p0.x+dx*.68+nx*curve,
+      p0.y+dy*.68+ny*curve-lift*.35,
+      p0.z+dz*.68
+    );
+
+    // Deliberately wide speed distribution: some birds dart, some cruise.
+    const speedClass=Math.random();
+    const duration=speedClass<.22 ? rand(850,1300)
+      : speedClass<.72 ? rand(1350,2050)
+      : rand(2100,2850);
 
     return {
       group,i,p0,p1,p2,p3,
-      delay:rand(0,520), duration:rand(1850,3000),
+      delay:rand(-420,380), duration,
       base:rand(5.5,12.5), phase:rand(0,TAU),
-      bankPhase:rand(0,TAU), wing:rand(.55,1.25),
-      flutter:rand(.55,1.25),
+      bankPhase:rand(0,TAU),
       tone:Math.random()<.10?'gold':(Math.random()<.18?'teal':'charcoal')
     };
   }
@@ -106,7 +133,6 @@
   const group3=Array.from({length:52},(_,i)=>make3DPath(3,i));
   const group4=Array.from({length:70},(_,i)=>make3DPath(4,i));
 
-  // One group-3 bird is promoted into the dramatic near-camera wipe.
   const wipeBird=group3[Math.floor(group3.length*.63)];
   wipeBird.delay=WIPE_START;
   wipeBird.duration=WIPE_END-WIPE_START;
@@ -120,7 +146,8 @@
   function resize(){
     dpr=Math.min(window.devicePixelRatio||1,1.75);
     w=Math.max(1,window.innerWidth); h=Math.max(1,window.innerHeight);
-    focal=Math.max(520,Math.min(980,w*.78));
+    // Wider FOV on narrow screens prevents the mobile flock from collapsing into the center.
+    focal=clamp(w*.82,300,900);
     canvas.width=Math.round(w*dpr); canvas.height=Math.round(h*dpr);
     canvas.style.width=`${w}px`; canvas.style.height=`${h}px`;
     ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -131,11 +158,11 @@
     wordTargets=new Map();
     const off=document.createElement('canvas');
     const octx=off.getContext('2d');
-    const ow=Math.min(920,Math.max(420,w*.78));
-    const oh=Math.min(220,Math.max(150,h*.22));
+    const ow=Math.min(920,Math.max(340,w*.78));
+    const oh=Math.min(220,Math.max(130,h*.22));
     off.width=Math.round(ow); off.height=Math.round(oh);
     octx.textAlign='center'; octx.textBaseline='middle'; octx.fillStyle='#000';
-    octx.font=`800 ${Math.max(52,Math.min(128,ow/7))}px Inter, Arial, sans-serif`;
+    octx.font=`800 ${Math.max(44,Math.min(128,ow/7))}px Inter, Arial, sans-serif`;
     for(const spec of WORDS){
       octx.clearRect(0,0,off.width,off.height);
       octx.fillText(spec.text,off.width/2,off.height/2);
@@ -159,30 +186,31 @@
   }
 
   function flight3D(p,t){
-    let q=(t-p.delay)/p.duration;
-    q=((q%1)+1)%1;
-    const u=smoother(q);
+    const raw=(t-p.delay)/p.duration;
+    const cycle=Math.floor(raw);
+    const q=raw-cycle;
+
+    // Constant progression through the cubic: no ease-in/ease-out, so no visual bouncing.
     const pos=V(
-      cubic(p.p0.x,p.p1.x,p.p2.x,p.p3.x,u),
-      cubic(p.p0.y,p.p1.y,p.p2.y,p.p3.y,u),
-      cubic(p.p0.z,p.p1.z,p.p2.z,p.p3.z,u)
+      cubic(p.p0.x,p.p1.x,p.p2.x,p.p3.x,q),
+      cubic(p.p0.y,p.p1.y,p.p2.y,p.p3.y,q),
+      cubic(p.p0.z,p.p1.z,p.p2.z,p.p3.z,q)
     );
     const vel=V(
-      cubicD(p.p0.x,p.p1.x,p.p2.x,p.p3.x,u),
-      cubicD(p.p0.y,p.p1.y,p.p2.y,p.p3.y,u),
-      cubicD(p.p0.z,p.p1.z,p.p2.z,p.p3.z,u)
+      cubicD(p.p0.x,p.p1.x,p.p2.x,p.p3.x,q),
+      cubicD(p.p0.y,p.p1.y,p.p2.y,p.p3.y,q),
+      cubicD(p.p0.z,p.p1.z,p.p2.z,p.p3.z,q)
     );
 
-    // Gentle flocking undulation exists in world space, so its apparent amplitude changes with depth.
-    const flutter=Math.sin(t*.0052*p.flutter+p.phase+q*TAU*1.7);
-    const sway=Math.sin(t*.0022+p.phase+q*TAU)*p.wing;
-    pos.x += sway*22 + flutter*6;
-    pos.y += Math.cos(t*.0027+p.phase*.7+q*TAU*1.4)*16 + flutter*4;
-    pos.z += Math.sin(t*.0018+p.phase)*32;
+    // Tiny aerodynamic drift only; no positional sine-wave oscillation.
+    const drift=Math.sin((t*.0017)+p.phase+cycle*.73);
+    pos.x += drift*5;
+    pos.y += Math.cos((t*.0013)+p.phase*.61+cycle*.47)*3.5;
 
     const projected=project(pos);
     const heading=Math.atan2(vel.y,vel.x)+Math.PI/2;
-    const bank=clamp(vel.x/Math.max(180,Math.abs(vel.z)+180),-.8,.8) + Math.sin(t*.003+p.bankPhase)*.12;
+    const turn=Math.atan2(vel.x,Math.max(220,Math.abs(vel.z)));
+    const bank=clamp(turn,-.62,.62)+Math.sin(t*.0025+p.bankPhase)*.055;
     return {...projected,world:pos,vel,rot:heading+bank,q};
   }
 
@@ -231,7 +259,7 @@
         rot=mix(rot,0,strength*.85);
       }
       const size=clamp(p.base*scale*1.9,2.2,56)*(1-strength*.2);
-      const stretch=1+Math.abs(f.vel.z)/1800*.18;
+      const stretch=1+Math.abs(f.vel.z)/1800*.14;
       drawTriangle(x,y,size,rot,colorFor(p,z,.88),.88,stretch);
     });
   }
@@ -280,14 +308,15 @@
 
   function nearCameraWipe(t){
     if(t<WIPE_START)return;
-    const q=smoother((t-WIPE_START)/(WIPE_END-WIPE_START));
+    const q=clamp((t-WIPE_START)/(WIPE_END-WIPE_START),0,1);
 
-    // Special 3D swoop: far-left -> near-camera center -> far-right.
-    const z0=1250,z1=110,z2=95,z3=520;
-    const p0=screenToWorld(-28,h*.68,z0);
-    const p1=screenToWorld(w*.28,h*.30,z1);
-    const p2=screenToWorld(w*.72,h*.42,z2);
-    const p3=screenToWorld(w+80,h*.18,z3);
+    // Deliberate one-way swoop: far-left -> near camera -> exit right.
+    const z0=1350,z1=430,z2=115,z3=260;
+    const p0=screenToWorld(-48,h*.72,z0);
+    const p3=screenToWorld(w+110,h*.12,z3);
+    const dx=p3.x-p0.x,dy=p3.y-p0.y,dz=p3.z-p0.z;
+    const p1=V(p0.x+dx*.34,p0.y+dy*.18-120,p0.z+dz*.34);
+    const p2=V(p0.x+dx*.72,p0.y+dy*.78-60,p0.z+dz*.78);
     const world=V(
       cubic(p0.x,p1.x,p2.x,p3.x,q),
       cubic(p0.y,p1.y,p2.y,p3.y,q),
@@ -299,21 +328,19 @@
       cubicD(p0.z,p1.z,p2.z,p3.z,q)
     );
     const pr=project(world), rot=Math.atan2(vel.y,vel.x)+Math.PI/2;
-    const near=clamp((420-pr.z)/330,0,1);
-    const size=mix(36,Math.hypot(w,h)*1.22,smoother(near));
+    const near=clamp((500-pr.z)/410,0,1);
+    const size=mix(34,Math.hypot(w,h)*1.28,smoother(near));
 
-    // As the bird gets too close to camera, its silhouette becomes the wipe mask.
     ctx.save(); ctx.globalCompositeOperation='destination-out';
-    ctx.translate(pr.x,pr.y); ctx.rotate(rot); ctx.globalAlpha=clamp(.22+near*.95,0,1);
+    ctx.translate(pr.x,pr.y); ctx.rotate(rot); ctx.globalAlpha=clamp(.20+near,0,1);
     ctx.beginPath();ctx.moveTo(0,-size);ctx.lineTo(size*.98,size*.78);ctx.lineTo(-size*.98,size*.78);ctx.closePath();ctx.fill();ctx.restore();
 
     if(near<.96){
       drawTriangle(pr.x,pr.y,Math.min(size,Math.hypot(w,h)*.92),rot,'rgba(27,31,34,.92)',.92,1.08);
     }
 
-    // Final fraction guarantees clean reveal after the near-camera pass.
-    if(q>.82){
-      ctx.save();ctx.globalCompositeOperation='destination-out';ctx.globalAlpha=smoother((q-.82)/.18);ctx.fillRect(0,0,w,h);ctx.restore();
+    if(q>.84){
+      ctx.save();ctx.globalCompositeOperation='destination-out';ctx.globalAlpha=smoother((q-.84)/.16);ctx.fillRect(0,0,w,h);ctx.restore();
     }
   }
 
