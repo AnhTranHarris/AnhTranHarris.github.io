@@ -73,7 +73,6 @@
     const target=screenToWorld(aim.x,aim.y,aimZ);
     const speed=speedProfile();
     let dir=norm(sub(target,pos));
-    // Give each bird a slightly different climb/dive and lateral intent.
     dir=norm(add(dir,V(rand(-.16,.16),rand(-.13,.13),rand(-.10,.10))));
     const obj=bird||{};
     Object.assign(obj,{
@@ -158,7 +157,6 @@
 
   function flockForce(b,index){
     let sep=V(),ali=V(),coh=V(),count=0;
-    // Sample neighbors rather than O(n^2) full scan; enough for murmuration coherence.
     const samples=12,stride=17;
     for(let k=1;k<=samples;k++){
       const other=birds[(index+k*stride)%birds.length];
@@ -200,7 +198,6 @@
   }
 
   function airCurrent(b,t){
-    // Noise changes acceleration/heading; it never directly teleports position.
     const a=Math.sin(t*.00072+b.phase),c=Math.cos(t*.00051+b.phase*.73);
     return V(a*24,c*18,Math.sin(t*.00039+b.phase*.41)*16);
   }
@@ -215,8 +212,6 @@
     let force=flockForce(b,index);
     force=add(force,formationForce(b,t));
     force=add(force,airCurrent(b,t));
-
-    // Mild forward persistence toward current heading keeps birds flying rather than hovering.
     const desired=mul(norm(b.vel),b.cruise);
     force=add(force,mul(limit(sub(desired,b.vel),b.maxForce),.32));
     b.acc=limit(force,b.maxForce*1.45);
@@ -229,7 +224,6 @@
     b.pos=add(b.pos,mul(b.vel,dt));
     const targetBank=clamp(b.acc.x/Math.max(120,b.maxForce),-.72,.72);
     b.bank=mix(b.bank,targetBank,clamp(dt*5.5,0,1));
-
     if(outOfFrustum(b)&&b.age>.22)spawnBird(b.group,b.index,b);
   }
 
@@ -271,7 +265,8 @@
 
     if(q<.86){
       ctx.save();ctx.translate(sx,sy);ctx.rotate(rot);ctx.globalAlpha=.92;ctx.fillStyle='rgba(27,31,34,.92)';
-      ctx.beginPath();ctx.moveTo(0,-Math.min(size,Math.hypot(w,h)*.9));ctx.lineTo(Math.min(size,Math.hypot(w,h)*.9)*.98,Math.min(size,Math.hypot(w,h)*.9)*.78);ctx.lineTo(-Math.min(size,Math.hypot(w,h)*.9)*.98,Math.min(size,Math.hypot(w,h)*.9)*.78);ctx.closePath();ctx.fill();ctx.restore();
+      const capped=Math.min(size,Math.hypot(w,h)*.9);
+      ctx.beginPath();ctx.moveTo(0,-capped);ctx.lineTo(capped*.98,capped*.78);ctx.lineTo(-capped*.98,capped*.78);ctx.closePath();ctx.fill();ctx.restore();
     }
     if(q>.80){mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=smooth((q-.80)/.20);mctx.fillRect(0,0,w,h);mctx.restore();}
   }
@@ -286,30 +281,26 @@
   function frame(now){
     if(!start){start=now;last=now;}
     const t=now-start,dt=clamp((now-last)/1000,0,.033);last=now;
-
-    // Physics first.
     birds.forEach((b,i)=>updateBird(b,i,t,dt));
 
     ctx.clearRect(0,0,w,h);
     ctx.drawImage(membrane,0,0,membrane.width,membrane.height,0,0,w,h);
 
-    // Render and let Group 3 permanently erode the white membrane along its flight.
     birds.forEach(b=>{
       if(b===wipeBird)return;
       const fade=b.group===4?1-smooth((t-2740)/280):1;
       if(fade<=0)return;
-      const p=drawTriangle(b,(b.group===3?.72:b.group===4?.66:.86)*fade);
+      const alpha=(b.group===3?0.72:(b.group===4?0.66:0.86))*fade;
+      const p=drawTriangle(b,alpha);
       if(b.group===3&&t>420&&t<2320)eraseTrail(b,p);
     });
 
     nearCameraWipe(t);
-
     if(t>=TOTAL){clearTimeout(watchdog);finish();return;}
     raf=requestAnimationFrame(frame);
   }
 
   window.addEventListener('resize',resize,{passive:true});
   window.addEventListener('pageshow',e=>{if(e.persisted)finish();},{passive:true});
-
   try{resize();document.documentElement.dataset.entryState='running';raf=requestAnimationFrame(frame);}catch(_){clearTimeout(watchdog);finish();}
 })();
