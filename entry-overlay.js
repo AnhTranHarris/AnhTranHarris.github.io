@@ -57,7 +57,6 @@
   uniform float uTime;
   uniform float uProgress;
 
-  const float PI=3.141592653589793;
   const vec3 WHITE=vec3(1.0);
   const vec3 INK=vec3(0.031,0.090,0.114);
   const vec3 TEAL=vec3(0.075,0.247,0.271);
@@ -67,76 +66,49 @@
     return sin(dot(p,k)+uTime*speed+phase);
   }
   float radial(vec2 p, vec2 c, float freq, float speed, float phase){
-    float r=length(p-c);
-    return cos(r*freq-uTime*speed+phase);
-  }
-  float pulse(float p,float a,float b){
-    if(p<=a||p>=b) return 0.0;
-    return sin(PI*(p-a)/(b-a));
+    return cos(length(p-c)*freq-uTime*speed+phase);
   }
 
   void main(){
     vec2 res=max(uResolution,vec2(1.0));
-
-    // Quantize in physical pixels, not CSS pixels. This gives the reference GIF's
-    // stepped/chopped boundaries while keeping those steps equally crisp at every DPR.
-    float blockPx = mix(19.0, 9.0, 0.5+0.5*sin(uTime*1.35));
+    float blockPx=mix(19.0,9.0,0.5+0.5*sin(uTime*1.35));
     vec2 qpx=floor((vUv*res)/blockPx)*blockPx+blockPx*0.5;
     vec2 uv=qpx/res;
 
-    // Aspect-correct field coordinates keep mathematical shapes consistent across
-    // portrait and landscape instead of stretching their wavelengths.
     float aspect=res.x/res.y;
     vec2 p=(uv-0.5)*vec2(aspect,1.0)*6.2831853;
     float t=uTime;
 
-    // Four directional oscillators. Their phase differences create constructive and
-    // destructive regions which grow, shrink and eat through one another.
     float d1=wave(p,vec2( 1.18, 0.46), 3.85, 0.20);
     float d2=wave(p,vec2(-0.63, 1.36),-3.05, 1.70);
     float d3=wave(p,vec2( 0.82, 1.02), 4.65, 3.10);
     float d4=wave(p,vec2( 1.54,-0.72),-4.10, 4.35);
 
-    // Two moving radial pressure fields drive the large aggressive expansions that
-    // periodically dominate the reference animation.
-    vec2 c1=vec2(-1.55+2.85*sin(t*0.71), 1.10*cos(t*0.93));
+    vec2 c1=vec2(-1.55+2.85*sin(t*0.71),1.10*cos(t*0.93));
     vec2 c2=vec2( 1.45*cos(t*0.83+1.4),-1.20+2.10*sin(t*0.59));
     float r1=radial(p,c1,2.18,5.15,0.45);
     float r2=radial(p,c2,2.63,-4.55,2.20);
 
-    // Three competing scalar fields. They share oscillators but with different signs,
-    // so when one grows another is mathematically destroyed rather than simply covered.
     float goldField= 1.04*d1 + 0.72*d3 - 0.63*d2 + 0.77*r1 - 0.45*r2;
     float inkField =-0.78*d1 + 1.02*d2 + 0.69*d4 + 0.66*r2 - 0.37*r1;
     float whiteField= 0.62*d1 - 0.58*d3 + 0.84*d4 - 0.39*r1 + 0.48*r2;
 
-    // Low-frequency envelope changes territorial dominance over time, reproducing the
-    // GIF's large phases where orange/black/white alternately consume most of frame.
-    float gBias=0.33*sin(t*2.55)+0.21*sin(t*5.20+0.7);
-    float iBias=0.30*sin(t*2.16+2.1)+0.22*sin(t*4.78+1.3);
-    float wBias=0.26*sin(t*2.88+4.0)+0.18*sin(t*5.64+2.7);
-    goldField+=gBias;
-    inkField +=iBias;
-    whiteField+=wBias;
+    goldField+=0.33*sin(t*2.55)+0.21*sin(t*5.20+0.7);
+    inkField +=0.30*sin(t*2.16+2.1)+0.22*sin(t*4.78+1.3);
+    whiteField+=0.26*sin(t*2.88+4.0)+0.18*sin(t*5.64+2.7);
 
-    // Hard winner-take-all thresholding. No smoothstep at color boundaries: this is
-    // intentional so edges remain graphic and razor sharp instead of fuzzy.
     float threshold=0.02+0.11*sin(t*1.82);
     vec3 color=WHITE;
     float best=whiteField;
-    if(inkField>best+threshold){best=inkField;color=INK;}
-    if(goldField>best+threshold){best=goldField;color=GOLD;}
+    int winner=0;
+    if(inkField>best+threshold){best=inkField;color=INK;winner=1;}
+    if(goldField>best+threshold){best=goldField;color=GOLD;winner=2;}
 
-    // Teal appears only in transitional interference bands to connect the reference
-    // effect to the portfolio palette without replacing its gold-vs-dark behavior.
     float competition=abs(goldField-inkField);
-    if(color!=WHITE && competition<0.16 && sin((p.x-p.y)*1.4+t*5.8)>0.05){color=TEAL;}
+    if(winner!=0 && competition<0.16 && sin((p.x-p.y)*1.4+t*5.8)>0.05){color=TEAL;}
 
-    // Flat white opening frame.
     if(uProgress<0.028){outColor=vec4(WHITE,1.0);return;}
 
-    // Beginning around 63%, destructive cancellation becomes transparency. The live
-    // portfolio therefore emerges from the same field instead of through a separate fade.
     float revealRamp=smoothstep(0.63,0.98,uProgress);
     float revealWave=
       0.70*wave(p,vec2(0.91,-1.13),5.30,0.2)+
@@ -145,7 +117,6 @@
     float revealThreshold=mix(1.42,-1.52,revealRamp);
     bool transparent=revealRamp>0.0 && revealWave>revealThreshold;
 
-    // Final destructive wave guarantees complete reveal without a blurry opacity fade.
     if(uProgress>0.965){
       float finalCut=smoothstep(0.965,1.0,uProgress);
       float sweep=(uv.x+uv.y*0.58)-mix(-0.35,1.62,finalCut);
@@ -229,12 +200,9 @@
     if (!start) start = now;
     const elapsed = Math.max(0, now - start - WHITE_HOLD_MS);
     const progress = Math.min(1, elapsed / TOTAL_MS);
-    const seconds = elapsed / 1000;
-
-    gl.uniform1f(uTime, seconds);
+    gl.uniform1f(uTime, elapsed / 1000);
     gl.uniform1f(uProgress, progress);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-
     if (progress >= 1) { finish(); return; }
     raf = requestAnimationFrame(frame);
   }
