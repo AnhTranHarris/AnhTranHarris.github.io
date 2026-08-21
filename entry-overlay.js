@@ -1,6 +1,6 @@
 /* Harris Portfolio entry: clustered Three.js murmuration.
-   A shared 3D flock trajectory drives the visual motion; Reynolds boids provide
-   separation, alignment, cohesion, and local variation inside that moving flock.
+   Shared camera-relative flock geometry keeps desktop/mobile motion consistent.
+   Reynolds boids add local separation/alignment/cohesion inside a fast banking flock.
    The portfolio remains untouched beneath this modular entry layer. */
 (async()=>{
   'use strict';
@@ -20,13 +20,18 @@
   }catch(_){finishImmediately();return;}
 
   const TOTAL=3180;
-  const FORMATION_START=1780;
+  const FORMATION_START=1740;
+  const LEADER_FLIGHT_END=1910;
   const WIPE_START=2440;
   const WIPE_END=3060;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const mix=(a,b,t)=>a+(b-a)*t;
   const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
   const rand=(a,b)=>a+Math.random()*(b-a);
+  const pulse=(p,a,b)=>{
+    if(p<=a||p>=b)return 0;
+    return Math.sin(Math.PI*(p-a)/(b-a));
+  };
   const gaussian=()=>{
     let u=0,v=0;
     while(!u)u=Math.random();
@@ -77,8 +82,8 @@
   const ndc=new THREE.Vector3();
   const rayDir=new THREE.Vector3();
 
-  const isMobile=()=>Math.min(window.innerWidth,window.innerHeight)<620;
-  const countForDevice=()=>isMobile()?280:500;
+  // Same flock population and same normalized choreography on desktop and mobile.
+  const countForDevice=()=>420;
 
   function screenToWorldAtZ(sx,sy,z){
     ndc.set((sx/width)*2-1,-((sy/height)*2-1),.5).unproject(camera);
@@ -93,41 +98,67 @@
     return{x:(p.x*.5+.5)*width,y:(-.5*p.y+.5)*height,visible:p.z>-1&&p.z<1};
   }
 
+  function viewAtZ(z){
+    const distance=Math.max(.25,camera.position.z-z);
+    const vh=2*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*distance;
+    return{w:vh*camera.aspect,h:vh};
+  }
+
   function buildLeaderCurve(){
+    // Same normalized screen choreography at every aspect ratio. The stronger
+    // lateral reversals create fast S-turns and visibly harder flock banking.
     const pts=[
-      screenToWorldAtZ(width*.91,height*.10,-7),
-      screenToWorldAtZ(width*.80,height*.15,-3),
-      screenToWorldAtZ(width*.74,height*.28,3),
-      screenToWorldAtZ(width*.68,height*.46,11),
-      screenToWorldAtZ(width*.52,height*.61,18),
-      screenToWorldAtZ(width*.28,height*.72,24),
-      screenToWorldAtZ(width*.12,height*.77,25.5),
-      screenToWorldAtZ(width*.32,height*.64,17),
-      screenToWorldAtZ(width*.63,height*.46,7),
-      screenToWorldAtZ(width*.84,height*.27,-3)
+      screenToWorldAtZ(width*.92,height*.10,-8),
+      screenToWorldAtZ(width*.78,height*.13,-4),
+      screenToWorldAtZ(width*.60,height*.24,3),
+      screenToWorldAtZ(width*.78,height*.39,10),
+      screenToWorldAtZ(width*.51,height*.54,17),
+      screenToWorldAtZ(width*.20,height*.66,23.2),
+      screenToWorldAtZ(width*.08,height*.75,25.3),
+      screenToWorldAtZ(width*.39,height*.59,18),
+      screenToWorldAtZ(width*.71,height*.41,8),
+      screenToWorldAtZ(width*.88,height*.22,-4)
     ];
-    leaderCurve=new THREE.CatmullRomCurve3(pts,false,'centripetal',.45);
-    leaderCurve.arcLengthDivisions=400;
+    leaderCurve=new THREE.CatmullRomCurve3(pts,false,'centripetal',.30);
+    leaderCurve.arcLengthDivisions=500;
     leaderCurve.updateArcLengths();
   }
 
-  function compactOffset(i,total){
-    // Dense irregular ellipsoid around ONE origin, not a full shell.
-    // Most birds are close to the center; a few form a soft outer edge.
-    const radialBias=Math.pow((i+.5)/total,.70);
-    const spread=.30+.55*radialBias;
+  function compactSlot(){
+    // Normalized camera-space ellipsoid. These numbers are fractions of the
+    // visible frustum, so mobile and desktop begin with the same visual cluster.
     return new THREE.Vector3(
-      gaussian()*.42*spread,
-      gaussian()*.31*spread,
-      gaussian()*.36*spread
+      gaussian()*.060,
+      gaussian()*.048,
+      gaussian()*.042
     );
   }
 
   function speedProfile(){
     const r=Math.random();
-    if(r<.14)return{cruise:7.45,max:9.6,maxForce:8.8};
-    if(r<.82)return{cruise:6.55,max:8.6,maxForce:8.1};
-    return{cruise:5.85,max:7.7,maxForce:7.4};
+    if(r<.22)return{cruise:14.2,max:19.0,maxForce:19.0};
+    if(r<.80)return{cruise:12.1,max:16.2,maxForce:17.0};
+    return{cruise:10.2,max:14.0,maxForce:15.2};
+  }
+
+  function slotWorld(slot,leader,t){
+    const view=viewAtZ(leader.point.z);
+    const p=leader.p;
+    // Two strong breath cycles: tighten -> swell -> tighten -> swell -> tighten.
+    // Perspective adds another natural expansion during the near-camera pass.
+    const breathe=.62 + .92*pulse(p,.08,.42) + 1.34*pulse(p,.47,.82);
+    const turn=Math.atan2(leader.tangent.y,leader.tangent.x);
+    const c=Math.cos(turn),s=Math.sin(turn);
+    const sx=slot.x*view.w*breathe;
+    const sy=slot.y*view.h*breathe;
+    const x=sx*c-sy*s;
+    const y=sx*s+sy*c;
+    const depthScale=Math.max(1.4,(camera.position.z-leader.point.z)*.16);
+    return leader.point.clone().add(new THREE.Vector3(
+      x-slot.z*depthScale*leader.bank*.20,
+      y+slot.z*depthScale*.08,
+      slot.z*depthScale*breathe
+    ));
   }
 
   function buildWordTargets(){
@@ -181,30 +212,46 @@
     }
   }
 
+  function leaderState(t){
+    // Fast collective flight: the entire GIF-like flock trajectory completes in
+    // ~1.9s, leaving the remaining entry time for formations and final wipe.
+    const p=clamp(t/LEADER_FLIGHT_END,0,1);
+    const point=leaderCurve.getPointAt(p);
+    const tangent=leaderCurve.getTangentAt(clamp(p+.0025,0,1)).normalize();
+    const prev=leaderCurve.getTangentAt(clamp(p-.012,0,1)).normalize();
+    const next=leaderCurve.getTangentAt(clamp(p+.012,0,1)).normalize();
+    const a0=Math.atan2(prev.y,prev.x),a1=Math.atan2(next.y,next.x);
+    let delta=a1-a0;
+    while(delta>Math.PI)delta-=Math.PI*2;
+    while(delta<-Math.PI)delta+=Math.PI*2;
+    // Amplified curvature produces the hard coordinated banking seen in a flock turn.
+    const bank=clamp(delta*8.5,-1.12,1.12);
+    return{p,point,tangent,bank};
+  }
+
   function initFlock(){
     if(mesh){scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();mesh=null;}
     const total=countForDevice();
     const g1=Math.round(total*.23),g2=Math.round(total*.18),g3=Math.round(total*.18),g4=total-g1-g2-g3;
     group1=[];group2=[];group3=[];group4=[];flock=[];
-    const leader0=leaderCurve.getPointAt(0);
-    const tangent0=leaderCurve.getTangentAt(.002).normalize();
+    const leader0=leaderState(0);
 
     for(let i=0;i<total;i++){
       const group=i<g1?1:i<g1+g2?2:i<g1+g2+g3?3:4;
       const sp=speedProfile();
-      const offset=compactOffset(i,total);
+      const slot=compactSlot();
+      const initialPosition=slotWorld(slot,leader0,0);
       const b={
         index:i,group,
-        position:leader0.clone().add(offset),
-        // Nearly identical initial heading/airspeed, like a real flock entering together.
-        velocity:tangent0.clone().multiplyScalar(sp.cruise).add(new THREE.Vector3(
-          rand(-.045,.045),rand(-.035,.035),rand(-.035,.035)
+        position:initialPosition,
+        velocity:leader0.tangent.clone().multiplyScalar(sp.cruise).add(new THREE.Vector3(
+          rand(-.05,.05),rand(-.04,.04),rand(-.04,.04)
         )),
         acceleration:new THREE.Vector3(),
-        slot:offset.clone(),
+        slot,
         cruise:sp.cruise,maxSpeed:sp.max,maxForce:sp.maxForce,
         scale:rand(.18,.31),tone:Math.random()<.05?'gold':(Math.random()<.08?'teal':'charcoal'),
-        bank:0,phase:rand(0,Math.PI*2),trail:null
+        bank:leader0.bank,phase:rand(0,Math.PI*2),trail:null
       };
       flock.push(b);
       (group===1?group1:group===2?group2:group===3?group3:group4).push(b);
@@ -222,7 +269,7 @@
     buildLineTargets();
   }
 
-  const CELL=2.0;
+  const CELL=2.2;
   let grid=new Map();
   const keyFor=p=>`${Math.floor(p.x/CELL)},${Math.floor(p.y/CELL)},${Math.floor(p.z/CELL)}`;
   const neighborOffsets=[];
@@ -264,55 +311,31 @@
     for(const id of neighborsOf(b)){
       const o=flock[id];if(o===b)continue;
       const dvec=o.position.clone().sub(b.position),d2=dvec.lengthSq();
-      // Much larger awareness radius so the compact flock actually behaves collectively.
-      if(d2>2.10*2.10||d2<1e-7)continue;
+      if(d2>2.35*2.35||d2<1e-7)continue;
       count++;ali.add(o.velocity);coh.add(o.position);
-      if(d2<.22*.22){sep.addScaledVector(dvec,-1/Math.max(d2,.006));sepCount++;}
+      if(d2<.20*.20){sep.addScaledVector(dvec,-1/Math.max(d2,.005));sepCount++;}
     }
     const f=new THREE.Vector3();
     if(sepCount){
       sep.divideScalar(sepCount);
       if(sep.lengthSq()>0)sep.setLength(b.maxSpeed);
-      f.addScaledVector(steerToVelocity(b,sep),1.15);
+      f.addScaledVector(steerToVelocity(b,sep),1.20);
     }
     if(count){
       ali.divideScalar(count);if(ali.lengthSq()>0)ali.setLength(b.cruise);
-      f.addScaledVector(steerToVelocity(b,ali),1.80);
+      f.addScaledVector(steerToVelocity(b,ali),2.05);
       coh.divideScalar(count);
-      f.addScaledVector(seek(b,coh,b.cruise),1.12);
+      f.addScaledVector(seek(b,coh,b.cruise),1.18);
     }
     return f;
   }
 
   function wordSpec(t){
     if(t<FORMATION_START)return null;
-    if(t<2010)return{text:'BUILD',strength:smooth((t-FORMATION_START)/230)*(1-smooth((t-1980)/90))};
-    if(t<2250)return{text:'EXPLORE',strength:smooth((t-2010)/180)*(1-smooth((t-2220)/70))};
-    if(t<2440)return{text:'IMPROVE',strength:smooth((t-2250)/150)*(1-smooth((t-2410)/60))};
+    if(t<1995)return{text:'BUILD',strength:smooth((t-FORMATION_START)/190)*(1-smooth((t-1970)/70))};
+    if(t<2225)return{text:'EXPLORE',strength:smooth((t-1995)/160)*(1-smooth((t-2195)/65))};
+    if(t<2440)return{text:'IMPROVE',strength:smooth((t-2225)/145)*(1-smooth((t-2410)/60))};
     return null;
-  }
-
-  function leaderState(t){
-    const p=clamp(t/(WIPE_START+120),0,1);
-    const point=leaderCurve.getPointAt(p);
-    const tangent=leaderCurve.getTangentAt(clamp(p+.002,0,1)).normalize();
-    return{p,point,tangent};
-  }
-
-  function dynamicSlot(b,leader,t){
-    // Tight at distance, widening only as the whole flock approaches the camera.
-    const near=clamp((leader.point.z-8)/17,0,1);
-    const breathe=.82 + .025*Math.sin(t*.0024+b.phase) + near*1.10;
-    const turn=Math.atan2(leader.tangent.y,leader.tangent.x);
-    const c=Math.cos(turn),s=Math.sin(turn);
-    const x=b.slot.x*c-b.slot.y*s;
-    const y=b.slot.x*s+b.slot.y*c;
-    const twist=.07*Math.sin(t*.0013)+near*.18;
-    return leader.point.clone().add(new THREE.Vector3(
-      (x-b.slot.z*twist)*breathe,
-      (y+b.slot.z*.08)*breathe,
-      b.slot.z*(.88+near*.72)
-    ));
   }
 
   function formationTarget(b,t){
@@ -324,7 +347,7 @@
       }
     }
     if(b.group===2){
-      const strength=smooth((t-1990)/300)*(1-smooth((t-2670)/210));
+      const strength=smooth((t-1950)/260)*(1-smooth((t-2670)/210));
       const idx=group2.indexOf(b),target=lineTargets[idx];
       if(target&&strength>0)return{target,strength};
     }
@@ -336,38 +359,39 @@
     buildGrid();
     for(const b of flock){
       let force=boidForce(b);
-      const slotTarget=dynamicSlot(b,leader,t);
-      force.addScaledVector(seek(b,slotTarget,b.cruise*.98),2.10);
-      force.addScaledVector(steerToVelocity(b,leader.tangent.clone().multiplyScalar(b.cruise)),1.72);
+      const slotTarget=slotWorld(b.slot,leader,t);
+      force.addScaledVector(seek(b,slotTarget,b.maxSpeed*1.10),2.80);
+      force.addScaledVector(steerToVelocity(b,leader.tangent.clone().multiplyScalar(b.cruise*1.04)),2.12);
 
       const formation=formationTarget(b,t);
       if(formation){
-        force.multiplyScalar(1-formation.strength*.38);
-        force.addScaledVector(seek(b,formation.target,b.maxSpeed*.88),2.8*formation.strength);
+        force.multiplyScalar(1-formation.strength*.42);
+        force.addScaledVector(seek(b,formation.target,b.maxSpeed*.94),3.05*formation.strength);
       }
 
-      // Tiny steering variation only; enough for life without dissolving the cluster.
-      const noise=new THREE.Vector3(
-        Math.sin(t*.00105+b.phase),
-        Math.cos(t*.00087+b.phase*.67),
-        Math.sin(t*.00063+b.phase*.43)
-      ).multiplyScalar(.055);
-      force.add(noise);
+      // Very small steering noise: the flock bends and banks, but does not wobble.
+      force.add(new THREE.Vector3(
+        Math.sin(t*.00115+b.phase),
+        Math.cos(t*.00090+b.phase*.67),
+        Math.sin(t*.00069+b.phase*.43)
+      ).multiplyScalar(.045));
 
-      if(force.length()>b.maxForce*2.2)force.setLength(b.maxForce*2.2);
+      if(force.length()>b.maxForce*2.35)force.setLength(b.maxForce*2.35);
       b.acceleration.copy(force);
       b.velocity.addScaledVector(b.acceleration,dt);
       const speed=b.velocity.length();
       if(speed>b.maxSpeed)b.velocity.setLength(b.maxSpeed);
-      else if(speed<b.cruise*.84)b.velocity.setLength(b.cruise*.84);
+      else if(speed<b.cruise*.88)b.velocity.setLength(b.cruise*.88);
       b.position.addScaledVector(b.velocity,dt);
-      const targetBank=clamp(b.acceleration.x/(b.maxForce*1.5),-.72,.72);
-      b.bank=mix(b.bank,targetBank,clamp(dt*6.5,0,1));
+
+      const localTurn=clamp(b.acceleration.x/(b.maxForce*1.2),-.45,.45);
+      const targetBank=clamp(leader.bank+localTurn,-1.18,1.18);
+      b.bank=mix(b.bank,targetBank,clamp(dt*11.0,0,1));
     }
   }
 
   function eraseGroup3Trails(t){
-    if(t<1550)return;
+    if(t<1500)return;
     for(const b of group3){
       if(b===wipeBird)continue;
       const s=worldToScreen(b.position);
@@ -385,11 +409,15 @@
   }
 
   function renderFlock(t){
-    const nearLeader=leaderState(t).point.z;
+    const leader=leaderState(t);
+    const view=viewAtZ(leader.point.z);
+    // World perspective already changes apparent size; a small extra boost makes
+    // the close pass read clearly without changing desktop/mobile consistency.
+    const near=clamp((leader.point.z-13)/12,0,1);
+    const scaleBoost=1+near*.30;
     for(let i=0;i<flock.length;i++){
       const b=flock[i];
       const formation=formationTarget(b,t);
-      const scaleBoost=1+clamp((nearLeader-13)/12,0,1)*.18;
       dummy.position.copy(b.position);
       const heading=Math.atan2(b.velocity.y,b.velocity.x)-Math.PI/2;
       dummy.rotation.set(0,0,heading+b.bank);
@@ -442,7 +470,7 @@
   const watchdog=setTimeout(finish,4500);
   function frame(now){
     if(!start){start=now;last=now;}
-    const t=now-start,dt=clamp((now-last)/1000,0,.028);last=now;
+    const t=now-start,dt=clamp((now-last)/1000,0,.024);last=now;
     updateFlock(t,dt);
     eraseGroup3Trails(t);
     wipe(t);
