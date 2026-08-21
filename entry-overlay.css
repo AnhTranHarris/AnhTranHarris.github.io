@@ -1,50 +1,41 @@
-/* Harris Portfolio entry overlay: exact supplied animation, full viewport. */
+/* Harris Portfolio entry overlay — isolated mathematical reveal layer.
+   One full-viewport canvas on every platform. No legacy video/WebGL selectors. */
 #portfolio-entry-overlay{
   position:fixed;
   inset:0;
-  width:100vw;
+  width:100%;
   height:100vh;
   height:100dvh;
   z-index:2147483000;
   overflow:hidden;
-  background:#fff;
+  background:transparent;
   pointer-events:none;
   opacity:1;
   visibility:visible;
   isolation:isolate;
+  contain:strict;
 }
-#portfolio-entry-overlay .entry-reference-stage{
+#portfolio-entry-overlay .entry-field-canvas{
   position:absolute;
   inset:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#fff;
-  pointer-events:none;
-}
-#portfolio-entry-overlay .entry-reference-video{
-  position:absolute;
-  inset:0;
-  width:100%;
-  height:100%;
   display:block;
-  object-fit:fill;
-  object-position:center;
-  opacity:0;
+  width:100%;
+  height:100%;
   border:0;
+  margin:0;
+  padding:0;
   pointer-events:none;
   user-select:none;
-}
-#portfolio-entry-overlay .entry-reference-stage.entry-reference-playing .entry-reference-video{
-  opacity:1;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
 }
 #portfolio-entry-overlay.entry-complete{
   opacity:0;
-  transition:opacity 120ms linear;
+  transition:opacity 90ms linear;
 }
 html[data-entry-state="complete"] #portfolio-entry-overlay{
   display:none!important;
 }
-@media(forced-colors:active){
+@media(forced-colors:active), (prefers-reduced-motion:reduce){
   #portfolio-entry-overlay{display:none!important}
 }
