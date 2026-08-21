@@ -1,6 +1,6 @@
 /* Harris Portfolio intro — tracer erasure transition.
-   The overlay itself is white for synchronous first paint. The dark-teal bridge stays
-   hidden until JavaScript confirms the white mask canvas has been painted. */
+   The overlay itself is white for synchronous first paint. The dark-teal bridge remains
+   compositor-hidden until JS finishes painting the white mask and marks the intro running. */
 #portfolio-entry-overlay{
   position:fixed;
   inset:0;
@@ -32,13 +32,15 @@
 #portfolio-entry-overlay .entry-teal-layer{
   z-index:1;
   background:#06151c;
-  opacity:0;
-}
-#portfolio-entry-overlay.entry-mask-ready .entry-teal-layer{
   opacity:1;
+  visibility:hidden;
+}
+html[data-entry-state="running"] #portfolio-entry-overlay .entry-teal-layer{
+  visibility:visible;
 }
 #portfolio-entry-overlay .entry-mask-canvas{
   z-index:2;
+  background:transparent;
 }
 #portfolio-entry-overlay .entry-fx-canvas{
   z-index:3;
