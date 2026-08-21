@@ -1,8 +1,7 @@
-/* Harris Portfolio entry: phase-shifted Three.js murmuration.
-   Motion model is inspired by the supplied Builder.io particle field: one compact
-   flock volume, persistent per-triangle phase offsets, shared trigonometric flow,
-   randomized full-screen 3D travel, swell/compress cycles, and near-camera fly-bys.
-   The portfolio remains untouched beneath this modular overlay. */
+/* Harris Portfolio entry: Three.js flock / panic / regroup simulation.
+   Individual triangle agents use persistent 3D position, velocity and acceleration.
+   State machine: FLOCK -> PANIC -> REGROUP -> FORMATION/REVEAL.
+   Modular overlay only; portfolio systems underneath remain untouched. */
 (async()=>{
   'use strict';
 
@@ -17,16 +16,16 @@
   catch(_){finishImmediately();return;}
 
   const TOTAL=3220;
-  const FLIGHT_END=2250;
-  const FORMATION_START=2160;
-  const WIPE_START=2630;
+  const FLOCK_END=760;
+  const PANIC_END=1620;
+  const REGROUP_END=2300;
+  const WIPE_START=2700;
   const WIPE_END=3090;
-  const BIRDS=420;
+  const BIRDS=360;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const mix=(a,b,t)=>a+(b-a)*t;
   const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
   const rand=(a,b)=>a+Math.random()*(b-a);
-  const pulse=(p,a,b)=>p<=a||p>=b?0:Math.sin(Math.PI*(p-a)/(b-a));
   const gaussian=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
 
   const membrane=document.createElement('canvas');
@@ -36,7 +35,7 @@
 
   const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
   renderer.setClearColor(0x000000,0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.4));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));
   renderer.domElement.className='entry-three-canvas';renderer.domElement.setAttribute('aria-hidden','true');overlay.appendChild(renderer.domElement);
 
   const scene=new THREE.Scene();
@@ -44,16 +43,21 @@
   camera.position.set(0,0,30);camera.lookAt(0,0,0);
 
   const geometry=new THREE.BufferGeometry();
-  geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,.82,0,-.72,-.52,0,.72,-.52,0],3));
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,.88,0,-.74,-.54,0,.74,-.54,0],3));
   const material=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,transparent:true,opacity:.96,depthWrite:false});
   const mesh=new THREE.InstancedMesh(geometry,material,BIRDS);
   mesh.frustumCulled=false;scene.add(mesh);
 
-  let width=1,height=1,dpr=1,route=null,start=0,last=0,raf=0,finished=false;
-  let birds=[],group1=[],group2=[],group3=[],group4=[];
-  let wordTargets=new Map(),lineTargets=[];
   const dummy=new THREE.Object3D(),color=new THREE.Color(),ndc=new THREE.Vector3(),rayDir=new THREE.Vector3();
+  let width=1,height=1,dpr=1,start=0,last=0,raf=0,finished=false;
+  let birds=[],grid=new Map(),flockCenter=new THREE.Vector3(),leaderVelocity=new THREE.Vector3();
+  let entrySide=0,exitSide=2,threatPoint=new THREE.Vector3();
 
+  function viewAtZ(z){
+    const d=Math.max(.25,camera.position.z-z);
+    const vh=2*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*d;
+    return{w:vh*camera.aspect,h:vh};
+  }
   function screenToWorldAtZ(sx,sy,z){
     ndc.set((sx/width)*2-1,-((sy/height)*2-1),.5).unproject(camera);
     rayDir.copy(ndc).sub(camera.position).normalize();
@@ -61,254 +65,236 @@
     return camera.position.clone().add(rayDir.multiplyScalar((z-camera.position.z)/denom));
   }
   function worldToScreen(v){const p=v.clone().project(camera);return{x:(p.x*.5+.5)*width,y:(-.5*p.y+.5)*height,visible:p.z>-1&&p.z<1};}
-  function viewAtZ(z){const d=Math.max(.2,camera.position.z-z),vh=2*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*d;return{w:vh*camera.aspect,h:vh};}
 
-  function randomEdge(){
-    const side=Math.floor(rand(0,4));
-    if(side===0)return{x:rand(.04,.96),y:-.08};
-    if(side===1)return{x:1.08,y:rand(.04,.96)};
-    if(side===2)return{x:rand(.04,.96),y:1.08};
-    return{x:-.08,y:rand(.04,.96)};
+  function borderWorld(side,z,pad=.05){
+    if(side===0)return screenToWorldAtZ(rand(.15,.85)*width,-pad*height,z);
+    if(side===1)return screenToWorldAtZ((1+pad)*width,rand(.15,.85)*height,z);
+    if(side===2)return screenToWorldAtZ(rand(.15,.85)*width,(1+pad)*height,z);
+    return screenToWorldAtZ(-pad*width,rand(.15,.85)*height,z);
   }
 
-  function buildRandomRoute(){
-    const pts=[];
-    const startN=randomEdge();
-    pts.push(screenToWorldAtZ(startN.x*width,startN.y*height,-8));
-
-    let left=Math.random()<.5;
-    const z=[-3,5,14,25.8,17,27.6,12,24.8,4,-6];
-    for(let i=0;i<z.length;i++){
-      let x,y;
-      if(i===3||i===5||i===7){
-        // Deep near-camera incursions can happen almost anywhere in frame.
-        x=rand(.16,.84);y=rand(.12,.88);
-      }else{
-        // Alternate opposing screen regions to force full-frame flock traversal.
-        x=left?rand(.02,.30):rand(.70,.98);
-        y=rand(.04,.96);
-        left=!left;
-      }
-      pts.push(screenToWorldAtZ(x*width,y*height,z[i]+rand(-1.0,1.0)));
-    }
-    const endN=randomEdge();
-    pts.push(screenToWorldAtZ(endN.x*width,endN.y*height,-7));
-    route=new THREE.CatmullRomCurve3(pts,false,'centripetal',.28);
-    route.arcLengthDivisions=800;route.updateArcLengths();
+  function chooseEntryExit(){
+    entrySide=Math.floor(rand(0,4));
+    exitSide=(entrySide+2)%4;
+    flockCenter=borderWorld(entrySide,-7,.06);
+    const target=borderWorld(exitSide,4,.10);
+    leaderVelocity.copy(target).sub(flockCenter).normalize().multiplyScalar(15.5);
   }
 
-  function routeState(t){
-    const p=clamp(t/FLIGHT_END,0,1);
-    const point=route.getPointAt(p);
-    const tangent=route.getTangentAt(clamp(p+.002,0,1)).normalize();
-    const prev=route.getTangentAt(clamp(p-.009,0,1)).normalize();
-    const next=route.getTangentAt(clamp(p+.009,0,1)).normalize();
-    let da=Math.atan2(next.y,next.x)-Math.atan2(prev.y,prev.x);
-    while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;
-    return{p,point,tangent,bank:clamp(da*12.5,-1.28,1.28)};
+  function stateFor(t){
+    if(t<FLOCK_END)return'flock';
+    if(t<PANIC_END)return'panic';
+    if(t<REGROUP_END)return'regroup';
+    return'calm';
   }
 
-  function makeBird(i,group){
-    // Compact camera-normalized base cloud. Same visual density on desktop/mobile.
-    const base=new THREE.Vector3(gaussian()*.045,gaussian()*.038,gaussian()*.034);
-    return{
-      i,group,base,
-      phaseA:rand(0,Math.PI),
-      phaseB:rand(0,Math.PI*2),
-      phaseRate:rand(.70,1.55),
-      amplitude:rand(.55,1.35),
-      scale:rand(.18,.32),
-      bankBias:rand(-.16,.16),
-      prev:null,
-      trail:null,
-      tone:Math.random()<.05?'gold':(Math.random()<.08?'teal':'charcoal')
-    };
+  function initialOffset(){
+    return new THREE.Vector3(gaussian()*.38,gaussian()*.30,gaussian()*.34);
   }
 
   function initBirds(){
-    const g1=Math.round(BIRDS*.23),g2=Math.round(BIRDS*.18),g3=Math.round(BIRDS*.18);
-    birds=[];group1=[];group2=[];group3=[];group4=[];
+    chooseEntryExit();birds=[];
+    const dir=leaderVelocity.clone().normalize();
     for(let i=0;i<BIRDS;i++){
-      const group=i<g1?1:i<g1+g2?2:i<g1+g2+g3?3:4;
-      const b=makeBird(i,group);birds.push(b);
-      (group===1?group1:group===2?group2:group===3?group3:group4).push(b);
-      color.set(b.tone==='gold'?0x8b7448:b.tone==='teal'?0x2f7778:0x25292c);mesh.setColorAt(i,color);
+      const offset=initialOffset();
+      const speed=rand(11.8,16.8);
+      const b={
+        i,
+        position:flockCenter.clone().add(offset),
+        velocity:dir.clone().multiplyScalar(speed).add(new THREE.Vector3(rand(-.28,.28),rand(-.22,.22),rand(-.22,.22))),
+        acceleration:new THREE.Vector3(),
+        maxSpeed:rand(15.0,21.0),
+        cruise:rand(12.4,16.4),
+        maxForce:rand(18,27),
+        scale:rand(.17,.31),
+        bank:0,
+        panicBias:new THREE.Vector3(gaussian(),gaussian(),gaussian()).normalize(),
+        nearPass:Math.random()<.055,
+        nearKick:rand(16,28),
+        tone:Math.random()<.04?'gold':(Math.random()<.07?'teal':'charcoal'),
+        trail:null
+      };
+      birds.push(b);
+      color.set(b.tone==='gold'?0x8b7448:b.tone==='teal'?0x2f7778:0x202427);mesh.setColorAt(i,color);
     }
     if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
   }
 
-  function flowPosition(b,state,t){
-    const view=viewAtZ(state.point.z),p=state.p;
-
-    // Builder.io-style phase field: every triangle samples the same spherical
-    // motion field at a different phase. This rolls/folds the flock organically.
-    const time=t*.0047;
-    const moveT=b.phaseA+b.phaseRate*time;
-    const moveS=b.phaseB+b.phaseRate*.83*time;
-    const field=new THREE.Vector3(
-      Math.cos(moveS)*Math.sin(moveT),
-      Math.cos(moveT),
-      Math.sin(moveS)*Math.sin(moveT)
-    );
-
-    // A second harmonic stops the field from looking like one clean orbit.
-    const h2=new THREE.Vector3(
-      Math.sin(moveT*1.71+b.phaseB),
-      Math.cos(moveS*1.33+b.phaseA),
-      Math.sin((moveT+moveS)*.79)
-    );
-    field.addScaledVector(h2,.34).normalize();
-
-    // The whole flock repeatedly swells and compresses while perspective expands
-    // it again during close camera passes.
-    const near=clamp((state.point.z-12)/16,0,1);
-    const breathe=.52
-      +.92*pulse(p,.03,.22)
-      +.60*pulse(p,.20,.38)
-      +1.15*pulse(p,.36,.58)
-      +.66*pulse(p,.56,.72)
-      +1.50*pulse(p,.68,.90)
-      +near*.70;
-
-    const turn=Math.atan2(state.tangent.y,state.tangent.x),c=Math.cos(turn),s=Math.sin(turn);
-    const bx=b.base.x*view.w*breathe,by=b.base.y*view.h*breathe;
-    const rx=bx*c-by*s,ry=bx*s+by*c;
-    const depth=Math.max(.8,(camera.position.z-state.point.z)*.12);
-
-    const flowAmp=b.amplitude*(.17+.36*breathe);
-    const fx=field.x*view.w*.020*flowAmp;
-    const fy=field.y*view.h*.024*flowAmp;
-    const fz=field.z*depth*.36*flowAmp;
-
-    return state.point.clone().add(new THREE.Vector3(
-      rx+fx-b.base.z*depth*state.bank*.18,
-      ry+fy+b.base.z*depth*.10,
-      b.base.z*depth*breathe+fz
-    ));
+  const CELL=2.4;
+  const OFF=[];for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++)for(let z=-1;z<=1;z++)OFF.push([x,y,z]);
+  const key=p=>`${Math.floor(p.x/CELL)},${Math.floor(p.y/CELL)},${Math.floor(p.z/CELL)}`;
+  function buildGrid(){
+    grid=new Map();
+    birds.forEach((b,i)=>{const k=key(b.position);let a=grid.get(k);if(!a)grid.set(k,a=[]);a.push(i);});
+  }
+  function neighbors(b){
+    const cx=Math.floor(b.position.x/CELL),cy=Math.floor(b.position.y/CELL),cz=Math.floor(b.position.z/CELL),out=[];
+    for(const [dx,dy,dz] of OFF){const a=grid.get(`${cx+dx},${cy+dy},${cz+dz}`);if(a)out.push(...a);}
+    return out;
   }
 
-  function buildWordTargets(){
-    wordTargets=new Map();
-    const off=document.createElement('canvas'),octx=off.getContext('2d');
-    const ow=Math.min(980,Math.max(340,width*.80)),oh=Math.min(230,Math.max(125,height*.22));
-    off.width=Math.round(ow);off.height=Math.round(oh);
-    octx.textAlign='center';octx.textBaseline='middle';octx.fillStyle='#000';octx.font=`800 ${Math.max(44,Math.min(132,ow/7))}px Inter,Arial,sans-serif`;
-    for(const text of ['BUILD','EXPLORE','IMPROVE']){
-      octx.clearRect(0,0,off.width,off.height);octx.fillText(text,off.width/2,off.height/2);
-      const data=octx.getImageData(0,0,off.width,off.height).data,pts=[],step=Math.max(7,Math.round(off.width/116));
-      for(let y=2;y<off.height-2;y+=step)for(let x=2;x<off.width-2;x+=step)if(data[(y*off.width+x)*4+3]>110)pts.push({x:x/off.width,y:y/off.height});
-      for(let i=pts.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pts[i],pts[j]]=[pts[j],pts[i]];}
-      wordTargets.set(text,group1.map((_,i)=>{const p=pts[i%Math.max(1,pts.length)]||{x:.5,y:.5};return screenToWorldAtZ(width*.5+(p.x-.5)*Math.min(width*.77,900),height*.48+(p.y-.5)*Math.min(height*.21,205),4);}));
+  function limit(v,m){if(v.length()>m)v.setLength(m);return v;}
+  function steerTowardVelocity(b,desired){return limit(desired.clone().sub(b.velocity),b.maxForce);}
+  function seek(b,target,speed=b.maxSpeed){
+    const d=target.clone().sub(b.position);if(d.lengthSq()<1e-8)return new THREE.Vector3();
+    d.setLength(speed);return steerTowardVelocity(b,d);
+  }
+
+  function reynolds(b,state){
+    const sep=new THREE.Vector3(),ali=new THREE.Vector3(),coh=new THREE.Vector3();
+    let count=0,sepCount=0;
+    const radius=state==='panic'?3.2:2.7;
+    const sepRadius=state==='panic'?1.25:.48;
+    for(const id of neighbors(b)){
+      const o=birds[id];if(o===b)continue;
+      const d=o.position.clone().sub(b.position),d2=d.lengthSq();
+      if(d2>radius*radius||d2<1e-8)continue;
+      count++;ali.add(o.velocity);coh.add(o.position);
+      if(d2<sepRadius*sepRadius){sep.addScaledVector(d,-1/Math.max(d2,.02));sepCount++;}
+    }
+    const f=new THREE.Vector3();
+    if(sepCount){sep.divideScalar(sepCount);if(sep.lengthSq())sep.setLength(b.maxSpeed);f.addScaledVector(steerTowardVelocity(b,sep),state==='panic'?3.8:1.7);}
+    if(count){
+      ali.divideScalar(count);if(ali.lengthSq())ali.setLength(b.cruise);
+      coh.divideScalar(count);
+      if(state==='flock'){f.addScaledVector(steerTowardVelocity(b,ali),2.5);f.addScaledVector(seek(b,coh,b.cruise),1.8);}
+      else if(state==='panic'){f.addScaledVector(steerTowardVelocity(b,ali),.18);f.addScaledVector(seek(b,coh,b.cruise),.08);}
+      else {f.addScaledVector(steerTowardVelocity(b,ali),3.0);f.addScaledVector(seek(b,coh,b.cruise),2.8);}
+    }
+    return f;
+  }
+
+  function leaderTarget(t,state){
+    const p=clamp(t/REGROUP_END,0,1);
+    const z=-6+Math.sin(p*Math.PI*2.4)*10+Math.sin(p*Math.PI*5.2)*4;
+    const sweepX=.5+.43*Math.sin(p*Math.PI*2.1+(entrySide%2?1.2:0));
+    const sweepY=.5+.40*Math.sin(p*Math.PI*2.8+1.1);
+    return screenToWorldAtZ(sweepX*width,sweepY*height,z);
+  }
+
+  function updateLeader(t,dt,state){
+    const target=leaderTarget(t,state);
+    const desired=target.clone().sub(flockCenter);
+    if(desired.lengthSq())desired.setLength(state==='panic'?22:state==='regroup'?18:15.5);
+    const steer=desired.sub(leaderVelocity);
+    limit(steer,state==='panic'?26:18);
+    leaderVelocity.addScaledVector(steer,dt);
+    limit(leaderVelocity,state==='panic'?23:19);
+    flockCenter.addScaledVector(leaderVelocity,dt);
+  }
+
+  function panicForce(b,t){
+    const q=smooth((t-FLOCK_END)/(PANIC_END-FLOCK_END));
+    const away=b.position.clone().sub(threatPoint);
+    if(away.lengthSq()<1e-6)away.copy(b.panicBias);
+    away.normalize();
+    const chaotic=b.panicBias.clone().multiplyScalar(8+10*Math.sin(q*Math.PI));
+    const force=away.multiplyScalar(24+28*Math.sin(q*Math.PI)).add(chaotic);
+    if(b.nearPass){
+      const towardCamera=new THREE.Vector3(0,0,1).multiplyScalar(b.nearKick*Math.sin(q*Math.PI));
+      force.add(towardCamera);
+    }
+    return force;
+  }
+
+  function boundaryForce(b){
+    const view=viewAtZ(b.position.z),hx=view.w*.62,hy=view.h*.62,f=new THREE.Vector3();
+    if(b.position.x>hx)f.x-=20;if(b.position.x<-hx)f.x+=20;
+    if(b.position.y>hy)f.y-=20;if(b.position.y<-hy)f.y+=20;
+    if(b.position.z>28)f.z-=28;if(b.position.z<-14)f.z+=20;
+    return f;
+  }
+
+  function updateBirds(t,dt){
+    const state=stateFor(t);
+    updateLeader(t,dt,state);
+    if(state==='panic'){
+      const wobble=Math.sin((t-FLOCK_END)*.011);
+      threatPoint.copy(flockCenter).add(new THREE.Vector3(wobble*2.4,Math.cos((t-FLOCK_END)*.009)*1.8,-1.5));
+    }
+    buildGrid();
+    for(const b of birds){
+      let force=reynolds(b,state);
+      force.add(boundaryForce(b));
+
+      if(state==='flock'){
+        force.addScaledVector(seek(b,flockCenter,b.cruise),1.55);
+        force.addScaledVector(steerTowardVelocity(b,leaderVelocity.clone().setLength(b.cruise)),2.0);
+      }else if(state==='panic'){
+        force.add(panicForce(b,t));
+      }else if(state==='regroup'){
+        force.addScaledVector(seek(b,flockCenter,b.maxSpeed),3.7);
+        force.addScaledVector(steerTowardVelocity(b,leaderVelocity.clone().setLength(b.cruise)),2.8);
+      }else{
+        force.addScaledVector(seek(b,flockCenter,b.cruise),2.4);
+      }
+
+      limit(force,b.maxForce*(state==='panic'?2.7:2.1));
+      b.acceleration.copy(force);
+      b.velocity.addScaledVector(b.acceleration,dt);
+      const min=state==='panic'?b.cruise*1.15:b.cruise*.78;
+      const max=state==='panic'?b.maxSpeed*1.22:b.maxSpeed;
+      const speed=b.velocity.length();
+      if(speed<min)b.velocity.setLength(min);else if(speed>max)b.velocity.setLength(max);
+      b.position.addScaledVector(b.velocity,dt);
+      const targetBank=clamp(b.acceleration.x/(b.maxForce*.72),-1.24,1.24);
+      b.bank=mix(b.bank,targetBank,clamp(dt*(state==='panic'?15:10),0,1));
     }
   }
 
-  function buildLineTargets(){
-    lineTargets=[];const cx=width*.66,cy=height*.51,cardW=Math.min(610,width*.56),cardH=Math.min(430,height*.48);
-    for(let i=0;i<group2.length;i++){
-      let sx,sy;
-      if(i<16){sx=mix(width*.31,width*.69,i/15);sy=86;}
-      else{const j=i-16,n=Math.max(1,group2.length-16),p=(j/n)*2*(cardW+cardH);if(p<cardW){sx=cx-cardW/2+p;sy=cy-cardH/2;}else if(p<cardW+cardH){sx=cx+cardW/2;sy=cy-cardH/2+p-cardW;}else if(p<2*cardW+cardH){sx=cx+cardW/2-(p-cardW-cardH);sy=cy+cardH/2;}else{sx=cx-cardW/2;sy=cy+cardH/2-(p-2*cardW-cardH);}}
-      lineTargets.push(screenToWorldAtZ(sx,sy,3));
-    }
-  }
-
-  function wordSpec(t){
-    if(t<FORMATION_START)return null;
-    if(t<2350)return{text:'BUILD',strength:smooth((t-FORMATION_START)/130)*(1-smooth((t-2315)/60))};
-    if(t<2510)return{text:'EXPLORE',strength:smooth((t-2350)/105)*(1-smooth((t-2480)/50))};
-    if(t<2630)return{text:'IMPROVE',strength:smooth((t-2510)/85)*(1-smooth((t-2600)/35))};
-    return null;
-  }
-
-  function formationPosition(b,pos,t){
-    if(b.group===1){
-      const spec=wordSpec(t);
-      if(spec){const target=(wordTargets.get(spec.text)||[])[group1.indexOf(b)];if(target)return pos.lerp(target,spec.strength);}
-    }
-    if(b.group===2){
-      const strength=smooth((t-2310)/180)*(1-smooth((t-2780)/130));
-      const target=lineTargets[group2.indexOf(b)];if(target&&strength>0)return pos.lerp(target,strength);
-    }
-    return pos;
-  }
-
-  function eraseTrails(t,positions){
-    if(t<1500)return;
-    for(const b of group3){
-      const pos=positions[b.i],s=worldToScreen(pos);
+  function erasePanicTrails(t){
+    if(t<FLOCK_END||t>REGROUP_END)return;
+    for(let i=0;i<birds.length;i+=5){
+      const b=birds[i],s=worldToScreen(b.position);
       if(!s.visible){b.trail=null;continue;}
       if(!b.trail){b.trail={x:s.x,y:s.y};continue;}
-      mctx.save();mctx.globalCompositeOperation='destination-out';mctx.lineCap='round';mctx.globalAlpha=.11;mctx.lineWidth=clamp(b.scale*20,4,10);
+      mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=.09;mctx.lineCap='round';mctx.lineWidth=clamp(b.scale*20,3,9);
       mctx.beginPath();mctx.moveTo(b.trail.x,b.trail.y);mctx.lineTo(s.x,s.y);mctx.stroke();mctx.restore();
-      b.trail.x=s.x;b.trail.y=s.y;
+      b.trail={x:s.x,y:s.y};
     }
   }
 
-  function renderFlock(t){
-    const state=routeState(t),positions=new Array(BIRDS);
+  function renderBirds(t){
     for(const b of birds){
-      let pos=flowPosition(b,state,t);
-      pos=formationPosition(b,pos,t);
-      positions[b.i]=pos;
-
-      let heading=state.bank;
-      if(b.prev){
-        const dx=pos.x-b.prev.x,dy=pos.y-b.prev.y;
-        if(Math.abs(dx)+Math.abs(dy)>.0001)heading=Math.atan2(dy,dx)-Math.PI/2;
-      }
-      b.prev=pos.clone();
-
-      const near=clamp((state.point.z-14)/14,0,1);
-      dummy.position.copy(pos);
-      dummy.rotation.set(0,0,heading+state.bank*.55+b.bankBias);
-      dummy.scale.setScalar(b.scale*(1+near*.24));
+      const heading=Math.atan2(b.velocity.y,b.velocity.x)-Math.PI/2;
+      const cameraNear=clamp((b.position.z-18)/10,0,1);
+      dummy.position.copy(b.position);
+      dummy.rotation.set(0,0,heading+b.bank);
+      dummy.scale.setScalar(b.scale*(1+cameraNear*.72));
       dummy.updateMatrix();mesh.setMatrixAt(b.i,dummy.matrix);
     }
     mesh.instanceMatrix.needsUpdate=true;
-    eraseTrails(t,positions);
     renderer.render(scene,camera);
   }
 
-  function foregroundPasses(t){
-    // Three separate flock members rush so close that their charcoal silhouette can
-    // temporarily obscure most of the viewport, like the supplied bird GIF.
-    const passes=[
-      {a:620,b:920,fromX:-.20,toX:1.12,y:.38,arc:.30,rot:-.70},
-      {a:1120,b:1435,fromX:1.15,toX:-.16,y:.64,arc:.34,rot:.58},
-      {a:1700,b:2050,fromX:-.18,toX:1.16,y:.52,arc:.42,rot:-.38}
-    ];
-    for(const pass of passes){
-      if(t<pass.a||t>pass.b)continue;
-      const q=smooth((t-pass.a)/(pass.b-pass.a));
-      const x=mix(pass.fromX,pass.toX,q)*width;
-      const y=height*(pass.y-Math.sin(q*Math.PI)*pass.arc);
-      const near=Math.sin(q*Math.PI);
-      const size=mix(24,Math.hypot(width,height)*1.08,Math.pow(near,2.0));
-      renderer.autoClear=false;
-      const c=document.createElement('canvas');
-      // Canvas creation is avoided in actual drawing; this branch only computes wipe below.
-      mctx.save();mctx.globalCompositeOperation='source-over';mctx.fillStyle='rgba(18,20,22,'+(near*.92)+')';mctx.translate(x,y);mctx.rotate(pass.rot+q*.55);
-      mctx.beginPath();mctx.moveTo(0,-size);mctx.lineTo(size*.98,size*.78);mctx.lineTo(-size*.98,size*.78);mctx.closePath();mctx.fill();mctx.restore();
-      renderer.autoClear=true;
+  function foregroundOcclusion(t){
+    if(t<FLOCK_END||t>PANIC_END)return;
+    const q=(t-FLOCK_END)/(PANIC_END-FLOCK_END);
+    const pulses=[.18,.46,.73];
+    for(const center of pulses){
+      const d=Math.abs(q-center);if(d>.11)continue;
+      const near=1-d/.11;
+      const alpha=Math.pow(near,2.2)*.88;
+      mctx.save();mctx.globalCompositeOperation='source-over';mctx.fillStyle=`rgba(14,16,18,${alpha})`;mctx.fillRect(0,0,width,height);mctx.restore();
     }
   }
 
   function wipe(t){
     if(t<WIPE_START)return;
     const q=smooth((t-WIPE_START)/(WIPE_END-WIPE_START));
-    const x=mix(-.15,1.15,q)*width,y=height*(.76-Math.sin(q*Math.PI)*.38);
-    const size=mix(28,Math.hypot(width,height)*1.25,smooth(clamp((q-.10)/.67,0,1)));
-    mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=clamp(.28+q,0,1);mctx.translate(x,y);mctx.rotate(-.65+q*.95);
+    const x=mix(-.18,1.18,q)*width,y=height*(.72-Math.sin(q*Math.PI)*.34);
+    const size=mix(24,Math.hypot(width,height)*1.30,smooth(clamp((q-.08)/.68,0,1)));
+    mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=clamp(.28+q,0,1);mctx.translate(x,y);mctx.rotate(-.68+q*.96);
     mctx.beginPath();mctx.moveTo(0,-size);mctx.lineTo(size*.98,size*.78);mctx.lineTo(-size*.98,size*.78);mctx.closePath();mctx.fill();mctx.restore();
-    if(q>.82){mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=smooth((q-.82)/.18);mctx.fillRect(0,0,width,height);mctx.restore();}
+    if(q>.80){mctx.save();mctx.globalCompositeOperation='destination-out';mctx.globalAlpha=smooth((q-.80)/.20);mctx.fillRect(0,0,width,height);mctx.restore();}
   }
 
   function resize(){
-    width=Math.max(1,window.innerWidth);height=Math.max(1,window.innerHeight);dpr=Math.min(window.devicePixelRatio||1,1.4);
+    width=Math.max(1,window.innerWidth);height=Math.max(1,window.innerHeight);dpr=Math.min(window.devicePixelRatio||1,1.35);
     camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setPixelRatio(dpr);renderer.setSize(width,height,false);
     membrane.width=Math.round(width*dpr);membrane.height=Math.round(height*dpr);membrane.style.width=`${width}px`;membrane.style.height=`${height}px`;
     mctx.setTransform(dpr,0,0,dpr,0,0);mctx.globalCompositeOperation='source-over';mctx.fillStyle='#fff';mctx.fillRect(0,0,width,height);
-    buildRandomRoute();initBirds();buildWordTargets();buildLineTargets();
+    initBirds();
   }
 
   function finish(){
@@ -316,13 +302,15 @@
     document.documentElement.dataset.entryState='complete';overlay.classList.add('entry-complete');setTimeout(()=>overlay.remove(),160);
   }
 
-  const watchdog=setTimeout(finish,4500);
+  const watchdog=setTimeout(finish,4600);
   function frame(now){
     if(!start){start=now;last=now;}
-    const t=now-start;last=now;
-    renderFlock(t);
-    foregroundPasses(t);
+    const t=now-start,dt=clamp((now-last)/1000,0,.024);last=now;
+    updateBirds(t,dt);
+    erasePanicTrails(t);
+    foregroundOcclusion(t);
     wipe(t);
+    renderBirds(t);
     if(t>=TOTAL){clearTimeout(watchdog);finish();return;}
     raf=requestAnimationFrame(frame);
   }
