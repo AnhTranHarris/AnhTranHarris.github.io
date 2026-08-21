@@ -1,0 +1,28 @@
+/* Harris Portfolio entry overlay: isolated first-load transition layer. */
+#portfolio-entry-overlay{
+  position:fixed;
+  inset:0;
+  z-index:2147483000;
+  overflow:hidden;
+  background:#fff;
+  pointer-events:none;
+  opacity:1;
+  visibility:visible;
+  contain:strict;
+  isolation:isolate;
+}
+#portfolio-entry-overlay canvas{
+  display:block;
+  width:100%;
+  height:100%;
+}
+#portfolio-entry-overlay.entry-complete{
+  opacity:0;
+  transition:opacity 140ms linear;
+}
+html[data-entry-state="complete"] #portfolio-entry-overlay{
+  display:none!important;
+}
+@media(forced-colors:active){
+  #portfolio-entry-overlay{display:none!important}
+}
