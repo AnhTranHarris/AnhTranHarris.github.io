@@ -95,7 +95,30 @@
   </div>
   <script src="entry-overlay.js?v=tracer-erosion-9f4757fa"></script>
   <script src="motion-policy.js"></script>
-  <script src="carousel-touch.js"></script>
+  <script>
+    (()=>{
+      const root=document.documentElement;
+      let loaded=false;
+      const loadCarousel=()=>{
+        if(loaded)return;
+        loaded=true;
+        const script=document.createElement('script');
+        script.src='carousel-touch.js?v=intro-gate-1';
+        script.async=false;
+        document.body.appendChild(script);
+      };
+      if(root.dataset.entryState==='complete'){
+        loadCarousel();
+        return;
+      }
+      const observer=new MutationObserver(()=>{
+        if(root.dataset.entryState!=='complete')return;
+        observer.disconnect();
+        loadCarousel();
+      });
+      observer.observe(root,{attributes:true,attributeFilter:['data-entry-state']});
+    })();
+  </script>
   <script src="resume-viewer.js"></script>
 </body>
 </html>
