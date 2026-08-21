@@ -1,267 +1,187 @@
-/* Harris Portfolio entry — randomized constructive/destructive field reveal.
-   FULL REWRITE: Canvas 2D only. No video, WebGL, Three.js, or moving blob sprites.
-   Each load generates a bounded random wave profile. Hard categorical cells are drawn
-   with nearest-neighbor scaling so boundaries stay crisp on desktop and mobile. */
+/* Harris Portfolio entry — discrete competitive block-growth reveal.
+   Full rewrite: Canvas 2D cellular automaton, no video/WebGL/wave blobs.
+   White, ink and gold occupy a rectangular lattice and compete through directional
+   propagation, erosion and timed reseeding. Geometry changes in discrete bursts so
+   the motion reads as block construction/destruction rather than liquid flow. */
 (() => {
   'use strict';
 
-  const overlay = document.getElementById('portfolio-entry-overlay');
-  if (!overlay) return;
+  const overlay=document.getElementById('portfolio-entry-overlay');
+  if(!overlay)return;
+  const nav=performance.getEntriesByType?.('navigation')?.[0];
+  const skip=nav?.type==='back_forward'||window.matchMedia?.('(forced-colors: active)').matches||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const finishImmediately=()=>{document.documentElement.dataset.entryState='complete';overlay.remove();};
+  if(skip){finishImmediately();return;}
 
-  const nav = performance.getEntriesByType?.('navigation')?.[0];
-  const shouldSkip = nav?.type === 'back_forward' ||
-    window.matchMedia?.('(forced-colors: active)').matches ||
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const TOTAL_MS=3270,WHITE_HOLD_MS=90,FAILSAFE_MS=4700;
+  const WHITE=0,INK=1,GOLD=2,CLEAR=3;
+  const COLORS=[[255,255,255,255],[6,21,28,255],[216,184,106,255],[0,0,0,0]];
+  const rand=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const choice=a=>a[Math.floor(Math.random()*a.length)];
 
-  const finishImmediately = () => {
-    document.documentElement.dataset.entryState = 'complete';
-    overlay.remove();
-  };
-  if (shouldSkip) { finishImmediately(); return; }
+  const canvas=document.createElement('canvas');
+  canvas.className='entry-field-canvas';canvas.setAttribute('aria-hidden','true');overlay.appendChild(canvas);
+  const ctx=canvas.getContext('2d',{alpha:true,desynchronized:true});
+  if(!ctx){finishImmediately();return;}ctx.imageSmoothingEnabled=false;
+  const field=document.createElement('canvas');
+  const fctx=field.getContext('2d',{alpha:true});if(!fctx){finishImmediately();return;}fctx.imageSmoothingEnabled=false;
 
-  const TOTAL_MS = 3270;
-  const WHITE_HOLD_MS = 90;
-  const FAILSAFE_MS = 4700;
-  const TAU = Math.PI * 2;
-  const COLORS = {
-    white: [255,255,255,255],
-    ink:   [6,21,28,255],
-    gold:  [216,184,106,255]
-  };
+  let cssW=1,cssH=1,cols=1,rows=1,grid=null,next=null,img=null,pix=null;
+  let start=0,lastStep=0,nextStepAt=0,raf=0,watchdog=0,finished=false,stepNo=0;
+  let events=[];
 
-  const rand = (a,b) => a + Math.random() * (b-a);
-  const randSign = () => Math.random() < .5 ? -1 : 1;
-  const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
-  const smoothstep = (a,b,x) => {
-    const q = clamp((x-a)/(b-a),0,1);
-    return q*q*(3-2*q);
-  };
-
-  // One random but bounded profile per page load. These ranges deliberately keep the
-  // animation in the same visual family while changing its exact growth/decay pattern.
-  const RUN = {
-    cellCss: rand(6.5,11.5),
-    waves: [
-      {kx:rand(.85,1.55)*randSign(), ky:rand(.28,.82)*randSign(), speed:rand(2.8,5.3)*randSign(), phase:rand(0,TAU)},
-      {kx:rand(.45,1.20)*randSign(), ky:rand(.90,1.60)*randSign(), speed:rand(2.5,4.9)*randSign(), phase:rand(0,TAU)},
-      {kx:rand(.70,1.45)*randSign(), ky:rand(.65,1.35)*randSign(), speed:rand(3.3,5.8)*randSign(), phase:rand(0,TAU)},
-      {kx:rand(1.05,1.80)*randSign(), ky:rand(.35,1.05)*randSign(), speed:rand(2.9,5.5)*randSign(), phase:rand(0,TAU)}
-    ],
-    pressure: [
-      {x:rand(.18,.38),y:rand(.18,.42),dx:rand(.16,.31)*randSign(),dy:rand(.16,.31)*randSign(),driftX:rand(.55,1.05),driftY:rand(.62,1.12),freq:rand(1.7,2.8),speed:rand(3.7,6.2)*randSign(),phase:rand(0,TAU)},
-      {x:rand(.62,.82),y:rand(.58,.82),dx:rand(.16,.31)*randSign(),dy:rand(.16,.31)*randSign(),driftX:rand(.58,1.08),driftY:rand(.54,1.02),freq:rand(1.9,3.0),speed:rand(3.5,6.0)*randSign(),phase:rand(0,TAU)}
-    ],
-    goldGrowth: rand(1.35,2.35),
-    inkGrowth: rand(1.20,2.25),
-    whiteGrowth: rand(1.35,2.55),
-    fastGold: rand(3.7,6.3),
-    fastInk: rand(3.5,6.0),
-    fastWhite: rand(3.8,6.5),
-    territorySpeed: rand(1.25,2.45),
-    territoryCross: rand(2.4,4.0),
-    revealStart: rand(.61,.70),
-    finalStart: rand(.945,.968),
-    revealPhase: rand(0,TAU)
+  const RUN={
+    cellCss:rand(8,14),
+    baseTick:rand(28,46),
+    fastTick:rand(16,26),
+    slowTick:rand(52,78),
+    inertia:rand(1.35,1.85),
+    capture:rand(.54,.72),
+    erosion:rand(.08,.16),
+    ortho:rand(1.05,1.35),
+    diag:rand(.46,.72),
+    burstCount:Math.floor(rand(6,9)),
+    revealStart:rand(.64,.71)
   };
 
-  const canvas = document.createElement('canvas');
-  canvas.className = 'entry-field-canvas';
-  canvas.setAttribute('aria-hidden','true');
-  overlay.appendChild(canvas);
-  const ctx = canvas.getContext('2d',{alpha:true,desynchronized:true});
-  if (!ctx) { finishImmediately(); return; }
-  ctx.imageSmoothingEnabled = false;
-
-  const fieldCanvas = document.createElement('canvas');
-  const fieldCtx = fieldCanvas.getContext('2d',{alpha:true});
-  if (!fieldCtx) { finishImmediately(); return; }
-  fieldCtx.imageSmoothingEnabled = false;
-
-  let cssW=1,cssH=1,cols=1,rows=1,imageData=null,data=null;
-  let uCoord=null,vCoord=null,waveBase=[],start=0,raf=0,watchdog=0,finished=false;
-
-  function setPixel(index,rgba){
-    const o=index*4;
-    data[o]=rgba[0];data[o+1]=rgba[1];data[o+2]=rgba[2];data[o+3]=rgba[3];
-  }
+  function id(x,y){return y*cols+x;}
+  function inb(x,y){return x>=0&&x<cols&&y>=0&&y<rows;}
 
   function resize(){
-    cssW=Math.max(1,window.innerWidth);
-    cssH=Math.max(1,window.innerHeight);
+    cssW=Math.max(1,window.innerWidth);cssH=Math.max(1,window.innerHeight);
     const dpr=Math.min(window.devicePixelRatio||1,2);
-    canvas.width=Math.round(cssW*dpr);
-    canvas.height=Math.round(cssH*dpr);
-    canvas.style.width=`${cssW}px`;
-    canvas.style.height=`${cssH}px`;
-    ctx.imageSmoothingEnabled=false;
+    canvas.width=Math.round(cssW*dpr);canvas.height=Math.round(cssH*dpr);
+    canvas.style.width=`${cssW}px`;canvas.style.height=`${cssH}px`;ctx.imageSmoothingEnabled=false;
+    cols=clamp(Math.ceil(cssW/RUN.cellCss),38,180);rows=clamp(Math.ceil(cssH/RUN.cellCss),38,180);
+    field.width=cols;field.height=rows;img=fctx.createImageData(cols,rows);pix=img.data;
+    grid=new Uint8Array(cols*rows);next=new Uint8Array(cols*rows);grid.fill(WHITE);next.fill(WHITE);
+    buildEvents();
+  }
 
-    // Cell size is defined in CSS pixels, not viewport count. This makes the stair-step
-    // edge scale visually consistent across portrait, landscape, desktop and mobile.
-    cols=clamp(Math.ceil(cssW/RUN.cellCss),34,220);
-    rows=clamp(Math.ceil(cssH/RUN.cellCss),34,160);
-    fieldCanvas.width=cols;
-    fieldCanvas.height=rows;
-    imageData=fieldCtx.createImageData(cols,rows);
-    data=imageData.data;
-    uCoord=new Float32Array(cols);
-    vCoord=new Float32Array(rows);
-    for(let x=0;x<cols;x++)uCoord[x]=(x+.5)/cols;
-    for(let y=0;y<rows;y++)vCoord[y]=(y+.5)/rows;
+  function edgePoint(side){
+    if(side===0)return{x:Math.floor(rand(0,cols)),y:0};
+    if(side===1)return{x:cols-1,y:Math.floor(rand(0,rows))};
+    if(side===2)return{x:Math.floor(rand(0,cols)),y:rows-1};
+    return{x:0,y:Math.floor(rand(0,rows))};
+  }
 
-    // Precompute spatial dot products for each directional oscillator. Only time phase
-    // changes every frame, keeping the higher-resolution grid fast enough on mobile.
-    waveBase=RUN.waves.map(()=>new Float32Array(cols*rows));
-    let i=0;
-    for(let y=0;y<rows;y++){
-      const py=(vCoord[y]-.5)*TAU;
-      for(let x=0;x<cols;x++,i++){
-        const px=(uCoord[x]-.5)*TAU;
-        for(let n=0;n<RUN.waves.length;n++){
-          const w=RUN.waves[n];
-          waveBase[n][i]=w.kx*px+w.ky*py+w.phase;
-        }
-      }
+  function buildEvents(){
+    events=[];
+    const states=[INK,GOLD,INK,GOLD,WHITE,INK,GOLD,WHITE];
+    let t=130;
+    for(let i=0;i<RUN.burstCount;i++){
+      const side=Math.floor(rand(0,4)),p=edgePoint(side);
+      const state=states[i%states.length];
+      const duration=rand(300,620);
+      const dir=side===0?{x:rand(-.35,.35),y:1}:side===1?{x:-1,y:rand(-.35,.35)}:side===2?{x:rand(-.35,.35),y:-1}:{x:1,y:rand(-.35,.35)};
+      events.push({start:t,end:t+duration,state,x:p.x,y:p.y,w:Math.floor(rand(4,11)),h:Math.floor(rand(3,9)),dx:dir.x,dy:dir.y,power:rand(1.2,2.3),seeded:false});
+      t+=rand(220,410);
     }
+    // Two late transparent fronts reveal the live portfolio through the same lattice.
+    events.push({start:TOTAL_MS*RUN.revealStart,end:TOTAL_MS*.90,state:CLEAR,...edgePoint(Math.floor(rand(0,4))),w:8,h:7,dx:choice([-1,1]),dy:choice([-1,1]),power:2.5,seeded:false});
+    events.push({start:TOTAL_MS*.82,end:TOTAL_MS,state:CLEAR,...edgePoint(Math.floor(rand(0,4))),w:12,h:10,dx:choice([-1,1]),dy:choice([-1,1]),power:3.0,seeded:false});
   }
 
-  function renderWhite(){
-    for(let i=0;i<cols*rows;i++)setPixel(i,COLORS.white);
-    fieldCtx.putImageData(imageData,0,0);
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(fieldCanvas,0,0,canvas.width,canvas.height);
+  function stamp(e){
+    const hw=Math.floor(e.w/2),hh=Math.floor(e.h/2);
+    for(let yy=-hh;yy<=hh;yy++)for(let xx=-hw;xx<=hw;xx++){
+      const x=clamp(e.x+xx,0,cols-1),y=clamp(e.y+yy,0,rows-1);
+      grid[id(x,y)]=e.state;
+    }
+    e.seeded=true;
   }
 
-  function renderField(seconds,progress){
-    const t=seconds;
-    const w0=RUN.waves[0],w1=RUN.waves[1],w2=RUN.waves[2],w3=RUN.waves[3];
-    const p0=RUN.pressure[0],p1=RUN.pressure[1];
+  function activeEvents(ms){return events.filter(e=>ms>=e.start&&ms<=e.end);}
 
-    const c1x=p0.x+p0.dx*Math.sin(t*p0.driftX+p0.phase);
-    const c1y=p0.y+p0.dy*Math.cos(t*p0.driftY+p0.phase*.73);
-    const c2x=p1.x+p1.dx*Math.cos(t*p1.driftX+p1.phase);
-    const c2y=p1.y+p1.dy*Math.sin(t*p1.driftY+p1.phase*.61);
+  function cadence(ms){
+    const active=activeEvents(ms);
+    if(active.some(e=>e.state===CLEAR))return RUN.fastTick;
+    if(active.length>=2)return RUN.fastTick;
+    if(active.length===0)return RUN.slowTick;
+    return RUN.baseTick*rand(.82,1.18);
+  }
 
-    // Independent growth/decay clocks. These are randomized each visit, so gold, ink
-    // and white do not repeat the same dominance timing from one load to the next.
-    const goldBias=.38*Math.sin(t*RUN.goldGrowth+RUN.revealPhase)+.24*Math.sin(t*RUN.fastGold+.7);
-    const inkBias =.36*Math.sin(t*RUN.inkGrowth +RUN.revealPhase+2.1)+.23*Math.sin(t*RUN.fastInk+1.35);
-    const whiteBias=.33*Math.sin(t*RUN.whiteGrowth+RUN.revealPhase+4.0)+.21*Math.sin(t*RUN.fastWhite+2.65);
+  function influenceAt(x,y,state,e){
+    let s=0;
+    const nb=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,.58],[1,-1,.58],[-1,1,.58],[-1,-1,.58]];
+    for(const [dx,dy,w] of nb){
+      const nx=x+dx,ny=y+dy;if(!inb(nx,ny)||grid[id(nx,ny)]!==state)continue;
+      let k=w===1?RUN.ortho:RUN.diag;
+      if(e){const dot=(-dx)*e.dx+(-dy)*e.dy;k*=1+Math.max(-.35,dot*.55);}
+      s+=k;
+    }
+    return s;
+  }
 
-    const revealRamp=smoothstep(RUN.revealStart,.985,progress);
-    const finalRamp=smoothstep(RUN.finalStart,1,progress);
+  function step(ms){
+    const act=activeEvents(ms);
+    for(const e of act)if(!e.seeded)stamp(e);
+    next.set(grid);
 
-    let idx=0;
-    for(let y=0;y<rows;y++){
-      const v=vCoord[y];
-      for(let x=0;x<cols;x++,idx++){
-        const u=uCoord[x];
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+      const i=id(x,y),cur=grid[i];
+      let bestState=cur,best=RUN.inertia;
+      for(const state of [WHITE,INK,GOLD,CLEAR]){
+        if(state===cur)continue;
+        let related=null,power=1;
+        for(const e of act)if(e.state===state){related=e;power=Math.max(power,e.power);}
+        let score=influenceAt(x,y,state,related)*power;
+        if(state===WHITE&&cur!==WHITE)score+=RUN.erosion*rand(0,1);
+        if(state===CLEAR&&ms<TOTAL_MS*RUN.revealStart)score=0;
+        if(score>best){best=score;bestState=state;}
+      }
+      if(bestState!==cur&&Math.random()<RUN.capture)next[i]=bestState;
+    }
 
-        const d1=Math.sin(waveBase[0][idx]+t*w0.speed);
-        const d2=Math.sin(waveBase[1][idx]+t*w1.speed);
-        const d3=Math.sin(waveBase[2][idx]+t*w2.speed);
-        const d4=Math.sin(waveBase[3][idx]+t*w3.speed);
-
-        // Manhattan pressure fronts create the sharp 45-degree/stair-step growth edges
-        // seen in the reference rather than soft circular metaball boundaries.
-        const m1=Math.abs(u-c1x)+Math.abs(v-c1y);
-        const m2=Math.abs(u-c2x)+Math.abs(v-c2y);
-        const r1=Math.cos(m1*TAU*p0.freq-t*p0.speed+p0.phase);
-        const r2=Math.cos(m2*TAU*p1.freq-t*p1.speed+p1.phase);
-
-        let gold=1.08*d1+.68*d3-.57*d2+.88*r1-.42*r2+goldBias;
-        let ink =-.74*d1+1.08*d2+.72*d4+.82*r2-.34*r1+inkBias;
-        let white=.62*d1-.53*d3+.92*d4-.37*r1+.45*r2+whiteBias;
-
-        // Large territorial constructive/destructive waves. Different speeds make some
-        // regions explode outward while others decay more slowly during the same run.
-        const territoryA=Math.sin((u+v)*TAU*randlessA - t*RUN.territorySpeed);
-        const territoryB=Math.sin((u-v)*TAU*randlessB + t*RUN.territoryCross+.8);
-        const territory=territoryA+.70*territoryB;
-        const breathe=Math.sin(t*(RUN.territorySpeed*.72)+RUN.revealPhase);
-        gold+=territory*.30*breathe;
-        ink -=territory*.27*breathe;
-        white+=territory*.17*Math.sin(t*(RUN.territorySpeed*.91)+2.2);
-
-        let rgba=COLORS.white;
-        let best=white;
-        const threshold=.005+.075*Math.sin(t*randThreshold+RUN.revealPhase);
-        if(ink>best+threshold){best=ink;rgba=COLORS.ink;}
-        if(gold>best+threshold){rgba=COLORS.gold;}
-
-        let transparent=false;
-        if(revealRamp>0){
-          const px=(u-.5)*TAU,py=(v-.5)*TAU;
-          const reveal=.78*Math.sin(.90*px-1.14*py+t*randRevealSpeed+RUN.revealPhase)+
-            .61*Math.cos((Math.abs(u-.56)+Math.abs(v-.45))*TAU*randRevealFreq-t*randRevealPressure+1.0)+
-            .39*Math.sin(-1.48*px-.36*py-t*4.0+2.6);
-          transparent=reveal>1.47-2.82*revealRamp;
-        }
-
-        if(finalRamp>0){
-          const direction=randFinalDirection;
-          const sweep=direction===0?u+.58*v:direction===1?(1-u)+.58*v:direction===2?u+.58*(1-v):(1-u)+.58*(1-v);
-          if(sweep<-.10+1.82*finalRamp)transparent=true;
-        }
-
-        setPixel(idx,transparent?[0,0,0,0]:rgba);
+    // Directional front reinforcement: active events push a rectangular nose forward.
+    for(const e of act){
+      const p=clamp((ms-e.start)/(e.end-e.start),0,1);
+      const travel=Math.floor(p*Math.max(cols,rows)*.78);
+      const cx=Math.round(e.x+e.dx*travel),cy=Math.round(e.y+e.dy*travel);
+      const rw=Math.max(2,Math.round(e.w*(1-p*.35))),rh=Math.max(2,Math.round(e.h*(1-p*.35)));
+      for(let yy=-rh;yy<=rh;yy++)for(let xx=-rw;xx<=rw;xx++){
+        const x=cx+xx,y=cy+yy;if(!inb(x,y))continue;
+        if(Math.random()<.22+e.power*.06)next[id(x,y)]=e.state;
       }
     }
 
-    fieldCtx.putImageData(imageData,0,0);
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(fieldCanvas,0,0,canvas.width,canvas.height);
+    const tmp=grid;grid=next;next=tmp;stepNo++;
   }
 
-  // Additional per-run constants used inside the hot pixel loop. Generated once only.
-  const randlessA=rand(.72,1.36);
-  const randlessB=rand(.66,1.22);
-  const randThreshold=rand(1.35,2.35);
-  const randRevealSpeed=rand(4.6,6.1);
-  const randRevealFreq=rand(1.45,2.05);
-  const randRevealPressure=rand(4.7,6.3);
-  const randFinalDirection=Math.floor(rand(0,4));
+  function render(){
+    for(let i=0;i<grid.length;i++){
+      const c=COLORS[grid[i]],o=i*4;pix[o]=c[0];pix[o+1]=c[1];pix[o+2]=c[2];pix[o+3]=c[3];
+    }
+    fctx.putImageData(img,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(field,0,0,canvas.width,canvas.height);
+  }
+
+  function renderWhite(){grid.fill(WHITE);render();}
 
   function finish(){
-    if(finished)return;
-    finished=true;
-    clearTimeout(watchdog);
-    cancelAnimationFrame(raf);
-    document.documentElement.dataset.entryState='complete';
-    overlay.classList.add('entry-complete');
+    if(finished)return;finished=true;clearTimeout(watchdog);cancelAnimationFrame(raf);
+    document.documentElement.dataset.entryState='complete';overlay.classList.add('entry-complete');
     setTimeout(()=>overlay.remove(),90);
   }
 
   function frame(now){
-    if(!start)start=now;
-    const elapsedTotal=now-start;
-    if(elapsedTotal<WHITE_HOLD_MS){
-      renderWhite();
-    }else{
-      const elapsed=elapsedTotal-WHITE_HOLD_MS;
-      const progress=clamp(elapsed/TOTAL_MS,0,1);
-      renderField(elapsed/1000,progress);
-      if(progress>=1){finish();return;}
-    }
+    if(!start){start=now;lastStep=now;nextStepAt=now+WHITE_HOLD_MS;}
+    const elapsed=now-start;
+    if(elapsed<WHITE_HOLD_MS){renderWhite();raf=requestAnimationFrame(frame);return;}
+    const sim=elapsed-WHITE_HOLD_MS;
+    while(now>=nextStepAt&&sim<TOTAL_MS){step(sim);nextStepAt+=cadence(sim);}
+    render();
+    if(sim>=TOTAL_MS){finish();return;}
     raf=requestAnimationFrame(frame);
   }
 
   let resizeTimer=0;
-  window.addEventListener('resize',()=>{
-    clearTimeout(resizeTimer);
-    resizeTimer=setTimeout(()=>{if(!finished)resize();},90);
-  },{passive:true});
+  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(!finished){resize();renderWhite();}},90);},{passive:true});
   window.addEventListener('pageshow',e=>{if(e.persisted)finish();},{passive:true});
 
   try{
-    resize();
-    renderWhite();
-    document.documentElement.dataset.entryState='running';
-    watchdog=setTimeout(finish,FAILSAFE_MS);
-    raf=requestAnimationFrame(frame);
-  }catch(error){
-    console.error('Entry overlay failed safely:',error);
-    finishImmediately();
-  }
+    resize();renderWhite();document.documentElement.dataset.entryState='running';
+    watchdog=setTimeout(finish,FAILSAFE_MS);raf=requestAnimationFrame(frame);
+  }catch(error){console.error('Entry overlay failed safely:',error);finishImmediately();}
 })();
