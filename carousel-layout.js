@@ -5,6 +5,7 @@
   'use strict';
 
   const root=document.documentElement;
+  const stage=document.querySelector('.stage');
   const barrel=document.querySelector('#barrel');
   const dotsHost=document.querySelector('.dots');
   if(!barrel){root.dataset.carouselLayout='fallback';return;}
@@ -35,6 +36,24 @@
       fragment.appendChild(dot);
     });
     dotsHost.replaceChildren(fragment);
+  }
+
+  /* Preserve today's five-card perspective exactly. Future sixth+ cards use a
+     proportional perspective so the larger mathematically-correct radius does not
+     make the front card appear progressively zoomed. No listener is installed for
+     the current five-card build. */
+  if(count>5&&stage){
+    const syncFuturePerspective=()=>{
+      const width=pages[0]?.offsetWidth||barrel.offsetWidth;
+      if(!(width>0))return;
+      const radius=width/(2*Math.tan(Math.PI/count));
+      const fiveCardRadius=width/(2*Math.tan(Math.PI/5));
+      const perspective=1800*(radius/fiveCardRadius);
+      stage.style.perspective=`${perspective.toFixed(2)}px`;
+    };
+    requestAnimationFrame(syncFuturePerspective);
+    window.addEventListener('resize',syncFuturePerspective,{passive:true});
+    window.visualViewport?.addEventListener?.('resize',syncFuturePerspective,{passive:true});
   }
 
   root.dataset.carouselLayout='ready';
