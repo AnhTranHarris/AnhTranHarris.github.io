@@ -7,16 +7,12 @@
   const reduceQuery = '(prefers-reduced-motion: reduce)';
   const systemReduce = nativeMatchMedia ? nativeMatchMedia(reduceQuery) : null;
 
-  // Preserve the visitor's actual system preference for diagnostics/future UI.
   window.__portfolioMotionPolicy = {
     mode: 'full',
     systemReducedMotion: !!systemReduce?.matches,
     nativeMatchMedia
   };
 
-  // Site-local compatibility shim: existing animation engines can keep their
-  // current reduced-motion checks, but this portfolio resolves that one query
-  // to Full Effects. All other media queries pass through untouched.
   if (nativeMatchMedia) {
     window.matchMedia = query => {
       const mql = nativeMatchMedia(query);
@@ -33,21 +29,14 @@
     };
   }
 
-  // Register the current carousel renderer before later modules run. The CTA
-  // arrow checks this same data attribute and therefore will not load its stale
-  // legacy edge-2 URL. This keeps exactly one carousel FX instance per page.
   if (!document.querySelector('script[data-carousel-edge-fx]')) {
     const carouselFx = document.createElement('script');
-    carouselFx.src = 'carousel-edge-fx.js?v=edge-6';
+    carouselFx.src = 'carousel-edge-fx.js?v=edge-7';
     carouselFx.dataset.carouselEdgeFx = 'true';
     carouselFx.async = false;
     document.head.appendChild(carouselFx);
   }
 
-  // CSS media queries are evaluated by the browser independently of the JS
-  // matchMedia shim. These Full-Effects-only overrides therefore restore only
-  // the current animation systems. The retired carousel conic-gradient tracer
-  // is deliberately kept disabled; carousel-edge-fx.js owns perimeter light.
   const installFullEffectsOverrides = () => {
     if (document.getElementById('portfolio-full-effects-overrides')) return;
     const style = document.createElement('style');
@@ -56,7 +45,6 @@
       html[data-effects="full"] .spotlight{will-change:transform,opacity}
       html[data-effects="full"] .barrel{will-change:auto}
 
-      /* Retired carousel pseudo-element renderer must never be resurrected. */
       html[data-effects="full"] .page::before,
       html[data-effects="full"] .barrel.edge-motion .page::before,
       html[data-effects="full"].edge-tracer-supported .barrel.edge-motion .page::before,
@@ -75,11 +63,8 @@
         mask-composite:initial!important;
       }
 
-      /* Current physical-perimeter carousel renderer. */
-      html[data-effects="full"] .carousel-edge-rail{
-        display:block!important;
-        animation-play-state:running!important;
-      }
+      html[data-effects="full"] .carousel-edge-frame,
+      html[data-effects="full"] .carousel-edge-rail,
       html[data-effects="full"] .carousel-edge-corner-flare{
         display:block!important;
         animation-play-state:running!important;
