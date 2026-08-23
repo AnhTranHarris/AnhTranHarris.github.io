@@ -33,11 +33,10 @@
     };
   }
 
-  // Existing CSS contains accessibility fallbacks inside @media
-  // (prefers-reduced-motion: reduce). Chrome/Edge evaluate those at the CSS
-  // engine level, so JS matchMedia alone cannot override them. Append a
-  // higher-specificity, Full-Effects-only restoration after the animation
-  // scripts have installed their styles.
+  // CSS media queries are evaluated by the browser independently of the JS
+  // matchMedia shim. These Full-Effects-only overrides therefore restore only
+  // the current animation systems. The retired carousel conic-gradient tracer
+  // is deliberately kept disabled; carousel-edge-fx.js owns perimeter light.
   const installFullEffectsOverrides = () => {
     if (document.getElementById('portfolio-full-effects-overrides')) return;
     const style = document.createElement('style');
@@ -46,33 +45,26 @@
       html[data-effects="full"] .spotlight{will-change:transform,opacity}
       html[data-effects="full"] .barrel{will-change:auto}
 
-      html[data-effects="full"] .page::before{transition:opacity 110ms linear!important}
-      html[data-effects="full"].edge-tracer-supported .page::before{
-        padding:2px!important;border:0!important;box-shadow:none!important;
-        background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 258deg,rgba(216,184,106,.10) 274deg,rgba(255,222,112,.96) 307deg,rgba(255,247,207,1) 323deg,rgba(255,255,238,1) 329deg,rgba(255,236,158,.92) 337deg,rgba(216,184,106,.22) 353deg,transparent 360deg)!important;
-        -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;
-        -webkit-mask-composite:xor!important;
-        mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;
-        mask-composite:exclude!important;
-        filter:drop-shadow(0 0 5px rgba(255,226,126,.90)) drop-shadow(0 0 9px rgba(216,184,106,.36))!important
+      /* Retired carousel pseudo-element renderer must never be resurrected. */
+      html[data-effects="full"] .page::before{
+        opacity:0!important;
+        background:none!important;
+        border:0!important;
+        padding:0!important;
+        box-shadow:none!important;
+        filter:none!important;
+        -webkit-mask:none!important;
+        mask:none!important;
       }
-      @media(min-width:901px){
-        html[data-effects="full"].desktop-edge-standard .page::before,
-        html[data-effects="full"].desktop-edge-webkit .page::before{
-          padding:10px!important;border:0!important;
-          background:conic-gradient(from var(--edge-angle,0deg),transparent 0deg 327deg,rgba(145,98,25,.12) 331deg,rgba(216,184,106,.38) 335deg,rgba(247,204,88,.72) 339deg,rgba(255,232,142,.96) 343deg,rgba(255,247,207,1) 346deg,rgba(255,255,255,1) 349deg,rgba(255,247,207,1) 352deg,rgba(255,232,142,.94) 355deg,rgba(216,184,106,.42) 358deg,transparent 360deg)!important;
-          filter:none!important
-        }
-        html[data-effects="full"].desktop-edge-standard .page::before{
-          -webkit-mask:none!important;-webkit-mask-composite:initial!important;
-          mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;
-          mask-composite:exclude!important
-        }
-        html[data-effects="full"].desktop-edge-webkit .page::before{
-          mask:none!important;mask-composite:initial!important;
-          -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;
-          -webkit-mask-composite:xor!important
-        }
+
+      /* Current physical-perimeter carousel renderer. */
+      html[data-effects="full"] .carousel-edge-rail{
+        display:block!important;
+        animation-play-state:running!important;
+      }
+      html[data-effects="full"] .carousel-edge-corner-flare{
+        display:block!important;
+        animation-play-state:running!important;
       }
 
       html[data-effects="full"] .resume-fx.active{display:block!important}
