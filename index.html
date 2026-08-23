@@ -30,6 +30,7 @@
     .intro{max-width:560px}.eyebrow{font-size:.76rem;letter-spacing:.2em;text-transform:uppercase;color:var(--teal)}
     h1{font-size:clamp(3.4rem,7.5vw,7rem);line-height:.9;letter-spacing:-.055em;margin:15px 0 22px}h1 span{color:var(--teal)}
     .intro>p{font-size:clamp(1rem,1.3vw,1.16rem);line-height:1.7;color:var(--muted);max-width:610px}
+    .progression-cta{display:flex;align-items:center;gap:14px;margin-top:22px;color:var(--gold);font-size:.76rem;font-weight:700;letter-spacing:.10em;text-transform:uppercase}
     .stage{height:min(69vh,610px);min-height:470px;position:relative;display:flex;align-items:center;justify-content:center;perspective:1800px;contain:layout style}
     .barrel{position:relative;width:min(610px,94%);height:430px;transform-style:preserve-3d;transform-origin:50% 50% 0;will-change:auto;z-index:20;pointer-events:none}
     .page{position:absolute;inset:0;padding:34px 38px;border:1px solid transparent;border-radius:7px;background:linear-gradient(155deg,var(--card1),var(--card2)) padding-box,linear-gradient(110deg,rgba(122,91,37,.9),rgba(216,184,106,.82),rgba(255,231,143,.58),rgba(112,87,43,.86),rgba(255,240,176,.72),rgba(122,91,37,.9)) border-box;box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07);display:flex;flex-direction:column;justify-content:space-between;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform-style:preserve-3d;overflow:hidden}
@@ -48,7 +49,7 @@
     @media(max-width:900px){.main{grid-template-columns:1fr;padding-top:16px}.desktop-swipe-guide{display:none}.stage{height:500px}}
     @media(max-width:560px){
       :root{--radius:62vw}.topbar{height:76px}.brand{font-size:.88rem;letter-spacing:.20em}.brand:before,.brand:after{width:26px}
-      .main{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 18px 20px}.intro{display:contents}.intro>.eyebrow{order:1}.intro>h1{order:2}.intro>p{order:3}
+      .main{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 18px 20px}.intro{display:contents}.intro>.eyebrow{order:1}.intro>h1{order:2}.intro>p{order:3}.progression-cta{order:4;flex-direction:column;align-items:flex-start;gap:6px;margin-top:18px}
       .swipe-guide{order:4;display:flex;width:100%;margin:22px 0 20px}.stage{order:5;width:100%;height:500px;min-height:500px;overflow:visible}.barrel{width:100%;height:390px}
       .page{left:5%;right:5%;width:90%;inset-block:auto;height:100%;padding:27px}.page h2{font-size:2.15rem}.page-bottom{align-items:flex-start;flex-direction:column;gap:12px}.page[data-card="about-me"] p{font-size:.82rem;line-height:1.45}
       .dots{bottom:8px}.site-disclaimer{width:calc(100% - 32px);margin-bottom:14px;padding:14px 12px;font-size:.64rem}
@@ -56,7 +57,7 @@
     }
     @media(min-width:901px){
       .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}
-      .desktop-performance-reduced .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(255,215,112,.28)!important}
+      .desktop-performance-reduced .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}
       .desktop-edge-standard .page::before{-webkit-mask:none!important;-webkit-mask-composite:initial!important;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;mask-composite:exclude!important}
       .desktop-edge-webkit .page::before{mask:none!important;mask-composite:initial!important;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;-webkit-mask-composite:xor!important}
       .desktop-edge-standard .barrel.edge-motion .page::before,.desktop-edge-webkit .barrel.edge-motion .page::before{opacity:min(1,calc(var(--edge-strength,.56) * 1.45))!important}
@@ -75,7 +76,7 @@
     <main class="main">
       <section class="intro">
         <div class="eyebrow">APPLIED AI · TECHNICAL COMMUNICATION · OPERATIONS</div>
-        <h1>Build.<br><span>Test.</span><br>Document.<br>Improve.</h1>
+        <h1>Build. <span>Test.</span><br>Document.<br>Improve.</h1>
         <p>This is a living portfolio where continued education becomes applied work. I’m building on a foundation in operations, information integrity, and documentation while developing practical skills in AI and technical communication—turning what I learn into experiments, workflows, documentation, and projects you can inspect.</p>
         <div class="progression-cta"><span>Explore the progression, turn the wheel</span><span data-progression-arrow aria-hidden="true"></span></div>
         <div class="swipe-guide" aria-label="Carousel navigation"><span class="carousel-guide-arrow" role="button" tabindex="0" data-dir="-1" aria-label="Previous portfolio card">←</span><span>Swipe left or right below</span><span class="carousel-guide-arrow" role="button" tabindex="0" data-dir="1" aria-label="Next portfolio card">→</span></div>
