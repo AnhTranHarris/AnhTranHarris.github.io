@@ -35,8 +35,19 @@
   opacity:1;
   visibility:hidden;
 }
+
+/* Perceptual-completion reveal: the gold system is fully dimmed at ~2375ms of effect
+   time (plus the 300ms white hold). Begin fading the teal bridge at that point rather
+   than waiting for the final 100% coverage bookkeeping. The mask/fx canvases remain
+   above this layer, so the final tracer movement can continue while revealing the
+   already-prepared portfolio underneath. Final JS cleanup still requires full completion. */
+@keyframes entry-teal-preemptive-reveal{
+  from{opacity:1}
+  to{opacity:0}
+}
 html[data-entry-state="running"] #portfolio-entry-overlay .entry-teal-layer{
   visibility:visible;
+  animation:entry-teal-preemptive-reveal 825ms cubic-bezier(.3,.05,.5,1) 2675ms both;
 }
 #portfolio-entry-overlay .entry-mask-canvas{
   z-index:2;
