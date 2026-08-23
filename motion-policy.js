@@ -33,6 +33,17 @@
     };
   }
 
+  // Register the current carousel renderer before later modules run. The CTA
+  // arrow checks this same data attribute and therefore will not load its stale
+  // legacy edge-2 URL. This keeps exactly one carousel FX instance per page.
+  if (!document.querySelector('script[data-carousel-edge-fx]')) {
+    const carouselFx = document.createElement('script');
+    carouselFx.src = 'carousel-edge-fx.js?v=edge-3';
+    carouselFx.dataset.carouselEdgeFx = 'true';
+    carouselFx.async = false;
+    document.head.appendChild(carouselFx);
+  }
+
   // CSS media queries are evaluated by the browser independently of the JS
   // matchMedia shim. These Full-Effects-only overrides therefore restore only
   // the current animation systems. The retired carousel conic-gradient tracer
