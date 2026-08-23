@@ -46,7 +46,12 @@
       html[data-effects="full"] .barrel{will-change:auto}
 
       /* Retired carousel pseudo-element renderer must never be resurrected. */
-      html[data-effects="full"] .page::before{
+      html[data-effects="full"] .page::before,
+      html[data-effects="full"] .barrel.edge-motion .page::before,
+      html[data-effects="full"].edge-tracer-supported .barrel.edge-motion .page::before,
+      html[data-effects="full"].desktop-edge-standard .barrel.edge-motion .page::before,
+      html[data-effects="full"].desktop-edge-webkit .barrel.edge-motion .page::before,
+      html[data-effects="full"].desktop-edge-fallback .barrel.edge-motion .page::before{
         opacity:0!important;
         background:none!important;
         border:0!important;
@@ -54,7 +59,9 @@
         box-shadow:none!important;
         filter:none!important;
         -webkit-mask:none!important;
+        -webkit-mask-composite:initial!important;
         mask:none!important;
+        mask-composite:initial!important;
       }
 
       /* Current physical-perimeter carousel renderer. */
