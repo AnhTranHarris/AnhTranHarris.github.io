@@ -13,21 +13,15 @@
     html[data-effects] .page::before{opacity:0!important;background:none!important;border:0!important;padding:0!important;box-shadow:none!important;filter:none!important;-webkit-mask:none!important;mask:none!important}
     @media(min-width:901px){html[data-effects] .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}}
 
-    /* Structural metal rim. It uses the same 10px footprint as the moving tracer,
-       but is an overlay so card dimensions/padding never change. */
+    /* Solid 10px structural gold rim. The metal itself remains opaque; only its
+       brightness/halo changes with card facing angle. */
     .carousel-edge-frame{
       position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;
-      box-shadow:
-        inset 0 10px 0 rgba(183,143,61,.58),
-        inset -10px 0 0 rgba(154,116,48,.55),
-        inset 0 -10px 0 rgba(184,143,60,.58),
-        inset 10px 0 0 rgba(154,116,48,.55),
-        inset 0 0 0 1px rgba(255,231,143,.58);
-      opacity:.88;
-    }
-    .carousel-edge-frame::before{
-      content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-      box-shadow:inset 0 0 0 10px rgba(216,184,106,.12),inset 0 0 8px rgba(255,240,176,.10);
+      box-sizing:border-box;border:10px solid rgb(190,145,58);opacity:1;
+      box-shadow:inset 0 0 0 1px rgb(231,197,116);
+      filter:brightness(.82) drop-shadow(0 0 1px rgba(216,184,106,.08));
+      transition:filter 52ms linear;
+      will-change:filter;
     }
 
     .carousel-edge-rail{position:absolute;z-index:4;pointer-events:none;opacity:0;will-change:transform,opacity,filter;transition:opacity 34ms linear,filter 42ms linear}
@@ -95,8 +89,14 @@
       const opacity=clamp01((.08+.92*frontal)*(.78+.22*motionStrength));
       const glare=clamp01(.18+.82*Math.pow(frontal,.48));
       state.page.classList.toggle('edge-fx-primary',isBrightest);
-      /* The structural metal frame brightens with orientation too, but much less than the tracer. */
-      state.frame.style.opacity=(.48+.40*frontal).toFixed(3);
+
+      /* Solid metal never becomes transparent. Facing angle changes only polish and halo. */
+      const frameBright=(.80+.30*Math.pow(frontal,.72)).toFixed(3);
+      const frameHalo=(.05+.22*Math.pow(frontal,.90)).toFixed(3);
+      const frameBlur=(1+4.5*Math.pow(frontal,.86)).toFixed(2);
+      state.frame.style.opacity='1';
+      state.frame.style.filter=`brightness(${frameBright}) drop-shadow(0 0 ${frameBlur}px rgba(216,184,106,${frameHalo}))`;
+
       Object.values(state.rails).forEach(rail=>{
         rail.style.opacity=rail.classList.contains('is-active')?opacity.toFixed(3):'0';
         const white=(.70+1.30*glare).toFixed(2),gold=(.34+1.26*glare).toFixed(2);
@@ -115,7 +115,7 @@
 
   let perimeterDistance=0,lastDistance=0,lastDriverAngle=null,lastMotionSign=1,raf=0;
   const clearRails=()=>pageFx.forEach(({rails})=>edgeNames.forEach(name=>{const rail=rails[name];rail.classList.remove('is-active','head-end','head-start');rail.style.opacity='0';}));
-  const tick=now=>{raf=0;if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();return;}const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;renderPerimeterLight(perimeterDistance,lastMotionSign);for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}raf=requestAnimationFrame(tick);};
-  const syncLoop=()=>{if(barrel.classList.contains('edge-motion')){if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);raf=requestAnimationFrame(tick);}}else{if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();}};
+  const tick=now=>{raf=0;if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();applyFacingLight();return;}const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;renderPerimeterLight(perimeterDistance,lastMotionSign);for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}raf=requestAnimationFrame(tick);};
+  const syncLoop=()=>{if(barrel.classList.contains('edge-motion')){if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);raf=requestAnimationFrame(tick);}}else{if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();applyFacingLight();}};
   if('MutationObserver'in window)new MutationObserver(syncLoop).observe(barrel,{attributes:true,attributeFilter:['class']});syncLoop();
 })();
