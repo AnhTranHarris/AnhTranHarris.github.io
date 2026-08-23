@@ -72,6 +72,7 @@
   const headAtEnd=(edge,sign)=>{const forward=edge==='top'||edge==='right';return sign>=0?forward:!forward;};
 
   const facingOf=page=>{try{if(typeof DOMMatrix!=='function')return page.classList.contains('edge-fx-primary')?1:.12;const bt=getComputedStyle(barrel).transform,pt=getComputedStyle(page).transform;const bm=new DOMMatrix(bt==='none'?undefined:bt),pm=new DOMMatrix(pt==='none'?undefined:pt);return clamp01(bm.multiply(pm).m11);}catch{return page.classList.contains('edge-fx-primary')?1:.12;}};
+  const BLOOM_FACING_MIN=.22;
   const applyFacingLight=()=>{
     const motionStrength=Math.max(.30,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.30));
     let brightestIndex=0,brightestFacing=-1;
@@ -99,27 +100,29 @@
   const signedPerimeterDelta=(from,to)=>{let d=((to-from)%perimeter+perimeter)%perimeter;if(d>perimeter/2)d-=perimeter;return d};
   const crossedDistance=(from,to,target)=>{const travel=signedPerimeterDelta(from,to),delta=signedPerimeterDelta(from,target);if(Math.abs(travel)<.001)return false;return travel>0?delta>=0&&delta<=travel:delta<=0&&delta>=travel;};
 
-  let flareAnimation=null,lastFlareAt=0,activeFlareProbe=null;
+  let flareAnimation=null,lastFlareAt=0,activeFlareProbe=null,activeFlarePage=null;
+  const flarePageVisible=page=>page&&facingOf(page)>=BLOOM_FACING_MIN;
   const positionFlareAtProbe=()=>{
-    if(!activeFlareProbe)return false;
+    if(!activeFlareProbe||!activeFlarePage||!flarePageVisible(activeFlarePage))return false;
     const p=activeFlareProbe.getBoundingClientRect(),s=stage.getBoundingClientRect();
     const x=p.left-s.left,y=p.top-s.top;
     if(!Number.isFinite(x)||!Number.isFinite(y))return false;
+    if(x<0||x>s.width||y<0||y>s.height)return false;
     flare.style.left=`${x}px`;flare.style.top=`${y}px`;return true;
   };
-  const clearFlare=()=>{flareAnimation?.cancel();flareAnimation=null;activeFlareProbe=null;flare.style.opacity='0';};
+  const clearFlare=()=>{flareAnimation?.cancel();flareAnimation=null;activeFlareProbe=null;activeFlarePage=null;flare.style.opacity='0';};
   const fireCornerFlare=(cornerName,now)=>{
     if(now-lastFlareAt<180)return;
     const state=pageFx[activePageIndex()]||pageFx[0],probe=state.probes[cornerName];
-    if(!probe)return;
-    activeFlareProbe=probe;
-    if(!positionFlareAtProbe()){activeFlareProbe=null;return;}
+    if(!probe||!flarePageVisible(state.page))return;
+    activeFlareProbe=probe;activeFlarePage=state.page;
+    if(!positionFlareAtProbe()){activeFlareProbe=null;activeFlarePage=null;return;}
     lastFlareAt=now;flareAnimation?.cancel();
     const peak=2+Math.random();
     const frames=[{opacity:0,transform:'translate(-50%,-50%) scale(.72) rotate(-18deg)',offset:0},{opacity:.62,transform:`translate(-50%,-50%) scale(${(peak*.82).toFixed(2)}) rotate(-8deg)`,offset:.22},{opacity:1,transform:`translate(-50%,-50%) scale(${peak.toFixed(2)}) rotate(8deg)`,offset:.44},{opacity:.90,transform:`translate(-50%,-50%) scale(${(peak*.92).toFixed(2)}) rotate(19deg)`,offset:.62},{opacity:.46,transform:`translate(-50%,-50%) scale(${(peak*.72).toFixed(2)}) rotate(10deg)`,offset:.80},{opacity:0,transform:`translate(-50%,-50%) scale(${(peak*.54).toFixed(2)}) rotate(0deg)`,offset:1}];
     if(flare.animate){
       flareAnimation=flare.animate(frames,{duration:620,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});
-      flareAnimation.onfinish=()=>{flareAnimation=null;activeFlareProbe=null;flare.style.opacity='0';};
+      flareAnimation.onfinish=()=>{flareAnimation=null;activeFlareProbe=null;activeFlarePage=null;flare.style.opacity='0';};
     }
   };
 
@@ -132,14 +135,14 @@
     const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;
     lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;
     renderPerimeterLight(perimeterDistance,lastMotionSign);
-    if(activeFlareProbe)positionFlareAtProbe();
+    if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();
     for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}
-    if(activeFlareProbe)positionFlareAtProbe();
+    if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();
     raf=requestAnimationFrame(tick);
   };
   const syncLoop=()=>{
     if(barrel.classList.contains('edge-motion')){
-      if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);if(activeFlareProbe)positionFlareAtProbe();raf=requestAnimationFrame(tick);}
+      if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();raf=requestAnimationFrame(tick);}
     }else{
       if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();
     }
