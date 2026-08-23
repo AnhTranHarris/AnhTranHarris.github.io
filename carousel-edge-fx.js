@@ -38,9 +38,9 @@
     .carousel-edge-rail[data-edge="left"].head-start::before,.carousel-edge-rail[data-edge="right"].head-start::before{background:linear-gradient(180deg,transparent 0%,rgba(216,184,106,.40) 1%,rgba(255,246,197,1) 2%,rgba(255,255,255,1) 5%,rgba(255,255,255,1) 8%,rgba(255,252,229,1) 13%,rgba(255,241,176,1) 21%,rgba(255,226,126,.82) 33%,rgba(247,204,88,.44) 51%,rgba(216,184,106,.18) 72%,rgba(216,184,106,.06) 90%,transparent 100%)}
 
     .carousel-edge-corner-probe{position:absolute;width:0;height:0;pointer-events:none;z-index:0}.carousel-edge-corner-probe[data-corner="tl"]{left:0;top:0}.carousel-edge-corner-probe[data-corner="tr"]{right:0;top:0}.carousel-edge-corner-probe[data-corner="br"]{right:0;bottom:0}.carousel-edge-corner-probe[data-corner="bl"]{left:0;bottom:0}
-    .carousel-edge-corner-flare{position:absolute;left:0;top:0;width:42px;height:28px;z-index:28;pointer-events:none;opacity:0;border-radius:50%;background:radial-gradient(ellipse at center,rgba(255,255,246,1) 0%,rgba(255,251,224,1) 10%,rgba(255,231,145,.96) 27%,rgba(216,184,106,.62) 50%,rgba(216,184,106,.20) 72%,rgba(216,184,106,0) 100%);filter:drop-shadow(0 0 5px rgba(255,249,218,.94)) drop-shadow(0 0 14px rgba(216,184,106,.46));transform:translate(-50%,-50%) scale(.7) rotate(-18deg);transform-origin:center}
-    .carousel-edge-corner-flare::before{content:"";position:absolute;left:4px;right:4px;top:50%;height:1px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,rgba(255,231,145,.48) 24%,rgba(255,255,246,1) 49%,rgba(255,255,246,1) 51%,rgba(255,231,145,.48) 76%,transparent);box-shadow:0 0 7px rgba(255,244,190,.78)}
-    .carousel-edge-corner-flare::after{content:"";position:absolute;left:9px;right:9px;top:7px;bottom:7px;border-radius:50%;border:1px solid rgba(255,232,150,.24);transform:rotate(-28deg)}
+    .carousel-edge-corner-flare{position:absolute;left:0;top:0;width:48px;height:30px;z-index:28;pointer-events:none;opacity:0;border-radius:50%;background:radial-gradient(ellipse at 48% 50%,rgba(255,255,255,1) 0%,rgba(255,255,247,.98) 8%,rgba(255,244,190,.82) 22%,rgba(243,203,106,.46) 43%,rgba(216,184,106,.16) 66%,rgba(216,184,106,.045) 82%,rgba(216,184,106,0) 100%);filter:drop-shadow(0 0 4px rgba(255,255,240,.92)) drop-shadow(0 0 11px rgba(255,227,140,.50)) drop-shadow(0 0 18px rgba(216,184,106,.24));transform:translate(-50%,-50%) scale(.7) rotate(-18deg);transform-origin:center}
+    .carousel-edge-corner-flare::before{content:"";position:absolute;left:-8px;right:-8px;top:50%;height:2px;transform:translateY(-50%);background:linear-gradient(90deg,transparent 0%,rgba(216,184,106,.08) 14%,rgba(255,225,132,.30) 30%,rgba(255,247,205,.80) 43%,rgba(255,255,255,1) 49%,rgba(255,255,255,1) 51%,rgba(255,247,205,.78) 58%,rgba(255,225,132,.26) 71%,rgba(216,184,106,.07) 86%,transparent 100%);filter:blur(.15px);box-shadow:0 0 5px rgba(255,252,230,.72),0 0 10px rgba(216,184,106,.28)}
+    .carousel-edge-corner-flare::after{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;transform:translate(-50%,-50%);border-radius:50%;border:0;background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,255,247,.98) 34%,rgba(255,237,168,.72) 58%,rgba(255,223,118,.20) 78%,rgba(255,223,118,0) 100%);box-shadow:0 0 4px rgba(255,255,255,.94),0 0 9px rgba(255,231,150,.56)}
   `;
   document.head.appendChild(style);
 
@@ -71,11 +71,7 @@
 
   const facingOf=page=>{try{if(typeof DOMMatrix!=='function')return page.classList.contains('edge-fx-primary')?1:.12;const bt=getComputedStyle(barrel).transform,pt=getComputedStyle(page).transform;const bm=new DOMMatrix(bt==='none'?undefined:bt),pm=new DOMMatrix(pt==='none'?undefined:pt);return clamp01(bm.multiply(pm).m11);}catch{return page.classList.contains('edge-fx-primary')?1:.12;}};
   const BLOOM_START_FACING=.20,BLOOM_KEEP_FACING=.10,BLOOM_STAGE_MARGIN=48;
-  const mostFacingState=()=>{
-    let best=pageFx[0],bestFacing=-1;
-    pageFx.forEach(state=>{const f=facingOf(state.page);state.facing=f;if(f>bestFacing){bestFacing=f;best=state;}});
-    return{state:best,facing:bestFacing};
-  };
+  const mostFacingState=()=>{let best=pageFx[0],bestFacing=-1;pageFx.forEach(state=>{const f=facingOf(state.page);state.facing=f;if(f>bestFacing){bestFacing=f;best=state;}});return{state:best,facing:bestFacing};};
   const applyFacingLight=()=>{
     const motionStrength=Math.max(.30,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.30));
     const{state:brightestState}=mostFacingState();
@@ -84,17 +80,9 @@
       const opacity=clamp01((.12+.88*frontal)*(.88+.12*motionStrength));
       const glare=clamp01(.28+.72*Math.pow(frontal,.44));
       state.page.classList.toggle('edge-fx-primary',isBrightest);
-      const frameBright=(.80+.30*Math.pow(frontal,.72)).toFixed(3);
-      const frameHalo=(.05+.22*Math.pow(frontal,.90)).toFixed(3);
-      const frameBlur=(1+4.5*Math.pow(frontal,.86)).toFixed(2);
-      state.frame.style.opacity='1';
-      state.frame.style.filter=`brightness(${frameBright}) drop-shadow(0 0 ${frameBlur}px rgba(216,184,106,${frameHalo}))`;
-      Object.values(state.rails).forEach(rail=>{
-        rail.style.opacity=rail.classList.contains('is-active')?opacity.toFixed(3):'0';
-        const whiteAlpha=Math.min(1,.72+.28*glare),goldAlpha=Math.min(1,.58+.38*glare);
-        const whiteBlur=5.25+8.75*glare,goldBlur=15.75+26.25*glare;
-        rail.style.filter=`brightness(1.75) drop-shadow(0 0 ${whiteBlur.toFixed(1)}px rgba(255,252,230,${whiteAlpha.toFixed(2)})) drop-shadow(0 0 ${goldBlur.toFixed(1)}px rgba(216,184,106,${goldAlpha.toFixed(2)}))`;
-      });
+      const frameBright=(.80+.30*Math.pow(frontal,.72)).toFixed(3),frameHalo=(.05+.22*Math.pow(frontal,.90)).toFixed(3),frameBlur=(1+4.5*Math.pow(frontal,.86)).toFixed(2);
+      state.frame.style.opacity='1';state.frame.style.filter=`brightness(${frameBright}) drop-shadow(0 0 ${frameBlur}px rgba(216,184,106,${frameHalo}))`;
+      Object.values(state.rails).forEach(rail=>{rail.style.opacity=rail.classList.contains('is-active')?opacity.toFixed(3):'0';const whiteAlpha=Math.min(1,.72+.28*glare),goldAlpha=Math.min(1,.58+.38*glare),whiteBlur=5.25+8.75*glare,goldBlur=15.75+26.25*glare;rail.style.filter=`brightness(1.75) drop-shadow(0 0 ${whiteBlur.toFixed(1)}px rgba(255,252,230,${whiteAlpha.toFixed(2)})) drop-shadow(0 0 ${goldBlur.toFixed(1)}px rgba(216,184,106,${goldAlpha.toFixed(2)}))`;});
     });
   };
 
@@ -103,51 +91,13 @@
   const crossedDistance=(from,to,target)=>{const travel=signedPerimeterDelta(from,to),delta=signedPerimeterDelta(from,target);if(Math.abs(travel)<.001)return false;return travel>0?delta>=0&&delta<=travel:delta<=0&&delta>=travel;};
 
   let flareAnimation=null,lastFlareAt=0,activeFlareProbe=null,activeFlarePage=null;
-  const positionFlareAtProbe=()=>{
-    if(!activeFlareProbe||!activeFlarePage||facingOf(activeFlarePage)<BLOOM_KEEP_FACING)return false;
-    const p=activeFlareProbe.getBoundingClientRect(),s=stage.getBoundingClientRect();
-    const x=p.left-s.left,y=p.top-s.top;
-    if(!Number.isFinite(x)||!Number.isFinite(y))return false;
-    if(x<-BLOOM_STAGE_MARGIN||x>s.width+BLOOM_STAGE_MARGIN||y<-BLOOM_STAGE_MARGIN||y>s.height+BLOOM_STAGE_MARGIN)return false;
-    flare.style.left=`${x}px`;flare.style.top=`${y}px`;return true;
-  };
+  const positionFlareAtProbe=()=>{if(!activeFlareProbe||!activeFlarePage||facingOf(activeFlarePage)<BLOOM_KEEP_FACING)return false;const p=activeFlareProbe.getBoundingClientRect(),s=stage.getBoundingClientRect(),x=p.left-s.left,y=p.top-s.top;if(!Number.isFinite(x)||!Number.isFinite(y))return false;if(x<-BLOOM_STAGE_MARGIN||x>s.width+BLOOM_STAGE_MARGIN||y<-BLOOM_STAGE_MARGIN||y>s.height+BLOOM_STAGE_MARGIN)return false;flare.style.left=`${x}px`;flare.style.top=`${y}px`;return true;};
   const clearFlare=()=>{flareAnimation?.cancel();flareAnimation=null;activeFlareProbe=null;activeFlarePage=null;flare.style.opacity='0';};
-  const fireCornerFlare=(cornerName,now)=>{
-    if(now-lastFlareAt<180)return;
-    const{state,facing}=mostFacingState();
-    if(!state||facing<BLOOM_START_FACING)return;
-    const probe=state.probes[cornerName];if(!probe)return;
-    activeFlareProbe=probe;activeFlarePage=state.page;
-    if(!positionFlareAtProbe()){activeFlareProbe=null;activeFlarePage=null;return;}
-    lastFlareAt=now;flareAnimation?.cancel();
-    const peak=2+Math.random();
-    const frames=[{opacity:0,transform:'translate(-50%,-50%) scale(.72) rotate(-18deg)',offset:0},{opacity:.62,transform:`translate(-50%,-50%) scale(${(peak*.82).toFixed(2)}) rotate(-8deg)`,offset:.22},{opacity:1,transform:`translate(-50%,-50%) scale(${peak.toFixed(2)}) rotate(8deg)`,offset:.44},{opacity:.90,transform:`translate(-50%,-50%) scale(${(peak*.92).toFixed(2)}) rotate(19deg)`,offset:.62},{opacity:.46,transform:`translate(-50%,-50%) scale(${(peak*.72).toFixed(2)}) rotate(10deg)`,offset:.80},{opacity:0,transform:`translate(-50%,-50%) scale(${(peak*.54).toFixed(2)}) rotate(0deg)`,offset:1}];
-    if(flare.animate){
-      flareAnimation=flare.animate(frames,{duration:620,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});
-      flareAnimation.onfinish=()=>{flareAnimation=null;activeFlareProbe=null;activeFlarePage=null;flare.style.opacity='0';};
-    }
-  };
+  const fireCornerFlare=(cornerName,now)=>{if(now-lastFlareAt<180)return;const{state,facing}=mostFacingState();if(!state||facing<BLOOM_START_FACING)return;const probe=state.probes[cornerName];if(!probe)return;activeFlareProbe=probe;activeFlarePage=state.page;if(!positionFlareAtProbe()){activeFlareProbe=null;activeFlarePage=null;return;}lastFlareAt=now;flareAnimation?.cancel();const peak=2+Math.random();const frames=[{opacity:0,transform:'translate(-50%,-50%) scale(.72) rotate(-18deg)',offset:0},{opacity:.62,transform:`translate(-50%,-50%) scale(${(peak*.82).toFixed(2)}) rotate(-8deg)`,offset:.22},{opacity:1,transform:`translate(-50%,-50%) scale(${peak.toFixed(2)}) rotate(8deg)`,offset:.44},{opacity:.90,transform:`translate(-50%,-50%) scale(${(peak*.92).toFixed(2)}) rotate(19deg)`,offset:.62},{opacity:.46,transform:`translate(-50%,-50%) scale(${(peak*.72).toFixed(2)}) rotate(10deg)`,offset:.80},{opacity:0,transform:`translate(-50%,-50%) scale(${(peak*.54).toFixed(2)}) rotate(0deg)`,offset:1}];if(flare.animate){flareAnimation=flare.animate(frames,{duration:620,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});flareAnimation.onfinish=()=>{flareAnimation=null;activeFlareProbe=null;activeFlarePage=null;flare.style.opacity='0';};}};
 
   let perimeterDistance=0,lastDistance=0,lastDriverAngle=null,lastMotionSign=1,raf=0;
   const clearRails=()=>pageFx.forEach(({rails})=>edgeNames.forEach(name=>{const rail=rails[name];rail.classList.remove('is-active','head-end','head-start');rail.style.opacity='0';}));
-  const tick=now=>{
-    raf=0;
-    if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();return;}
-    const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;
-    const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;
-    lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;
-    renderPerimeterLight(perimeterDistance,lastMotionSign);
-    if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();
-    for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}
-    if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();
-    raf=requestAnimationFrame(tick);
-  };
-  const syncLoop=()=>{
-    if(barrel.classList.contains('edge-motion')){
-      if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();raf=requestAnimationFrame(tick);}
-    }else{
-      if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();
-    }
-  };
+  const tick=now=>{raf=0;if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();return;}const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;renderPerimeterLight(perimeterDistance,lastMotionSign);if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();raf=requestAnimationFrame(tick);};
+  const syncLoop=()=>{if(barrel.classList.contains('edge-motion')){if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);if(activeFlareProbe&&!positionFlareAtProbe())clearFlare();raf=requestAnimationFrame(tick);}}else{if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();}};
   if('MutationObserver'in window)new MutationObserver(syncLoop).observe(barrel,{attributes:true,attributeFilter:['class']});syncLoop();
 })();
