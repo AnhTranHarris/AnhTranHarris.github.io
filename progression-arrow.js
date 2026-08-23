@@ -293,3 +293,12 @@
   };
   window.addEventListener('pointermove',onPointerMove,{passive:true});
 })();
+
+(()=>{
+  if(document.querySelector('script[data-carousel-edge-fx]'))return;
+  const script=document.createElement('script');
+  script.src='carousel-edge-fx.js?v=edge-1';
+  script.dataset.carouselEdgeFx='true';
+  script.defer=true;
+  document.head.appendChild(script);
+})();
