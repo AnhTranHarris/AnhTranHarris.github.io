@@ -13,6 +13,23 @@
     html[data-effects] .page::before{opacity:0!important;background:none!important;border:0!important;padding:0!important;box-shadow:none!important;filter:none!important;-webkit-mask:none!important;mask:none!important}
     @media(min-width:901px){html[data-effects] .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}}
 
+    /* Structural metal rim. It uses the same 10px footprint as the moving tracer,
+       but is an overlay so card dimensions/padding never change. */
+    .carousel-edge-frame{
+      position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;
+      box-shadow:
+        inset 0 10px 0 rgba(183,143,61,.58),
+        inset -10px 0 0 rgba(154,116,48,.55),
+        inset 0 -10px 0 rgba(184,143,60,.58),
+        inset 10px 0 0 rgba(154,116,48,.55),
+        inset 0 0 0 1px rgba(255,231,143,.58);
+      opacity:.88;
+    }
+    .carousel-edge-frame::before{
+      content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+      box-shadow:inset 0 0 0 10px rgba(216,184,106,.12),inset 0 0 8px rgba(255,240,176,.10);
+    }
+
     .carousel-edge-rail{position:absolute;z-index:4;pointer-events:none;opacity:0;will-change:transform,opacity,filter;transition:opacity 34ms linear,filter 42ms linear}
     .carousel-edge-rail::before{content:"";position:absolute;inset:0;border-radius:999px}
     .carousel-edge-rail[data-edge="top"],.carousel-edge-rail[data-edge="bottom"]{width:72px;height:10px;left:0}
@@ -34,10 +51,12 @@
 
   const edgeNames=['top','right','bottom','left'],cornerNames=['tl','tr','br','bl'];
   const pageFx=pages.map(page=>{
+    const frame=document.createElement('span');
+    frame.className='carousel-edge-frame';frame.setAttribute('aria-hidden','true');page.appendChild(frame);
     const rails={},probes={};
     edgeNames.forEach(name=>{const rail=document.createElement('span');rail.className='carousel-edge-rail';rail.dataset.edge=name;rail.setAttribute('aria-hidden','true');page.appendChild(rail);rails[name]=rail;});
     cornerNames.forEach(name=>{const probe=document.createElement('span');probe.className='carousel-edge-corner-probe';probe.dataset.corner=name;probe.setAttribute('aria-hidden','true');page.appendChild(probe);probes[name]=probe;});
-    return{page,rails,probes};
+    return{page,frame,rails,probes};
   });
 
   const flare=document.createElement('span');flare.className='carousel-edge-corner-flare';flare.setAttribute('aria-hidden','true');stage.appendChild(flare);
@@ -59,14 +78,12 @@
   const placeRail=(rail,edge,offset)=>{if(edge==='top'||edge==='bottom'){const x=Math.max(-railHalf,Math.min(pageWidth-railHalf,offset-railHalf));rail.style.transform=`translate3d(${x}px,0,0)`;}else{const y=Math.max(-railHalf,Math.min(pageHeight-railHalf,offset-railHalf));rail.style.transform=`translate3d(0,${y}px,0)`;}};
   const headAtEnd=(edge,sign)=>{const forward=edge==='top'||edge==='right';return sign>=0?forward:!forward;};
 
-  /* Browser-projected face intensity. Matrix multiplication uses the same 3D transforms the viewer sees. */
   const facingOf=page=>{
     try{
       if(typeof DOMMatrix!=='function')return page.classList.contains('edge-fx-primary')?1:.12;
-      const bm=new DOMMatrix(getComputedStyle(barrel).transform==='none'?undefined:getComputedStyle(barrel).transform);
-      const pm=new DOMMatrix(getComputedStyle(page).transform==='none'?undefined:getComputedStyle(page).transform);
-      const combined=bm.multiply(pm);
-      return clamp01(combined.m11);
+      const bt=getComputedStyle(barrel).transform,pt=getComputedStyle(page).transform;
+      const bm=new DOMMatrix(bt==='none'?undefined:bt),pm=new DOMMatrix(pt==='none'?undefined:pt);
+      return clamp01(bm.multiply(pm).m11);
     }catch{return page.classList.contains('edge-fx-primary')?1:.12;}
   };
   const applyFacingLight=()=>{
@@ -74,14 +91,12 @@
     let brightestIndex=0,brightestFacing=-1;
     pageFx.forEach((state,index)=>{const f=facingOf(state.page);state.facing=f;if(f>brightestFacing){brightestFacing=f;brightestIndex=index;}});
     pageFx.forEach((state,index)=>{
-      const f=state.facing||0;
-      /* Quiet while oblique, then rapidly intensify through the final approach to front-facing. */
-      const approach=smoothstep((f-.08)/.92);
-      const frontal=Math.pow(approach,.62);
-      const isBrightest=index===brightestIndex;
+      const f=state.facing||0,approach=smoothstep((f-.08)/.92),frontal=Math.pow(approach,.62),isBrightest=index===brightestIndex;
       const opacity=clamp01((.08+.92*frontal)*(.78+.22*motionStrength));
       const glare=clamp01(.18+.82*Math.pow(frontal,.48));
       state.page.classList.toggle('edge-fx-primary',isBrightest);
+      /* The structural metal frame brightens with orientation too, but much less than the tracer. */
+      state.frame.style.opacity=(.48+.40*frontal).toFixed(3);
       Object.values(state.rails).forEach(rail=>{
         rail.style.opacity=rail.classList.contains('is-active')?opacity.toFixed(3):'0';
         const white=(.70+1.30*glare).toFixed(2),gold=(.34+1.26*glare).toFixed(2);
