@@ -1,4 +1,4 @@
-/* Harris Portfolio: modular recruiter CTA arrow with inertial pointer-reactive SVG glint. */
+/* Harris Portfolio: modular recruiter CTA arrow with inertial pointer-reactive glint and corner blooms. */
 (()=>{
   const mount=document.querySelector('[data-progression-arrow]');
   if(!mount)return;
@@ -18,15 +18,25 @@
     .progression-arrow.is-pointer-active .pa-core{opacity:.96}
     .progression-arrow.is-autonomous .pa-glint{stroke-dasharray:24 420;animation:progressionGlint 4200ms cubic-bezier(.45,0,.55,1) infinite}
     .progression-arrow.is-autonomous .pa-core{stroke-dasharray:8 436;animation:progressionGlint 4200ms cubic-bezier(.45,0,.55,1) infinite}
+    .pa-bloom{pointer-events:none;opacity:0;transform-box:fill-box;transform-origin:center}
+    .pa-bloom .pa-bloom-aura{fill:rgba(216,184,106,.18);stroke:rgba(255,226,126,.20);stroke-width:2;filter:drop-shadow(0 0 7px rgba(216,184,106,.55))}
+    .pa-bloom .pa-bloom-exposure{fill:rgba(245,193,72,.34);stroke:rgba(255,224,118,.62);stroke-width:1.6;filter:drop-shadow(0 0 4px rgba(255,210,92,.82))}
+    .pa-bloom .pa-bloom-core{fill:rgba(255,250,218,.96);stroke:#fff6c7;stroke-width:.8;filter:drop-shadow(0 0 3px rgba(255,247,190,.98))}
+    .pa-bloom.is-blooming{animation:cornerBloom 520ms cubic-bezier(.18,.78,.22,1) both}
+    @keyframes cornerBloom{0%{opacity:0;transform:scale(.32)}18%{opacity:1;transform:scale(1.55)}38%{opacity:.96;transform:scale(1.18)}100%{opacity:0;transform:scale(.72)}}
     @keyframes progressionGlint{0%,20%{stroke-dashoffset:446;opacity:0}27%{opacity:.95}54%{opacity:1}68%{stroke-dashoffset:0;opacity:.88}74%,100%{stroke-dashoffset:-34;opacity:0}}
     @media(max-width:900px){.progression-arrow{width:86px;height:104px;transform:rotate(90deg) translateZ(0);transform-origin:43px 52px;margin:2px 0 0 20px}}
-    @media(prefers-reduced-motion:reduce){.progression-arrow .pa-glint,.progression-arrow .pa-core{animation:none!important;transition:none!important;opacity:.38;stroke-dashoffset:0}}
+    @media(prefers-reduced-motion:reduce){.progression-arrow .pa-glint,.progression-arrow .pa-core{animation:none!important;transition:none!important;opacity:.38;stroke-dashoffset:0}.pa-bloom{display:none}}
   `;
   document.head.appendChild(style);
+
+  const corners=[[8,36],[94,36],[94,18],[136,50],[94,82],[94,64],[8,64]];
+  const bloomMarkup=corners.map(([x,y],i)=>`<g class="pa-bloom" data-bloom="${i}" transform="translate(${x} ${y})"><circle class="pa-bloom-aura" r="12"/><circle class="pa-bloom-exposure" r="6.5"/><circle class="pa-bloom-core" r="2.2"/></g>`).join('');
 
   mount.innerHTML=`<svg class="progression-arrow" viewBox="0 0 144 100" role="img" aria-label="Arrow pointing toward the portfolio carousel" focusable="false">
     <path class="pa-depth" d="M8 36H94V18L136 50 94 82V64H8Z"/>
     <path class="pa-face" d="M8 36H94V18L136 50 94 82V64H8Z"/>
+    ${bloomMarkup}
     <path class="pa-rim" d="M8 36H94V18L136 50 94 82V64H8Z"/>
     <path class="pa-glint" d="M8 36H94V18L136 50 94 82V64H8Z"/>
     <path class="pa-core" d="M8 36H94V18L136 50 94 82V64H8Z"/>
@@ -36,6 +46,7 @@
   const guide=svg.querySelector('.pa-rim');
   const glint=svg.querySelector('.pa-glint');
   const core=svg.querySelector('.pa-core');
+  const blooms=[...svg.querySelectorAll('.pa-bloom')];
   if(!svg||!guide||!glint||!core)return;
 
   if(reduce)return;
@@ -50,11 +61,38 @@
   glint.style.strokeDasharray=`${glintLength} ${Math.max(1,total-glintLength)}`;
   core.style.strokeDasharray=`${coreLength} ${Math.max(1,total-coreLength)}`;
 
+  const nearestPathLengthToPoint=(x,y)=>{
+    const samples=72;
+    let bestLength=0,bestDistance=Infinity;
+    for(let i=0;i<=samples;i++){
+      const length=total*(i/samples);
+      const point=guide.getPointAtLength(length);
+      const dx=point.x-x,dy=point.y-y;
+      const distance=dx*dx+dy*dy;
+      if(distance<bestDistance){bestDistance=distance;bestLength=length;}
+    }
+    let step=total/samples;
+    for(let pass=0;pass<6;pass++){
+      step*=.5;
+      for(const candidate of [(bestLength-step+total)%total,(bestLength+step)%total]){
+        const point=guide.getPointAtLength(candidate);
+        const dx=point.x-x,dy=point.y-y;
+        const distance=dx*dx+dy*dy;
+        if(distance<bestDistance){bestDistance=distance;bestLength=candidate;}
+      }
+    }
+    return bestLength;
+  };
+
+  const cornerStates=corners.map(([x,y],index)=>({length:nearestPathLengthToPoint(x,y),node:blooms[index],inside:false,lastFired:-Infinity}));
+
   let clientX=0,clientY=0,targetLength=0,currentLength=0;
   let searchRaf=0,motionRaf=0,fadeTimer=0,lastFrame=0,initialized=false,pointerFresh=false;
   const FOLLOW_RATE=7.2;
   const SETTLE_EPSILON=.45;
   const IDLE_BEFORE_FADE=260;
+  const CORNER_RADIUS=Math.max(8,total*.022);
+  const CORNER_COOLDOWN=620;
 
   const nearestLength=(x,y)=>{
     const ctm=svg.getScreenCTM();
@@ -90,9 +128,28 @@
     return delta;
   };
 
-  const paint=(length)=>{
+  const circularDistance=(a,b)=>Math.abs(shortestDelta(a,b));
+
+  const fireCornerBloom=(state,now)=>{
+    if(!state.node||now-state.lastFired<CORNER_COOLDOWN)return;
+    state.lastFired=now;
+    state.node.classList.remove('is-blooming');
+    void state.node.getBoundingClientRect();
+    state.node.classList.add('is-blooming');
+  };
+
+  const updateCornerBlooms=(length,now)=>{
+    for(const state of cornerStates){
+      const inside=circularDistance(length,state.length)<=CORNER_RADIUS;
+      if(inside&&!state.inside)fireCornerBloom(state,now);
+      state.inside=inside;
+    }
+  };
+
+  const paint=(length,now=performance.now())=>{
     glint.style.strokeDashoffset=String(total-length+glintLength*.5);
     core.style.strokeDashoffset=String(total-length+coreLength*.5);
+    updateCornerBlooms(length,now);
   };
 
   const animateGlint=now=>{
@@ -102,14 +159,14 @@
     const delta=shortestDelta(currentLength,targetLength);
     const follow=1-Math.exp(-FOLLOW_RATE*dt/1000);
     currentLength=(currentLength+delta*follow+total)%total;
-    paint(currentLength);
+    paint(currentLength,now);
 
     if(Math.abs(delta)>SETTLE_EPSILON||pointerFresh){
       pointerFresh=false;
       motionRaf=requestAnimationFrame(animateGlint);
     }else{
       currentLength=targetLength;
-      paint(currentLength);
+      paint(currentLength,now);
       lastFrame=0;
     }
   };
