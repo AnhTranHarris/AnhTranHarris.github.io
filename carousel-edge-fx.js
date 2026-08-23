@@ -32,7 +32,7 @@
   document.head.appendChild(style);
 
   const edgeNames=['top','right','bottom','left'],cornerNames=['tl','tr','br','bl'];
-  const pageFx=pages.map(page=>{const frame=document.createElement('span');frame.className='carousel-edge-frame';frame.setAttribute('aria-hidden','true');page.appendChild(frame);const rails={},probes={};edgeNames.forEach(name=>{const rail=document.createElement('span');rail.className='carousel-edge-rail';rail.dataset.edge=name;rail.setAttribute('aria-hidden','true');page.appendChild(rail);rails[name]=rail;});cornerNames.forEach(name=>{const probe=document.createElement('span');probe.className='carousel-edge-corner-probe';probe.dataset.corner=name;probe.setAttribute('aria-hidden','true');page.appendChild(probe);probes[name]=probe;});return{page,frame,rails,probes,facing:0};});
+  const pageFx=pages.map(page=>{const frame=document.createElement('span');frame.className='carousel-edge-frame';frame.setAttribute('aria-hidden','true');page.appendChild(frame);const rails={},probes={};edgeNames.forEach(name=>{const rail=document.createElement('span');rail.className='carousel-edge-rail';rail.dataset.edge=name;rail.setAttribute('aria-hidden','true');page.appendChild(rail);rails[name]=rail;});cornerNames.forEach(name=>{const probe=document.createElement('span');probe.className='carousel-edge-corner-probe';probe.dataset.corner=name;probe.setAttribute('aria-hidden','true');page.appendChild(probe);probes[name]=probe;});return{page,frame,rails,probes,facing:0,surfaceArmed:false};});
 
   const flare=document.createElement('span');flare.className='carousel-edge-corner-flare';flare.setAttribute('aria-hidden','true');stage.appendChild(flare);
   const normalize360=v=>((v%360)+360)%360;
@@ -44,6 +44,21 @@
   const rgbCss=a=>`rgb(${a[0]},${a[1]},${a[2]})`;
   const CHAMP_SHADOW=[112,102,80],CHAMP_BODY=[169,154,120],CHAMP_HI=[215,202,167];
   const GOLD_SHADOW=[154,110,34],GOLD_BODY=[214,166,58],GOLD_HI=[255,214,107];
+
+  /* Static procedural card surfaces. Regenerated only after a previously visible card rotates nearly edge-on. */
+  const SURFACE_ARM_FACING=.20,SURFACE_REGEN_FACING=.08;
+  const rand=(min,max)=>min+Math.random()*(max-min);
+  const surfaceGradient=()=>{
+    const x1=rand(12,88).toFixed(1),y1=rand(8,92).toFixed(1),x2=rand(8,92).toFixed(1),y2=rand(10,90).toFixed(1),x3=rand(10,90).toFixed(1),y3=rand(8,92).toFixed(1);
+    const a1=rand(.72,.96).toFixed(3),a2=rand(.58,.88).toFixed(3),a3=rand(.64,.94).toFixed(3);
+    const s1=rand(18,31).toFixed(1),s2=rand(20,34).toFixed(1),s3=rand(18,33).toFixed(1);
+    const f1=rand(62,82).toFixed(1),f2=rand(64,84).toFixed(1),f3=rand(60,82).toFixed(1),angle=rand(118,218).toFixed(1);
+    return `radial-gradient(ellipse 78% 68% at ${x1}% ${y1}%,rgba(10,45,35,${a1}) 0%,rgba(10,45,35,.56) ${s1}%,rgba(10,45,35,.18) ${(+s1+18).toFixed(1)}%,rgba(10,45,35,0) ${f1}%),radial-gradient(ellipse 82% 72% at ${x2}% ${y2}%,rgba(6,21,28,${a2}) 0%,rgba(6,21,28,.54) ${s2}%,rgba(6,21,28,.17) ${(+s2+20).toFixed(1)}%,rgba(6,21,28,0) ${f2}%),radial-gradient(ellipse 72% 78% at ${x3}% ${y3}%,rgba(5,16,11,${a3}) 0%,rgba(5,16,11,.61) ${s3}%,rgba(5,16,11,.20) ${(+s3+19).toFixed(1)}%,rgba(5,16,11,0) ${f3}%),linear-gradient(${angle}deg,rgb(6,21,28) 0%,rgb(8,34,28) 34%,rgb(7,27,22) 58%,rgb(5,16,11) 100%)`;
+  };
+  const legacyBorder='linear-gradient(110deg,rgba(122,91,37,.9),rgba(216,184,106,.82),rgba(255,231,143,.58),rgba(112,87,43,.86),rgba(255,240,176,.72),rgba(122,91,37,.9))';
+  const regenerateSurface=state=>{const surface=surfaceGradient();state.page.style.background=`${surface} padding-box,${legacyBorder} border-box`;};
+  pageFx.forEach(regenerateSurface);
+
   let pageWidth=1,pageHeight=1,perimeter=4;
   const cornerDistances=[{name:'tr',distance:0},{name:'br',distance:0},{name:'bl',distance:0},{name:'tl',distance:0}];
   const syncGeometry=()=>{const sample=pages[0];pageWidth=Math.max(1,sample.offsetWidth);pageHeight=Math.max(1,sample.offsetHeight);perimeter=2*(pageWidth+pageHeight);cornerDistances[0].distance=pageWidth;cornerDistances[1].distance=pageWidth+pageHeight;cornerDistances[2].distance=2*pageWidth+pageHeight;cornerDistances[3].distance=0;};
@@ -56,7 +71,8 @@
   const facingOf=page=>{try{if(typeof DOMMatrix!=='function')return page.classList.contains('edge-fx-primary')?1:.12;const bt=getComputedStyle(barrel).transform,pt=getComputedStyle(page).transform;const bm=new DOMMatrix(bt==='none'?undefined:bt),pm=new DOMMatrix(pt==='none'?undefined:pt);return clamp01(bm.multiply(pm).m11);}catch{return page.classList.contains('edge-fx-primary')?1:.12;}};
   const BLOOM_START_FACING=.20,BLOOM_KEEP_FACING=.10,BLOOM_STAGE_MARGIN=48;
   const mostFacingState=()=>{let best=pageFx[0],bestFacing=-1;pageFx.forEach(state=>{const f=facingOf(state.page);state.facing=f;if(f>bestFacing){bestFacing=f;best=state;}});return{state:best,facing:bestFacing};};
-  const applyFacingLight=()=>{const motionStrength=Math.max(.30,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.30));const{state:brightestState}=mostFacingState();pageFx.forEach(state=>{const f=state.facing||0,approach=smoothstep((f-.08)/.92),frontal=Math.pow(approach,.62),isBrightest=state===brightestState;const opacity=clamp01((.12+.88*frontal)*(.88+.12*motionStrength));const glare=clamp01(.28+.72*Math.pow(frontal,.44));state.page.classList.toggle('edge-fx-primary',isBrightest);
+  const updateSurfaceLifecycle=state=>{const f=state.facing||0;if(f>=SURFACE_ARM_FACING){state.surfaceArmed=true;return;}if(state.surfaceArmed&&f<=SURFACE_REGEN_FACING){regenerateSurface(state);state.surfaceArmed=false;}};
+  const applyFacingLight=()=>{const motionStrength=Math.max(.30,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.30));const{state:brightestState}=mostFacingState();pageFx.forEach(state=>{updateSurfaceLifecycle(state);const f=state.facing||0,approach=smoothstep((f-.08)/.92),frontal=Math.pow(approach,.62),isBrightest=state===brightestState;const opacity=clamp01((.12+.88*frontal)*(.88+.12*motionStrength));const glare=clamp01(.28+.72*Math.pow(frontal,.44));state.page.classList.toggle('edge-fx-primary',isBrightest);
     const warm=.12+.48*Math.pow(frontal,.82),sweep=(315+(frontal-.5)*26).toFixed(2);
     state.frame.style.setProperty('--metal-angle',`${sweep}deg`);
     state.frame.style.setProperty('--champ-shadow',rgbCss(mixRgb(CHAMP_SHADOW,GOLD_SHADOW,warm*.44)));
