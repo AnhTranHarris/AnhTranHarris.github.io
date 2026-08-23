@@ -1,4 +1,4 @@
-/* Harris Portfolio: modular recruiter CTA arrow with pointer-reactive SVG glint. */
+/* Harris Portfolio: modular recruiter CTA arrow with inertial pointer-reactive SVG glint. */
 (()=>{
   const mount=document.querySelector('[data-progression-arrow]');
   if(!mount)return;
@@ -11,7 +11,7 @@
     .progression-arrow .pa-depth{fill:rgba(87,57,16,.44);stroke:rgba(120,83,29,.82);stroke-width:3;transform:translate(4px,5px)}
     .progression-arrow .pa-face{fill:rgba(62,45,18,.34);stroke:#b89745;stroke-width:3}
     .progression-arrow .pa-rim{fill:none;stroke:rgba(255,226,126,.72);stroke-width:1.25}
-    .progression-arrow .pa-glint,.progression-arrow .pa-core{fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 170ms ease-out;pointer-events:none}
+    .progression-arrow .pa-glint,.progression-arrow .pa-core{fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 180ms ease-out;pointer-events:none}
     .progression-arrow .pa-glint{stroke:#fff0b0;stroke-width:4;filter:drop-shadow(0 0 3px rgba(255,240,176,.95)) drop-shadow(0 0 8px rgba(216,184,106,.72))}
     .progression-arrow .pa-core{stroke:rgba(255,255,238,.96);stroke-width:1.4}
     .progression-arrow.is-pointer-active .pa-glint{opacity:1}
@@ -50,10 +50,15 @@
   glint.style.strokeDasharray=`${glintLength} ${Math.max(1,total-glintLength)}`;
   core.style.strokeDasharray=`${coreLength} ${Math.max(1,total-coreLength)}`;
 
-  let clientX=0,clientY=0,raf=0,fadeTimer=0;
+  let clientX=0,clientY=0,targetLength=0,currentLength=0;
+  let searchRaf=0,motionRaf=0,fadeTimer=0,lastFrame=0,initialized=false,pointerFresh=false;
+  const FOLLOW_RATE=7.2;
+  const SETTLE_EPSILON=.45;
+  const IDLE_BEFORE_FADE=260;
+
   const nearestLength=(x,y)=>{
     const ctm=svg.getScreenCTM();
-    if(!ctm)return 0;
+    if(!ctm)return currentLength;
     const local=new DOMPoint(x,y).matrixTransform(ctm.inverse());
     const samples=30;
     let bestLength=0,bestDistance=Infinity;
@@ -78,20 +83,56 @@
     return bestLength;
   };
 
-  const renderPointerGlint=()=>{
-    raf=0;
-    const length=nearestLength(clientX,clientY);
+  const shortestDelta=(from,to)=>{
+    let delta=(to-from)%total;
+    if(delta>total*.5)delta-=total;
+    if(delta<-total*.5)delta+=total;
+    return delta;
+  };
+
+  const paint=(length)=>{
     glint.style.strokeDashoffset=String(total-length+glintLength*.5);
     core.style.strokeDashoffset=String(total-length+coreLength*.5);
+  };
+
+  const animateGlint=now=>{
+    motionRaf=0;
+    const dt=Math.min(40,lastFrame?now-lastFrame:16.7);
+    lastFrame=now;
+    const delta=shortestDelta(currentLength,targetLength);
+    const follow=1-Math.exp(-FOLLOW_RATE*dt/1000);
+    currentLength=(currentLength+delta*follow+total)%total;
+    paint(currentLength);
+
+    if(Math.abs(delta)>SETTLE_EPSILON||pointerFresh){
+      pointerFresh=false;
+      motionRaf=requestAnimationFrame(animateGlint);
+    }else{
+      currentLength=targetLength;
+      paint(currentLength);
+      lastFrame=0;
+    }
+  };
+
+  const updateTarget=()=>{
+    searchRaf=0;
+    targetLength=nearestLength(clientX,clientY);
+    if(!initialized){
+      initialized=true;
+      currentLength=targetLength;
+      paint(currentLength);
+    }
+    pointerFresh=true;
     svg.classList.add('is-pointer-active');
+    if(!motionRaf){lastFrame=0;motionRaf=requestAnimationFrame(animateGlint);}
   };
 
   const onPointerMove=event=>{
     if(event.pointerType&&event.pointerType!=='mouse'&&event.pointerType!=='pen')return;
     clientX=event.clientX;clientY=event.clientY;
-    if(!raf)raf=requestAnimationFrame(renderPointerGlint);
+    if(!searchRaf)searchRaf=requestAnimationFrame(updateTarget);
     clearTimeout(fadeTimer);
-    fadeTimer=setTimeout(()=>svg.classList.remove('is-pointer-active'),120);
+    fadeTimer=setTimeout(()=>svg.classList.remove('is-pointer-active'),IDLE_BEFORE_FADE);
   };
 
   window.addEventListener('pointermove',onPointerMove,{passive:true});
