@@ -13,21 +13,17 @@
     html[data-effects] .page::before{opacity:0!important;background:none!important;border:0!important;padding:0!important;box-shadow:none!important;filter:none!important;-webkit-mask:none!important;mask:none!important}
     @media(min-width:901px){html[data-effects] .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}}
 
-    .carousel-edge-rail{position:absolute;z-index:4;pointer-events:none;opacity:0;filter:drop-shadow(0 0 3px rgba(255,250,220,.88)) drop-shadow(0 0 9px rgba(216,184,106,.38));will-change:transform,opacity}
+    .carousel-edge-rail{position:absolute;z-index:4;pointer-events:none;opacity:0;will-change:transform,opacity,filter;transition:opacity 34ms linear,filter 42ms linear}
     .carousel-edge-rail::before{content:"";position:absolute;inset:0;border-radius:999px}
     .carousel-edge-rail[data-edge="top"],.carousel-edge-rail[data-edge="bottom"]{width:72px;height:10px;left:0}
     .carousel-edge-rail[data-edge="left"],.carousel-edge-rail[data-edge="right"]{width:10px;height:72px;top:0}
     .carousel-edge-rail[data-edge="top"]{top:0}.carousel-edge-rail[data-edge="right"]{right:0;left:auto}.carousel-edge-rail[data-edge="bottom"]{bottom:0;top:auto}.carousel-edge-rail[data-edge="left"]{left:0}
 
-    /* Teal-tracer-style directional optical profile: long fading tail, compact hot head. */
-    .carousel-edge-rail.head-end::before{background:linear-gradient(90deg,transparent 0%,rgba(216,184,106,.025) 12%,rgba(216,184,106,.07) 30%,rgba(247,204,88,.18) 50%,rgba(255,226,126,.42) 68%,rgba(255,238,169,.72) 80%,rgba(255,249,218,.96) 88%,rgba(255,255,255,1) 93%,rgba(255,248,207,.86) 96%,rgba(216,184,106,.18) 98.5%,transparent 100%)}
-    .carousel-edge-rail.head-start::before{background:linear-gradient(90deg,transparent 0%,rgba(216,184,106,.18) 1.5%,rgba(255,248,207,.86) 4%,rgba(255,255,255,1) 7%,rgba(255,249,218,.96) 12%,rgba(255,238,169,.72) 20%,rgba(255,226,126,.42) 32%,rgba(247,204,88,.18) 50%,rgba(216,184,106,.07) 70%,rgba(216,184,106,.025) 88%,transparent 100%)}
-    .carousel-edge-rail[data-edge="left"].head-end::before,.carousel-edge-rail[data-edge="right"].head-end::before{background:linear-gradient(180deg,transparent 0%,rgba(216,184,106,.025) 12%,rgba(216,184,106,.07) 30%,rgba(247,204,88,.18) 50%,rgba(255,226,126,.42) 68%,rgba(255,238,169,.72) 80%,rgba(255,249,218,.96) 88%,rgba(255,255,255,1) 93%,rgba(255,248,207,.86) 96%,rgba(216,184,106,.18) 98.5%,transparent 100%)}
-    .carousel-edge-rail[data-edge="left"].head-start::before,.carousel-edge-rail[data-edge="right"].head-start::before{background:linear-gradient(180deg,transparent 0%,rgba(216,184,106,.18) 1.5%,rgba(255,248,207,.86) 4%,rgba(255,255,255,1) 7%,rgba(255,249,218,.96) 12%,rgba(255,238,169,.72) 20%,rgba(255,226,126,.42) 32%,rgba(247,204,88,.18) 50%,rgba(216,184,106,.07) 70%,rgba(216,184,106,.025) 88%,transparent 100%)}
-
-    html[data-effects] .barrel.edge-motion .page.edge-fx-primary .carousel-edge-rail.is-active{opacity:clamp(.68,calc(var(--edge-strength,.56) * 1.15),1)}
-    html[data-effects] .barrel.edge-motion .page:not(.edge-fx-primary) .carousel-edge-rail.is-active{opacity:calc(var(--edge-strength,.56) * .22);filter:drop-shadow(0 0 2px rgba(216,184,106,.12))}
-    .desktop-performance-reduced .carousel-edge-rail{filter:drop-shadow(0 0 3px rgba(216,184,106,.22))}
+    /* Directional polished-metal tracer: long tail into a concentrated white-hot head. */
+    .carousel-edge-rail.head-end::before{background:linear-gradient(90deg,transparent 0%,rgba(216,184,106,.035) 10%,rgba(216,184,106,.10) 28%,rgba(247,204,88,.26) 49%,rgba(255,226,126,.58) 67%,rgba(255,241,176,.88) 79%,rgba(255,252,229,1) 87%,rgba(255,255,255,1) 92%,rgba(255,255,255,1) 94%,rgba(255,246,197,.95) 97%,rgba(216,184,106,.24) 99%,transparent 100%)}
+    .carousel-edge-rail.head-start::before{background:linear-gradient(90deg,transparent 0%,rgba(216,184,106,.24) 1%,rgba(255,246,197,.95) 3%,rgba(255,255,255,1) 6%,rgba(255,255,255,1) 8%,rgba(255,252,229,1) 13%,rgba(255,241,176,.88) 21%,rgba(255,226,126,.58) 33%,rgba(247,204,88,.26) 51%,rgba(216,184,106,.10) 72%,rgba(216,184,106,.035) 90%,transparent 100%)}
+    .carousel-edge-rail[data-edge="left"].head-end::before,.carousel-edge-rail[data-edge="right"].head-end::before{background:linear-gradient(180deg,transparent 0%,rgba(216,184,106,.035) 10%,rgba(216,184,106,.10) 28%,rgba(247,204,88,.26) 49%,rgba(255,226,126,.58) 67%,rgba(255,241,176,.88) 79%,rgba(255,252,229,1) 87%,rgba(255,255,255,1) 92%,rgba(255,255,255,1) 94%,rgba(255,246,197,.95) 97%,rgba(216,184,106,.24) 99%,transparent 100%)}
+    .carousel-edge-rail[data-edge="left"].head-start::before,.carousel-edge-rail[data-edge="right"].head-start::before{background:linear-gradient(180deg,transparent 0%,rgba(216,184,106,.24) 1%,rgba(255,246,197,.95) 3%,rgba(255,255,255,1) 6%,rgba(255,255,255,1) 8%,rgba(255,252,229,1) 13%,rgba(255,241,176,.88) 21%,rgba(255,226,126,.58) 33%,rgba(247,204,88,.26) 51%,rgba(216,184,106,.10) 72%,rgba(216,184,106,.035) 90%,transparent 100%)}
 
     .carousel-edge-corner-probe{position:absolute;width:0;height:0;pointer-events:none;z-index:0}.carousel-edge-corner-probe[data-corner="tl"]{left:0;top:0}.carousel-edge-corner-probe[data-corner="tr"]{right:0;top:0}.carousel-edge-corner-probe[data-corner="br"]{right:0;bottom:0}.carousel-edge-corner-probe[data-corner="bl"]{left:0;bottom:0}
     .carousel-edge-corner-flare{position:absolute;left:0;top:0;width:42px;height:28px;z-index:28;pointer-events:none;opacity:0;border-radius:50%;background:radial-gradient(ellipse at center,rgba(255,255,246,1) 0%,rgba(255,251,224,.98) 10%,rgba(255,231,145,.80) 27%,rgba(216,184,106,.36) 50%,rgba(216,184,106,.10) 72%,rgba(216,184,106,0) 100%);filter:drop-shadow(0 0 3px rgba(255,249,218,.72)) drop-shadow(0 0 8px rgba(216,184,106,.26));transform:translate(-50%,-50%) scale(.7) rotate(-18deg);transform-origin:center}
@@ -46,12 +42,12 @@
 
   const flare=document.createElement('span');flare.className='carousel-edge-corner-flare';flare.setAttribute('aria-hidden','true');stage.appendChild(flare);
   const activePageIndex=()=>{const i=dots.findIndex(dot=>dot.classList.contains('on'));return i>=0?i:0};
-  const syncPrimaryPage=()=>{const active=activePageIndex();pageFx.forEach((state,i)=>state.page.classList.toggle('edge-fx-primary',i===active));};
-  syncPrimaryPage();if('MutationObserver'in window&&dots.length){const observer=new MutationObserver(syncPrimaryPage);dots.forEach(dot=>observer.observe(dot,{attributes:true,attributeFilter:['class']}));}
 
   const normalize360=v=>((v%360)+360)%360;
   const signedAngleDelta=(from,to)=>{let d=normalize360(to-from);if(d>180)d-=360;return d};
   const readDriverAngle=()=>normalize360(parseFloat(barrel.style.getPropertyValue('--edge-angle'))||0);
+  const clamp01=v=>Math.max(0,Math.min(1,v));
+  const smoothstep=v=>{v=clamp01(v);return v*v*(3-2*v)};
 
   let pageWidth=1,pageHeight=1,perimeter=4;
   const cornerDistances=[{name:'tr',distance:0},{name:'br',distance:0},{name:'bl',distance:0},{name:'tl',distance:0}];
@@ -62,7 +58,39 @@
   const railHalf=36;
   const placeRail=(rail,edge,offset)=>{if(edge==='top'||edge==='bottom'){const x=Math.max(-railHalf,Math.min(pageWidth-railHalf,offset-railHalf));rail.style.transform=`translate3d(${x}px,0,0)`;}else{const y=Math.max(-railHalf,Math.min(pageHeight-railHalf,offset-railHalf));rail.style.transform=`translate3d(0,${y}px,0)`;}};
   const headAtEnd=(edge,sign)=>{const forward=edge==='top'||edge==='right';return sign>=0?forward:!forward;};
-  const renderPerimeterLight=(distance,sign)=>{const segment=segmentAtDistance(distance);pageFx.forEach(({rails})=>{edgeNames.forEach(name=>{const rail=rails[name],active=name===segment.edge;rail.classList.toggle('is-active',active);if(!active){rail.classList.remove('head-end','head-start');return;}const end=headAtEnd(segment.edge,sign);rail.classList.toggle('head-end',end);rail.classList.toggle('head-start',!end);});placeRail(rails[segment.edge],segment.edge,segment.offset);});};
+
+  /* Browser-projected face intensity. Matrix multiplication uses the same 3D transforms the viewer sees. */
+  const facingOf=page=>{
+    try{
+      if(typeof DOMMatrix!=='function')return page.classList.contains('edge-fx-primary')?1:.12;
+      const bm=new DOMMatrix(getComputedStyle(barrel).transform==='none'?undefined:getComputedStyle(barrel).transform);
+      const pm=new DOMMatrix(getComputedStyle(page).transform==='none'?undefined:getComputedStyle(page).transform);
+      const combined=bm.multiply(pm);
+      return clamp01(combined.m11);
+    }catch{return page.classList.contains('edge-fx-primary')?1:.12;}
+  };
+  const applyFacingLight=()=>{
+    const motionStrength=Math.max(.30,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.30));
+    let brightestIndex=0,brightestFacing=-1;
+    pageFx.forEach((state,index)=>{const f=facingOf(state.page);state.facing=f;if(f>brightestFacing){brightestFacing=f;brightestIndex=index;}});
+    pageFx.forEach((state,index)=>{
+      const f=state.facing||0;
+      /* Quiet while oblique, then rapidly intensify through the final approach to front-facing. */
+      const approach=smoothstep((f-.08)/.92);
+      const frontal=Math.pow(approach,.62);
+      const isBrightest=index===brightestIndex;
+      const opacity=clamp01((.08+.92*frontal)*(.78+.22*motionStrength));
+      const glare=clamp01(.18+.82*Math.pow(frontal,.48));
+      state.page.classList.toggle('edge-fx-primary',isBrightest);
+      Object.values(state.rails).forEach(rail=>{
+        rail.style.opacity=rail.classList.contains('is-active')?opacity.toFixed(3):'0';
+        const white=(.70+1.30*glare).toFixed(2),gold=(.34+1.26*glare).toFixed(2);
+        rail.style.filter=`drop-shadow(0 0 ${(3+5*glare).toFixed(1)}px rgba(255,252,230,${Math.min(1,white/1.45).toFixed(2)})) drop-shadow(0 0 ${(9+15*glare).toFixed(1)}px rgba(216,184,106,${Math.min(.92,gold/2).toFixed(2)}))`;
+      });
+    });
+  };
+
+  const renderPerimeterLight=(distance,sign)=>{const segment=segmentAtDistance(distance);pageFx.forEach(({rails})=>{edgeNames.forEach(name=>{const rail=rails[name],active=name===segment.edge;rail.classList.toggle('is-active',active);if(!active){rail.classList.remove('head-end','head-start');return;}const end=headAtEnd(segment.edge,sign);rail.classList.toggle('head-end',end);rail.classList.toggle('head-start',!end);});placeRail(rails[segment.edge],segment.edge,segment.offset);});applyFacingLight();};
 
   const signedPerimeterDelta=(from,to)=>{let d=((to-from)%perimeter+perimeter)%perimeter;if(d>perimeter/2)d-=perimeter;return d};
   const crossedDistance=(from,to,target)=>{const travel=signedPerimeterDelta(from,to),delta=signedPerimeterDelta(from,target);if(Math.abs(travel)<.001)return false;return travel>0?delta>=0&&delta<=travel:delta<=0&&delta>=travel;};
@@ -71,7 +99,7 @@
   const fireCornerFlare=(cornerName,now)=>{if(now-lastFlareAt<180)return;const state=pageFx[activePageIndex()]||pageFx[0],probe=state.probes[cornerName];if(!probe)return;const p=probe.getBoundingClientRect(),s=stage.getBoundingClientRect(),x=p.left-s.left,y=p.top-s.top;if(!Number.isFinite(x)||!Number.isFinite(y))return;lastFlareAt=now;flare.style.left=`${x}px`;flare.style.top=`${y}px`;flareAnimation?.cancel();const peak=2+Math.random();const frames=[{opacity:0,transform:'translate(-50%,-50%) scale(.72) rotate(-18deg)',offset:0},{opacity:.48,transform:`translate(-50%,-50%) scale(${(peak*.82).toFixed(2)}) rotate(-8deg)`,offset:.22},{opacity:.88,transform:`translate(-50%,-50%) scale(${peak.toFixed(2)}) rotate(8deg)`,offset:.44},{opacity:.72,transform:`translate(-50%,-50%) scale(${(peak*.92).toFixed(2)}) rotate(19deg)`,offset:.62},{opacity:.30,transform:`translate(-50%,-50%) scale(${(peak*.72).toFixed(2)}) rotate(10deg)`,offset:.80},{opacity:0,transform:`translate(-50%,-50%) scale(${(peak*.54).toFixed(2)}) rotate(0deg)`,offset:1}];if(flare.animate){flareAnimation=flare.animate(frames,{duration:620,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});flareAnimation.onfinish=()=>{flareAnimation=null;};}};
 
   let perimeterDistance=0,lastDistance=0,lastDriverAngle=null,lastMotionSign=1,raf=0;
-  const clearRails=()=>pageFx.forEach(({rails})=>edgeNames.forEach(name=>{rails[name].classList.remove('is-active','head-end','head-start');}));
+  const clearRails=()=>pageFx.forEach(({rails})=>edgeNames.forEach(name=>{const rail=rails[name];rail.classList.remove('is-active','head-end','head-start');rail.style.opacity='0';}));
   const tick=now=>{raf=0;if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();return;}const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;renderPerimeterLight(perimeterDistance,lastMotionSign);for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}raf=requestAnimationFrame(tick);};
   const syncLoop=()=>{if(barrel.classList.contains('edge-motion')){if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);raf=requestAnimationFrame(tick);}}else{if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();}};
   if('MutationObserver'in window)new MutationObserver(syncLoop).observe(barrel,{attributes:true,attributeFilter:['class']});syncLoop();
