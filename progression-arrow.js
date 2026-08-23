@@ -1,4 +1,4 @@
-/* Harris Portfolio: modular recruiter CTA arrow with inertial pointer-reactive glint and hero corner blooms. */
+/* Harris Portfolio: modular recruiter CTA arrow with inertial pointer-reactive glint and swept hero corner blooms. */
 (()=>{
   const mount=document.querySelector('[data-progression-arrow]');
   if(!mount)return;
@@ -19,29 +19,21 @@
     .progression-arrow.is-autonomous .pa-glint{stroke-dasharray:24 420;animation:progressionGlint 4200ms cubic-bezier(.45,0,.55,1) infinite}
     .progression-arrow.is-autonomous .pa-core{stroke-dasharray:8 436;animation:progressionGlint 4200ms cubic-bezier(.45,0,.55,1) infinite}
 
-    .pa-bloom{pointer-events:none;opacity:0;transform-box:fill-box;transform-origin:center;--hero-scale:12}
-    .pa-bloom .pa-bloom-aura{fill:rgba(216,184,106,.28);stroke:rgba(255,226,126,.30);stroke-width:1.8;filter:drop-shadow(0 0 5px rgba(216,184,106,.92)) drop-shadow(0 0 12px rgba(245,193,72,.76))}
-    .pa-bloom .pa-bloom-exposure{fill:rgba(247,190,54,.62);stroke:rgba(255,229,131,.88);stroke-width:1.35;filter:drop-shadow(0 0 4px rgba(255,211,81,.98)) drop-shadow(0 0 8px rgba(255,196,54,.88))}
-    .pa-bloom .pa-bloom-inner{fill:rgba(255,226,112,.92);stroke:rgba(255,244,187,.98);stroke-width:.9;filter:drop-shadow(0 0 3px rgba(255,239,162,1))}
-    .pa-bloom .pa-bloom-core{fill:#fffdeb;stroke:#fff7c9;stroke-width:.6;filter:drop-shadow(0 0 2px rgba(255,255,238,1)) drop-shadow(0 0 5px rgba(255,235,135,.98))}
-    .pa-bloom.is-blooming{animation:cornerHeroBloom 760ms cubic-bezier(.16,.76,.18,1) both}
-    @keyframes cornerHeroBloom{
-      0%{opacity:0;transform:scale(.45)}
-      12%{opacity:.92;transform:scale(calc(var(--hero-scale) * .54))}
-      23%{opacity:1;transform:scale(var(--hero-scale))}
-      38%{opacity:1;transform:scale(calc(var(--hero-scale) * .86))}
-      54%{opacity:.88;transform:scale(calc(var(--hero-scale) * .68))}
-      100%{opacity:0;transform:scale(calc(var(--hero-scale) * .36))}
-    }
+    .pa-bloom-anchor,.pa-bloom{pointer-events:none}
+    .pa-bloom{opacity:0;transform-box:fill-box;transform-origin:center}
+    .pa-bloom-aura{fill:rgba(216,184,106,.30);stroke:rgba(255,226,126,.32);stroke-width:1.8;filter:drop-shadow(0 0 5px rgba(216,184,106,.95)) drop-shadow(0 0 13px rgba(245,193,72,.82))}
+    .pa-bloom-exposure{fill:rgba(247,190,54,.66);stroke:rgba(255,229,131,.92);stroke-width:1.35;filter:drop-shadow(0 0 4px rgba(255,211,81,1)) drop-shadow(0 0 9px rgba(255,196,54,.94))}
+    .pa-bloom-inner{fill:rgba(255,226,112,.94);stroke:rgba(255,244,187,1);stroke-width:.9;filter:drop-shadow(0 0 3px rgba(255,239,162,1))}
+    .pa-bloom-core{fill:#fffdeb;stroke:#fff7c9;stroke-width:.6;filter:drop-shadow(0 0 2px rgba(255,255,238,1)) drop-shadow(0 0 5px rgba(255,235,135,1))}
 
     @keyframes progressionGlint{0%,20%{stroke-dashoffset:446;opacity:0}27%{opacity:.95}54%{opacity:1}68%{stroke-dashoffset:0;opacity:.88}74%,100%{stroke-dashoffset:-34;opacity:0}}
     @media(max-width:900px){.progression-arrow{width:86px;height:104px;transform:rotate(90deg) translateZ(0);transform-origin:43px 52px;margin:2px 0 0 20px}}
-    @media(prefers-reduced-motion:reduce){.progression-arrow .pa-glint,.progression-arrow .pa-core{animation:none!important;transition:none!important;opacity:.38;stroke-dashoffset:0}.pa-bloom{display:none}}
+    @media(prefers-reduced-motion:reduce){.progression-arrow .pa-glint,.progression-arrow .pa-core{animation:none!important;transition:none!important;opacity:.38;stroke-dashoffset:0}.pa-bloom-anchor{display:none}}
   `;
   document.head.appendChild(style);
 
   const corners=[[8,36],[94,36],[94,18],[136,50],[94,82],[94,64],[8,64]];
-  const bloomMarkup=corners.map(([x,y],i)=>`<g class="pa-bloom" data-bloom="${i}" transform="translate(${x} ${y})"><circle class="pa-bloom-aura" r="6.2"/><circle class="pa-bloom-exposure" r="3.8"/><circle class="pa-bloom-inner" r="2.25"/><circle class="pa-bloom-core" r="1.05"/></g>`).join('');
+  const bloomMarkup=corners.map(([x,y],i)=>`<g class="pa-bloom-anchor" data-bloom="${i}" transform="translate(${x} ${y})"><g class="pa-bloom"><circle class="pa-bloom-aura" r="6.2"/><circle class="pa-bloom-exposure" r="3.8"/><circle class="pa-bloom-inner" r="2.25"/><circle class="pa-bloom-core" r="1.05"/></g></g>`).join('');
 
   mount.innerHTML=`<svg class="progression-arrow" viewBox="0 0 144 100" role="img" aria-label="Arrow pointing toward the portfolio carousel" focusable="false">
     <path class="pa-depth" d="M8 36H94V18L136 50 94 82V64H8Z"/>
@@ -53,10 +45,10 @@
   </svg>`;
 
   const svg=mount.querySelector('.progression-arrow');
-  const guide=svg.querySelector('.pa-rim');
-  const glint=svg.querySelector('.pa-glint');
-  const core=svg.querySelector('.pa-core');
-  const blooms=[...svg.querySelectorAll('.pa-bloom')];
+  const guide=svg?.querySelector('.pa-rim');
+  const glint=svg?.querySelector('.pa-glint');
+  const core=svg?.querySelector('.pa-core');
+  const bloomNodes=[...svg?.querySelectorAll('.pa-bloom')||[]];
   if(!svg||!guide||!glint||!core)return;
 
   if(reduce)return;
@@ -94,14 +86,22 @@
     return bestLength;
   };
 
-  const cornerStates=corners.map(([x,y],index)=>({length:nearestPathLengthToPoint(x,y),node:blooms[index],inside:false,lastFired:-Infinity}));
+  const cornerStates=corners.map(([x,y],index)=>({
+    length:nearestPathLengthToPoint(x,y),
+    node:bloomNodes[index],
+    armed:true,
+    lastFired:-Infinity,
+    animation:null
+  }));
 
-  let clientX=0,clientY=0,targetLength=0,currentLength=0;
+  let clientX=0,clientY=0,targetLength=0,currentLength=0,previousLength=0;
   let searchRaf=0,motionRaf=0,fadeTimer=0,lastFrame=0,initialized=false,pointerFresh=false;
   const FOLLOW_RATE=7.2;
   const SETTLE_EPSILON=.45;
   const IDLE_BEFORE_FADE=260;
-  const CORNER_RADIUS=Math.max(8,total*.022);
+  const BASE_CORNER_RADIUS=Math.max(8,total*.022);
+  const CORNER_RADIUS=BASE_CORNER_RADIUS*1.05;
+  const CORNER_REARM_RADIUS=CORNER_RADIUS*1.35;
   const CORNER_COOLDOWN=900;
 
   const nearestLength=(x,y)=>{
@@ -137,30 +137,47 @@
     if(delta<-total*.5)delta+=total;
     return delta;
   };
-
   const circularDistance=(a,b)=>Math.abs(shortestDelta(a,b));
 
-  const fireCornerBloom=(state,now)=>{
-    if(!state.node||now-state.lastFired<CORNER_COOLDOWN)return;
-    state.lastFired=now;
-    state.node.style.setProperty('--hero-scale',(10+Math.random()*5).toFixed(2));
-    state.node.classList.remove('is-blooming');
-    void state.node.getBoundingClientRect();
-    state.node.classList.add('is-blooming');
+  const sweptAcrossCorner=(from,to,corner,radius)=>{
+    const travel=shortestDelta(from,to);
+    const cornerDelta=shortestDelta(from,corner);
+    if(Math.abs(travel)<.001)return Math.abs(cornerDelta)<=radius;
+    return travel>0
+      ? cornerDelta>=-radius&&cornerDelta<=travel+radius
+      : cornerDelta<=radius&&cornerDelta>=travel-radius;
   };
 
-  const updateCornerBlooms=(length,now)=>{
+  const fireCornerBloom=(state,now)=>{
+    if(!state.node||!state.armed||now-state.lastFired<CORNER_COOLDOWN)return;
+    state.armed=false;
+    state.lastFired=now;
+    state.animation?.cancel();
+    const hero=10+Math.random()*5;
+    const frames=[
+      {opacity:0,transform:'scale(.45)',offset:0},
+      {opacity:.94,transform:`scale(${(hero*.54).toFixed(2)})`,offset:.12},
+      {opacity:1,transform:`scale(${hero.toFixed(2)})`,offset:.23},
+      {opacity:1,transform:`scale(${(hero*.86).toFixed(2)})`,offset:.40},
+      {opacity:.90,transform:`scale(${(hero*.68).toFixed(2)})`,offset:.56},
+      {opacity:0,transform:`scale(${(hero*.34).toFixed(2)})`,offset:1}
+    ];
+    state.animation=state.node.animate(frames,{duration:780,easing:'cubic-bezier(.16,.76,.18,1)',fill:'both'});
+    state.animation.onfinish=()=>{state.animation=null;state.node.style.opacity='0';};
+  };
+
+  const updateCornerBlooms=(from,to,now)=>{
     for(const state of cornerStates){
-      const inside=circularDistance(length,state.length)<=CORNER_RADIUS;
-      if(inside&&!state.inside)fireCornerBloom(state,now);
-      state.inside=inside;
+      if(!state.armed&&circularDistance(to,state.length)>CORNER_REARM_RADIUS)state.armed=true;
+      if(sweptAcrossCorner(from,to,state.length,CORNER_RADIUS))fireCornerBloom(state,now);
     }
   };
 
   const paint=(length,now=performance.now())=>{
     glint.style.strokeDashoffset=String(total-length+glintLength*.5);
     core.style.strokeDashoffset=String(total-length+coreLength*.5);
-    updateCornerBlooms(length,now);
+    updateCornerBlooms(previousLength,length,now);
+    previousLength=length;
   };
 
   const animateGlint=now=>{
@@ -188,7 +205,9 @@
     if(!initialized){
       initialized=true;
       currentLength=targetLength;
-      paint(currentLength);
+      previousLength=targetLength;
+      glint.style.strokeDashoffset=String(total-currentLength+glintLength*.5);
+      core.style.strokeDashoffset=String(total-currentLength+coreLength*.5);
     }
     pointerFresh=true;
     svg.classList.add('is-pointer-active');
