@@ -114,6 +114,36 @@
   const CORNER_REARM_RADIUS=CORNER_RADIUS*1.35;
   const CORNER_COOLDOWN=650;
 
+  let dismissed=false;
+  const stopArrowEffects=()=>{
+    if(dismissed)return;
+    dismissed=true;
+    svg.classList.remove('is-pointer-active');
+    cornerStates.forEach(state=>{
+      state.animation?.cancel();
+      state.animation=null;
+      if(state.node){state.node.style.opacity='0';state.node.style.transform='none';}
+    });
+  };
+
+  const carouselStage=document.querySelector('.stage');
+  const carouselBarrel=document.querySelector('#barrel');
+  if(carouselStage){
+    carouselStage.addEventListener('pointerdown',stopArrowEffects,{passive:true,capture:true});
+    carouselStage.addEventListener('touchstart',stopArrowEffects,{passive:true,capture:true});
+    carouselStage.addEventListener('click',stopArrowEffects,{passive:true,capture:true});
+  }
+  if(carouselBarrel&&'MutationObserver'in window){
+    const motionObserver=new MutationObserver(()=>{
+      if(carouselBarrel.classList.contains('edge-motion')){
+        stopArrowEffects();
+        motionObserver.disconnect();
+      }
+    });
+    motionObserver.observe(carouselBarrel,{attributes:true,attributeFilter:['class']});
+    if(carouselBarrel.classList.contains('edge-motion'))stopArrowEffects();
+  }
+
   const sweptAcrossCorner=(from,to,corner,radius)=>{
     const travel=shortestDelta(from,to),cornerDelta=shortestDelta(from,corner);
     if(Math.abs(travel)<.001)return Math.abs(cornerDelta)<=radius;
@@ -121,7 +151,7 @@
   };
 
   const fireCornerBloom=(state,now)=>{
-    if(!state.node||!state.armed||now-state.lastFired<CORNER_COOLDOWN)return;
+    if(dismissed||!state.node||!state.armed||now-state.lastFired<CORNER_COOLDOWN)return;
     state.armed=false;state.lastFired=now;state.animation?.cancel();
     const bloom=2+Math.random();
     const frames=[
@@ -137,11 +167,12 @@
       state.animation.onfinish=()=>{state.animation=null;};
     }else{
       state.node.style.opacity='.84';state.node.style.transform=`scale(${bloom.toFixed(2)}) rotate(4deg)`;
-      setTimeout(()=>{state.node.style.opacity='0';state.node.style.transform='scale(.72) rotate(0deg)';},190);
+      setTimeout(()=>{if(!dismissed){state.node.style.opacity='0';state.node.style.transform='scale(.72) rotate(0deg)';}},190);
     }
   };
 
   const updateCornerBlooms=(from,to,now)=>{
+    if(dismissed)return;
     for(const state of cornerStates){
       if(!state.armed&&circularDistance(to,state.length)>CORNER_REARM_RADIUS)state.armed=true;
       if(sweptAcrossCorner(from,to,state.length,CORNER_RADIUS))fireCornerBloom(state,now);
@@ -150,6 +181,7 @@
 
   let previousLength=0;
   const paint=(length,now=performance.now())=>{
+    if(dismissed)return;
     glint.style.strokeDashoffset=String(total-length+glintLength*.5);
     core.style.strokeDashoffset=String(total-length+coreLength*.5);
     updateCornerBlooms(previousLength,length,now);
@@ -160,9 +192,11 @@
     const TRAVEL_MS=2300,PAUSE_MS=1900;
     let autoRaf=0,autoTimer=0,cycleStart=0;
     const runCycle=()=>{
+      if(dismissed)return;
       if(document.hidden){autoTimer=setTimeout(runCycle,500);return;}
       cycleStart=performance.now();previousLength=0;paint(0,cycleStart);svg.classList.add('is-pointer-active');
       const tick=now=>{
+        if(dismissed){svg.classList.remove('is-pointer-active');return;}
         const progress=Math.min(1,(now-cycleStart)/TRAVEL_MS);
         const eased=progress<.5?2*progress*progress:1-Math.pow(-2*progress+2,2)/2;
         paint(eased*total,now);
@@ -171,7 +205,11 @@
       };
       autoRaf=requestAnimationFrame(tick);
     };
-    const onVisibility=()=>{if(document.hidden){cancelAnimationFrame(autoRaf);clearTimeout(autoTimer);}else{clearTimeout(autoTimer);autoTimer=setTimeout(runCycle,250);}};
+    const onVisibility=()=>{
+      if(dismissed)return;
+      if(document.hidden){cancelAnimationFrame(autoRaf);clearTimeout(autoTimer);}
+      else{clearTimeout(autoTimer);autoTimer=setTimeout(runCycle,250);}
+    };
     document.addEventListener('visibilitychange',onVisibility,{passive:true});
     runCycle();
     return;
@@ -202,6 +240,7 @@
 
   const animateGlint=now=>{
     motionRaf=0;
+    if(dismissed)return;
     const dt=Math.min(40,lastFrame?now-lastFrame:16.7);lastFrame=now;
     const delta=shortestDelta(currentLength,targetLength),follow=1-Math.exp(-FOLLOW_RATE*dt/1000);
     currentLength=(currentLength+delta*follow+total)%total;paint(currentLength,now);
@@ -210,16 +249,19 @@
   };
 
   const updateTarget=()=>{
-    searchRaf=0;targetLength=nearestLength(clientX,clientY);
+    searchRaf=0;
+    if(dismissed)return;
+    targetLength=nearestLength(clientX,clientY);
     if(!initialized){initialized=true;currentLength=targetLength;previousLength=targetLength;glint.style.strokeDashoffset=String(total-currentLength+glintLength*.5);core.style.strokeDashoffset=String(total-currentLength+coreLength*.5);}
     pointerFresh=true;svg.classList.add('is-pointer-active');
     if(!motionRaf){lastFrame=0;motionRaf=requestAnimationFrame(animateGlint);}
   };
 
   const onPointerMove=event=>{
+    if(dismissed)return;
     if(event.pointerType&&event.pointerType!=='mouse'&&event.pointerType!=='pen')return;
     clientX=event.clientX;clientY=event.clientY;if(!searchRaf)searchRaf=requestAnimationFrame(updateTarget);
-    clearTimeout(fadeTimer);fadeTimer=setTimeout(()=>svg.classList.remove('is-pointer-active'),IDLE_BEFORE_FADE);
+    clearTimeout(fadeTimer);fadeTimer=setTimeout(()=>{if(!dismissed)svg.classList.remove('is-pointer-active');},IDLE_BEFORE_FADE);
   };
   window.addEventListener('pointermove',onPointerMove,{passive:true});
 })();
