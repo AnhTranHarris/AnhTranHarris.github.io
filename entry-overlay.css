@@ -52,6 +52,18 @@ html[data-entry-state="running"] #portfolio-entry-overlay .entry-teal-layer{
 html[data-entry-state="complete"] #portfolio-entry-overlay{
   display:none!important;
 }
+
+/* Handoff rule: once the portfolio is genuinely ready, remove the safety curtain
+   immediately behind the still-running intro. The intro remains the visible top layer,
+   so its own teal fade reveals the finished portfolio directly rather than fading into
+   a second teal screen. Slow/degraded loads keep the curtain until readiness is reached. */
+html[data-portfolio-state="ready"] #portfolio-handoff-curtain{
+  opacity:0!important;
+  visibility:hidden!important;
+  transition:none!important;
+  will-change:auto!important;
+}
+
 @media(forced-colors:active){
   #portfolio-entry-overlay{display:none!important}
 }
