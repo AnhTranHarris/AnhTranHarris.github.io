@@ -94,31 +94,42 @@
     <footer class="site-disclaimer" role="note"><strong>Development Disclosure</strong><span>This portfolio was vibe-coded with ChatGPT as an AI-assisted development tool. Content direction, review, testing, selection, and publication decisions remain the responsibility of the portfolio owner. AI-assisted methods were used to accelerate design and implementation.</span></footer>
   </div>
   <script src="entry-overlay.js?v=intro-cleanup-20260821a"></script>
-  <script src="motion-policy.js"></script>
   <script>
     (()=>{
       const root=document.documentElement;
       let loaded=false;
-      const loadCarousel=()=>{
+      const loadScript=src=>new Promise((resolve,reject)=>{
+        const script=document.createElement('script');
+        script.src=src;
+        script.async=false;
+        script.onload=resolve;
+        script.onerror=reject;
+        document.body.appendChild(script);
+      });
+      const loadPortfolio=async()=>{
         if(loaded)return;
         loaded=true;
-        const script=document.createElement('script');
-        script.src='carousel-touch.js?v=intro-gate-1';
-        script.async=false;
-        document.body.appendChild(script);
+        try{
+          await loadScript('motion-policy.js?v=handoff-1');
+          await loadScript('carousel-touch.js?v=handoff-1');
+          await loadScript('resume-viewer.js?v=handoff-1');
+          root.dataset.portfolioState='ready';
+        }catch(error){
+          console.error('Portfolio handoff failed safely:',error);
+          root.dataset.portfolioState='degraded';
+        }
       };
       if(root.dataset.entryState==='complete'){
-        loadCarousel();
+        loadPortfolio();
         return;
       }
       const observer=new MutationObserver(()=>{
         if(root.dataset.entryState!=='complete')return;
         observer.disconnect();
-        loadCarousel();
+        loadPortfolio();
       });
       observer.observe(root,{attributes:true,attributeFilter:['data-entry-state']});
     })();
   </script>
-  <script src="resume-viewer.js"></script>
 </body>
 </html>
