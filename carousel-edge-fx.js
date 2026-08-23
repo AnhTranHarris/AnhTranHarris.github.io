@@ -31,48 +31,49 @@
 
     .carousel-edge-rail{
       position:absolute;z-index:4;pointer-events:none;opacity:0;
-      filter:drop-shadow(0 0 2px rgba(255,250,220,.76)) drop-shadow(0 0 6px rgba(216,184,106,.28));
+      filter:drop-shadow(0 0 3px rgba(255,250,220,.88)) drop-shadow(0 0 9px rgba(216,184,106,.38));
       will-change:transform,opacity;
     }
     .carousel-edge-rail::before{
       content:"";position:absolute;inset:0;border-radius:999px;
       background:linear-gradient(90deg,
         transparent 0%,
-        rgba(216,184,106,.05) 13%,
-        rgba(247,204,88,.22) 28%,
-        rgba(255,231,145,.58) 41%,
-        rgba(255,249,218,.94) 47%,
+        rgba(216,184,106,.07) 13%,
+        rgba(247,204,88,.30) 28%,
+        rgba(255,231,145,.70) 41%,
+        rgba(255,249,218,.98) 47%,
         rgba(255,255,255,1) 50%,
-        rgba(255,249,218,.94) 53%,
-        rgba(255,231,145,.58) 59%,
-        rgba(247,204,88,.22) 72%,
-        rgba(216,184,106,.05) 87%,
+        rgba(255,249,218,.98) 53%,
+        rgba(255,231,145,.70) 59%,
+        rgba(247,204,88,.30) 72%,
+        rgba(216,184,106,.07) 87%,
         transparent 100%);
     }
-    .carousel-edge-rail[data-edge="top"],.carousel-edge-rail[data-edge="bottom"]{width:58px;height:3px;left:0;}
-    .carousel-edge-rail[data-edge="left"],.carousel-edge-rail[data-edge="right"]{width:3px;height:58px;top:0;}
+    .carousel-edge-rail[data-edge="top"],.carousel-edge-rail[data-edge="bottom"]{width:58px;height:10px;left:0;}
+    .carousel-edge-rail[data-edge="left"],.carousel-edge-rail[data-edge="right"]{width:10px;height:58px;top:0;}
     .carousel-edge-rail[data-edge="left"]::before,.carousel-edge-rail[data-edge="right"]::before{
       background:linear-gradient(180deg,
         transparent 0%,
-        rgba(216,184,106,.05) 13%,
-        rgba(247,204,88,.22) 28%,
-        rgba(255,231,145,.58) 41%,
-        rgba(255,249,218,.94) 47%,
+        rgba(216,184,106,.07) 13%,
+        rgba(247,204,88,.30) 28%,
+        rgba(255,231,145,.70) 41%,
+        rgba(255,249,218,.98) 47%,
         rgba(255,255,255,1) 50%,
-        rgba(255,249,218,.94) 53%,
-        rgba(255,231,145,.58) 59%,
-        rgba(247,204,88,.22) 72%,
-        rgba(216,184,106,.05) 87%,
+        rgba(255,249,218,.98) 53%,
+        rgba(255,231,145,.70) 59%,
+        rgba(247,204,88,.30) 72%,
+        rgba(216,184,106,.07) 87%,
         transparent 100%);
     }
-    .carousel-edge-rail[data-edge="top"]{top:-1px;}
-    .carousel-edge-rail[data-edge="right"]{right:-1px;left:auto;}
-    .carousel-edge-rail[data-edge="bottom"]{bottom:-1px;top:auto;}
-    .carousel-edge-rail[data-edge="left"]{left:-1px;}
+    /* Keep all 10px inside the card so overflow:hidden cannot clip the tracer. */
+    .carousel-edge-rail[data-edge="top"]{top:0;}
+    .carousel-edge-rail[data-edge="right"]{right:0;left:auto;}
+    .carousel-edge-rail[data-edge="bottom"]{bottom:0;top:auto;}
+    .carousel-edge-rail[data-edge="left"]{left:0;}
 
-    html[data-effects] .barrel.edge-motion .page.edge-fx-primary .carousel-edge-rail.is-active{opacity:var(--edge-strength,.56);}
+    html[data-effects] .barrel.edge-motion .page.edge-fx-primary .carousel-edge-rail.is-active{opacity:clamp(.68,calc(var(--edge-strength,.56) * 1.15),1);}
     html[data-effects] .barrel.edge-motion .page:not(.edge-fx-primary) .carousel-edge-rail.is-active{opacity:calc(var(--edge-strength,.56) * .22);filter:drop-shadow(0 0 2px rgba(216,184,106,.12));}
-    .desktop-performance-reduced .carousel-edge-rail{filter:drop-shadow(0 0 2px rgba(216,184,106,.16));}
+    .desktop-performance-reduced .carousel-edge-rail{filter:drop-shadow(0 0 3px rgba(216,184,106,.22));}
 
     .carousel-edge-corner-probe{position:absolute;width:0;height:0;pointer-events:none;z-index:0;}
     .carousel-edge-corner-probe[data-corner="tl"]{left:0;top:0;}
@@ -153,7 +154,6 @@
     return delta;
   };
   const readDriverAngle=()=>normalize360(parseFloat(barrel.style.getPropertyValue('--edge-angle'))||0);
-  const readStrength=()=>Math.max(.15,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.56));
 
   let pageWidth=0,pageHeight=0,perimeter=0;
   const syncGeometry=()=>{
@@ -167,13 +167,13 @@
 
   const segmentAtDistance=distance=>{
     let d=((distance%perimeter)+perimeter)%perimeter;
-    if(d<pageWidth)return{edge:'top',offset:d,cornerBefore:'tl',cornerAfter:'tr'};
+    if(d<pageWidth)return{edge:'top',offset:d};
     d-=pageWidth;
-    if(d<pageHeight)return{edge:'right',offset:d,cornerBefore:'tr',cornerAfter:'br'};
+    if(d<pageHeight)return{edge:'right',offset:d};
     d-=pageHeight;
-    if(d<pageWidth)return{edge:'bottom',offset:pageWidth-d,cornerBefore:'br',cornerAfter:'bl'};
+    if(d<pageWidth)return{edge:'bottom',offset:pageWidth-d};
     d-=pageWidth;
-    return{edge:'left',offset:pageHeight-d,cornerBefore:'bl',cornerAfter:'tl'};
+    return{edge:'left',offset:pageHeight-d};
   };
 
   const railHalf=29;
@@ -187,10 +187,8 @@
     }
   };
 
-  let currentEdge=null;
   const renderPerimeterLight=distance=>{
     const segment=segmentAtDistance(distance);
-    currentEdge=segment.edge;
     pageFx.forEach(({rails})=>{
       edgeNames.forEach(name=>rails[name].classList.toggle('is-active',name===segment.edge));
       placeRail(rails[segment.edge],segment.edge,segment.offset);
@@ -222,7 +220,7 @@
   };
   const crossedDistance=(from,to,target)=>{
     const travel=signedPerimeterDelta(from,to);
-    let delta=signedPerimeterDelta(from,target);
+    const delta=signedPerimeterDelta(from,target);
     if(Math.abs(travel)<.001)return false;
     return travel>0?delta>=0&&delta<=travel:delta<=0&&delta>=travel;
   };
