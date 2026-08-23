@@ -4,7 +4,6 @@
   const stage=document.querySelector('.stage');
   if(!barrel||!stage)return;
   const pages=[...barrel.querySelectorAll('.page')];
-  const dots=[...document.querySelectorAll('.dot')];
   if(!pages.length)return;
 
   const style=document.createElement('style');
@@ -51,11 +50,10 @@
     const rails={},probes={};
     edgeNames.forEach(name=>{const rail=document.createElement('span');rail.className='carousel-edge-rail';rail.dataset.edge=name;rail.setAttribute('aria-hidden','true');page.appendChild(rail);rails[name]=rail;});
     cornerNames.forEach(name=>{const probe=document.createElement('span');probe.className='carousel-edge-corner-probe';probe.dataset.corner=name;probe.setAttribute('aria-hidden','true');page.appendChild(probe);probes[name]=probe;});
-    return{page,frame,rails,probes};
+    return{page,frame,rails,probes,facing:0};
   });
 
   const flare=document.createElement('span');flare.className='carousel-edge-corner-flare';flare.setAttribute('aria-hidden','true');stage.appendChild(flare);
-  const activePageIndex=()=>{const i=dots.findIndex(dot=>dot.classList.contains('on'));return i>=0?i:0};
   const normalize360=v=>((v%360)+360)%360;
   const signedAngleDelta=(from,to)=>{let d=normalize360(to-from);if(d>180)d-=360;return d};
   const readDriverAngle=()=>normalize360(parseFloat(barrel.style.getPropertyValue('--edge-angle'))||0);
@@ -72,13 +70,17 @@
   const headAtEnd=(edge,sign)=>{const forward=edge==='top'||edge==='right';return sign>=0?forward:!forward;};
 
   const facingOf=page=>{try{if(typeof DOMMatrix!=='function')return page.classList.contains('edge-fx-primary')?1:.12;const bt=getComputedStyle(barrel).transform,pt=getComputedStyle(page).transform;const bm=new DOMMatrix(bt==='none'?undefined:bt),pm=new DOMMatrix(pt==='none'?undefined:pt);return clamp01(bm.multiply(pm).m11);}catch{return page.classList.contains('edge-fx-primary')?1:.12;}};
-  const BLOOM_FACING_MIN=.22;
+  const BLOOM_START_FACING=.20,BLOOM_KEEP_FACING=.10,BLOOM_STAGE_MARGIN=48;
+  const mostFacingState=()=>{
+    let best=pageFx[0],bestFacing=-1;
+    pageFx.forEach(state=>{const f=facingOf(state.page);state.facing=f;if(f>bestFacing){bestFacing=f;best=state;}});
+    return{state:best,facing:bestFacing};
+  };
   const applyFacingLight=()=>{
     const motionStrength=Math.max(.30,Math.min(1,parseFloat(barrel.style.getPropertyValue('--edge-strength'))||.30));
-    let brightestIndex=0,brightestFacing=-1;
-    pageFx.forEach((state,index)=>{const f=facingOf(state.page);state.facing=f;if(f>brightestFacing){brightestFacing=f;brightestIndex=index;}});
-    pageFx.forEach((state,index)=>{
-      const f=state.facing||0,approach=smoothstep((f-.08)/.92),frontal=Math.pow(approach,.62),isBrightest=index===brightestIndex;
+    const{state:brightestState}=mostFacingState();
+    pageFx.forEach(state=>{
+      const f=state.facing||0,approach=smoothstep((f-.08)/.92),frontal=Math.pow(approach,.62),isBrightest=state===brightestState;
       const opacity=clamp01((.12+.88*frontal)*(.88+.12*motionStrength));
       const glare=clamp01(.28+.72*Math.pow(frontal,.44));
       state.page.classList.toggle('edge-fx-primary',isBrightest);
@@ -101,20 +103,20 @@
   const crossedDistance=(from,to,target)=>{const travel=signedPerimeterDelta(from,to),delta=signedPerimeterDelta(from,target);if(Math.abs(travel)<.001)return false;return travel>0?delta>=0&&delta<=travel:delta<=0&&delta>=travel;};
 
   let flareAnimation=null,lastFlareAt=0,activeFlareProbe=null,activeFlarePage=null;
-  const flarePageVisible=page=>page&&facingOf(page)>=BLOOM_FACING_MIN;
   const positionFlareAtProbe=()=>{
-    if(!activeFlareProbe||!activeFlarePage||!flarePageVisible(activeFlarePage))return false;
+    if(!activeFlareProbe||!activeFlarePage||facingOf(activeFlarePage)<BLOOM_KEEP_FACING)return false;
     const p=activeFlareProbe.getBoundingClientRect(),s=stage.getBoundingClientRect();
     const x=p.left-s.left,y=p.top-s.top;
     if(!Number.isFinite(x)||!Number.isFinite(y))return false;
-    if(x<0||x>s.width||y<0||y>s.height)return false;
+    if(x<-BLOOM_STAGE_MARGIN||x>s.width+BLOOM_STAGE_MARGIN||y<-BLOOM_STAGE_MARGIN||y>s.height+BLOOM_STAGE_MARGIN)return false;
     flare.style.left=`${x}px`;flare.style.top=`${y}px`;return true;
   };
   const clearFlare=()=>{flareAnimation?.cancel();flareAnimation=null;activeFlareProbe=null;activeFlarePage=null;flare.style.opacity='0';};
   const fireCornerFlare=(cornerName,now)=>{
     if(now-lastFlareAt<180)return;
-    const state=pageFx[activePageIndex()]||pageFx[0],probe=state.probes[cornerName];
-    if(!probe||!flarePageVisible(state.page))return;
+    const{state,facing}=mostFacingState();
+    if(!state||facing<BLOOM_START_FACING)return;
+    const probe=state.probes[cornerName];if(!probe)return;
     activeFlareProbe=probe;activeFlarePage=state.page;
     if(!positionFlareAtProbe()){activeFlareProbe=null;activeFlarePage=null;return;}
     lastFlareAt=now;flareAnimation?.cancel();
