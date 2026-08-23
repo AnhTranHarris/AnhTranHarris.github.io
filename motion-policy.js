@@ -70,14 +70,12 @@
         animation-play-state:running!important;
       }
 
-      /* Static bevel crown: a narrow highlight through the middle of the 10px metal rim. */
+      /* Rounded bevel crown: broad soft highlight plus a narrow specular center ridge. */
+      html[data-effects="full"] .carousel-edge-frame::before,
       html[data-effects="full"] .carousel-edge-frame::after{
         content:"";
         position:absolute;
-        inset:4px;
         pointer-events:none;
-        border-radius:calc(7px - 2px);
-        padding:1px;
         background:conic-gradient(
           from var(--metal-angle,315deg),
           color-mix(in srgb,var(--champ-hi,#D7CAA7) 82%,white 18%) 0deg,
@@ -91,8 +89,22 @@
         -webkit-mask-composite:xor;
         mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
         mask-composite:exclude;
-        opacity:.62;
-        box-shadow:0 0 2px rgba(245,233,198,.18);
+      }
+
+      html[data-effects="full"] .carousel-edge-frame::before{
+        inset:3px;
+        border-radius:calc(7px - 1px);
+        padding:3px;
+        opacity:.26;
+        box-shadow:0 0 4px rgba(245,233,198,.12),0 0 7px rgba(213,192,145,.08);
+      }
+
+      html[data-effects="full"] .carousel-edge-frame::after{
+        inset:4px;
+        border-radius:calc(7px - 2px);
+        padding:1px;
+        opacity:.54;
+        box-shadow:0 0 3px rgba(245,233,198,.22),0 0 5px rgba(226,205,156,.10);
       }
 
       html[data-effects="full"] .resume-fx.active{display:block!important}
