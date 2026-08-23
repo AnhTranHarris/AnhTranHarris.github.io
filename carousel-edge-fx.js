@@ -99,12 +99,50 @@
   const signedPerimeterDelta=(from,to)=>{let d=((to-from)%perimeter+perimeter)%perimeter;if(d>perimeter/2)d-=perimeter;return d};
   const crossedDistance=(from,to,target)=>{const travel=signedPerimeterDelta(from,to),delta=signedPerimeterDelta(from,target);if(Math.abs(travel)<.001)return false;return travel>0?delta>=0&&delta<=travel:delta<=0&&delta>=travel;};
 
-  let flareAnimation=null,lastFlareAt=0;
-  const fireCornerFlare=(cornerName,now)=>{if(now-lastFlareAt<180)return;const state=pageFx[activePageIndex()]||pageFx[0],probe=state.probes[cornerName];if(!probe)return;const p=probe.getBoundingClientRect(),s=stage.getBoundingClientRect(),x=p.left-s.left,y=p.top-s.top;if(!Number.isFinite(x)||!Number.isFinite(y))return;lastFlareAt=now;flare.style.left=`${x}px`;flare.style.top=`${y}px`;flareAnimation?.cancel();const peak=2+Math.random();const frames=[{opacity:0,transform:'translate(-50%,-50%) scale(.72) rotate(-18deg)',offset:0},{opacity:.62,transform:`translate(-50%,-50%) scale(${(peak*.82).toFixed(2)}) rotate(-8deg)`,offset:.22},{opacity:1,transform:`translate(-50%,-50%) scale(${peak.toFixed(2)}) rotate(8deg)`,offset:.44},{opacity:.90,transform:`translate(-50%,-50%) scale(${(peak*.92).toFixed(2)}) rotate(19deg)`,offset:.62},{opacity:.46,transform:`translate(-50%,-50%) scale(${(peak*.72).toFixed(2)}) rotate(10deg)`,offset:.80},{opacity:0,transform:`translate(-50%,-50%) scale(${(peak*.54).toFixed(2)}) rotate(0deg)`,offset:1}];if(flare.animate){flareAnimation=flare.animate(frames,{duration:620,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});flareAnimation.onfinish=()=>{flareAnimation=null;};}};
+  let flareAnimation=null,lastFlareAt=0,activeFlareProbe=null;
+  const positionFlareAtProbe=()=>{
+    if(!activeFlareProbe)return false;
+    const p=activeFlareProbe.getBoundingClientRect(),s=stage.getBoundingClientRect();
+    const x=p.left-s.left,y=p.top-s.top;
+    if(!Number.isFinite(x)||!Number.isFinite(y))return false;
+    flare.style.left=`${x}px`;flare.style.top=`${y}px`;return true;
+  };
+  const clearFlare=()=>{flareAnimation?.cancel();flareAnimation=null;activeFlareProbe=null;flare.style.opacity='0';};
+  const fireCornerFlare=(cornerName,now)=>{
+    if(now-lastFlareAt<180)return;
+    const state=pageFx[activePageIndex()]||pageFx[0],probe=state.probes[cornerName];
+    if(!probe)return;
+    activeFlareProbe=probe;
+    if(!positionFlareAtProbe()){activeFlareProbe=null;return;}
+    lastFlareAt=now;flareAnimation?.cancel();
+    const peak=2+Math.random();
+    const frames=[{opacity:0,transform:'translate(-50%,-50%) scale(.72) rotate(-18deg)',offset:0},{opacity:.62,transform:`translate(-50%,-50%) scale(${(peak*.82).toFixed(2)}) rotate(-8deg)`,offset:.22},{opacity:1,transform:`translate(-50%,-50%) scale(${peak.toFixed(2)}) rotate(8deg)`,offset:.44},{opacity:.90,transform:`translate(-50%,-50%) scale(${(peak*.92).toFixed(2)}) rotate(19deg)`,offset:.62},{opacity:.46,transform:`translate(-50%,-50%) scale(${(peak*.72).toFixed(2)}) rotate(10deg)`,offset:.80},{opacity:0,transform:`translate(-50%,-50%) scale(${(peak*.54).toFixed(2)}) rotate(0deg)`,offset:1}];
+    if(flare.animate){
+      flareAnimation=flare.animate(frames,{duration:620,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});
+      flareAnimation.onfinish=()=>{flareAnimation=null;activeFlareProbe=null;flare.style.opacity='0';};
+    }
+  };
 
   let perimeterDistance=0,lastDistance=0,lastDriverAngle=null,lastMotionSign=1,raf=0;
   const clearRails=()=>pageFx.forEach(({rails})=>edgeNames.forEach(name=>{const rail=rails[name];rail.classList.remove('is-active','head-end','head-start');rail.style.opacity='0';}));
-  const tick=now=>{raf=0;if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();applyFacingLight();return;}const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;renderPerimeterLight(perimeterDistance,lastMotionSign);for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}raf=requestAnimationFrame(tick);};
-  const syncLoop=()=>{if(barrel.classList.contains('edge-motion')){if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);raf=requestAnimationFrame(tick);}}else{if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;flareAnimation?.cancel();flareAnimation=null;flare.style.opacity='0';clearRails();applyFacingLight();}};
+  const tick=now=>{
+    raf=0;
+    if(!barrel.classList.contains('edge-motion')){lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();return;}
+    const driverAngle=readDriverAngle();if(lastDriverAngle===null)lastDriverAngle=driverAngle;
+    const angleDelta=signedAngleDelta(lastDriverAngle,driverAngle);lastDriverAngle=driverAngle;if(Math.abs(angleDelta)>.001)lastMotionSign=Math.sign(angleDelta)||lastMotionSign;
+    lastDistance=perimeterDistance;perimeterDistance=((perimeterDistance+(angleDelta/360)*perimeter)%perimeter+perimeter)%perimeter;
+    renderPerimeterLight(perimeterDistance,lastMotionSign);
+    if(activeFlareProbe)positionFlareAtProbe();
+    for(const corner of cornerDistances){if(crossedDistance(lastDistance,perimeterDistance,corner.distance)){fireCornerFlare(corner.name,now);break;}}
+    if(activeFlareProbe)positionFlareAtProbe();
+    raf=requestAnimationFrame(tick);
+  };
+  const syncLoop=()=>{
+    if(barrel.classList.contains('edge-motion')){
+      if(!raf){syncGeometry();lastDriverAngle=readDriverAngle();renderPerimeterLight(perimeterDistance,lastMotionSign);if(activeFlareProbe)positionFlareAtProbe();raf=requestAnimationFrame(tick);}
+    }else{
+      if(raf)cancelAnimationFrame(raf);raf=0;lastDriverAngle=null;clearFlare();clearRails();applyFacingLight();
+    }
+  };
   if('MutationObserver'in window)new MutationObserver(syncLoop).observe(barrel,{attributes:true,attributeFilter:['class']});syncLoop();
 })();
