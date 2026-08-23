@@ -31,7 +31,7 @@
 
   if (!document.querySelector('script[data-carousel-edge-fx]')) {
     const carouselFx = document.createElement('script');
-    carouselFx.src = 'carousel-edge-fx.js?v=edge-7';
+    carouselFx.src = 'carousel-edge-fx.js?v=edge-8';
     carouselFx.dataset.carouselEdgeFx = 'true';
     carouselFx.async = false;
     document.head.appendChild(carouselFx);
