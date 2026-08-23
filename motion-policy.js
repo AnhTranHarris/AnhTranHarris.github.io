@@ -38,7 +38,7 @@
   // legacy edge-2 URL. This keeps exactly one carousel FX instance per page.
   if (!document.querySelector('script[data-carousel-edge-fx]')) {
     const carouselFx = document.createElement('script');
-    carouselFx.src = 'carousel-edge-fx.js?v=edge-5';
+    carouselFx.src = 'carousel-edge-fx.js?v=edge-6';
     carouselFx.dataset.carouselEdgeFx = 'true';
     carouselFx.async = false;
     document.head.appendChild(carouselFx);
