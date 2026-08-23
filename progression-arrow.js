@@ -19,11 +19,11 @@
 
     .pa-bloom-anchor,.pa-bloom{pointer-events:none}
     .pa-bloom{opacity:0;transform-box:fill-box;transform-origin:center}
-    .pa-bloom-aura{fill:rgba(216,184,106,.21);stroke:none;filter:drop-shadow(0 0 6px rgba(216,184,106,.58)) drop-shadow(0 0 12px rgba(245,193,72,.38))}
-    .pa-bloom-orbit{fill:none;stroke:rgba(255,224,132,.30);stroke-width:.65;filter:drop-shadow(0 0 3px rgba(255,218,116,.38))}
-    .pa-bloom-streak{stroke:rgba(255,226,126,.66);stroke-width:.82;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(255,218,116,.62))}
-    .pa-bloom-streak-secondary{stroke:rgba(255,244,194,.34);stroke-width:.45;stroke-linecap:round;filter:drop-shadow(0 0 2px rgba(255,235,156,.40))}
-    .pa-bloom-core{fill:#fffdeb;stroke:rgba(255,247,201,.90);stroke-width:.30;filter:drop-shadow(0 0 2px rgba(255,255,238,.90)) drop-shadow(0 0 4px rgba(255,224,112,.62))}
+    .pa-bloom-aura{stroke:none;filter:drop-shadow(0 0 4px rgba(255,233,151,.42)) drop-shadow(0 0 9px rgba(216,184,106,.30))}
+    .pa-bloom-orbit{fill:none;stroke:rgba(255,229,150,.19);stroke-width:.52;filter:drop-shadow(0 0 2px rgba(255,218,116,.26))}
+    .pa-bloom-streak{stroke:url(#pa-flare-streak);stroke-width:.72;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(255,239,174,.54))}
+    .pa-bloom-streak-secondary{stroke:url(#pa-flare-streak-soft);stroke-width:.40;stroke-linecap:round;filter:drop-shadow(0 0 2px rgba(255,235,156,.30))}
+    .pa-bloom-core{fill:#fffef2;stroke:rgba(255,249,216,.98);stroke-width:.24;filter:drop-shadow(0 0 2px rgba(255,255,244,1)) drop-shadow(0 0 5px rgba(255,228,126,.82))}
 
     @media(max-width:900px){.progression-arrow{width:86px;height:104px;transform:rotate(90deg) translateZ(0);transform-origin:43px 52px;margin:2px 0 0 20px}}
     @media(prefers-reduced-motion:reduce){
@@ -37,9 +37,33 @@
   document.head.appendChild(style);
 
   const corners=[[8,36],[94,36],[94,18],[136,50],[94,82],[94,64],[8,64]];
-  const bloomMarkup=corners.map(([x,y],i)=>`<g class="pa-bloom-anchor" data-bloom="${i}" transform="translate(${x} ${y})"><g class="pa-bloom"><ellipse class="pa-bloom-aura" rx="8.4" ry="5.2"/><ellipse class="pa-bloom-orbit" rx="6.4" ry="3.7" transform="rotate(-27)"/><line class="pa-bloom-streak" x1="-6.4" y1="0" x2="6.4" y2="0"/><line class="pa-bloom-streak-secondary" x1="-3.7" y1="-1.25" x2="4.2" y2="1.25"/><circle class="pa-bloom-core" r="1.0"/></g></g>`).join('');
+  const bloomMarkup=corners.map(([x,y],i)=>`<g class="pa-bloom-anchor" data-bloom="${i}" transform="translate(${x} ${y})"><g class="pa-bloom"><ellipse class="pa-bloom-aura" rx="8.7" ry="5.5" fill="url(#pa-flare-aura)"/><ellipse class="pa-bloom-orbit" rx="6.5" ry="3.8" transform="rotate(-27)"/><line class="pa-bloom-streak" x1="-6.0" y1="0" x2="6.0" y2="0"/><line class="pa-bloom-streak-secondary" x1="-3.5" y1="-1.2" x2="3.9" y2="1.2"/><circle class="pa-bloom-core" r="1.12"/></g></g>`).join('');
 
   mount.innerHTML=`<svg class="progression-arrow" viewBox="0 0 144 100" role="img" aria-label="Arrow pointing toward the portfolio carousel" focusable="false">
+    <defs>
+      <radialGradient id="pa-flare-aura" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+        <stop offset="0%" stop-color="#fffef4" stop-opacity="1"/>
+        <stop offset="12%" stop-color="#fff6cf" stop-opacity=".98"/>
+        <stop offset="27%" stop-color="#ffe08b" stop-opacity=".82"/>
+        <stop offset="48%" stop-color="#d8b86a" stop-opacity=".42"/>
+        <stop offset="72%" stop-color="#d8b86a" stop-opacity=".14"/>
+        <stop offset="90%" stop-color="#d8b86a" stop-opacity=".035"/>
+        <stop offset="100%" stop-color="#d8b86a" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="pa-flare-streak" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#fff0b0" stop-opacity="0"/>
+        <stop offset="25%" stop-color="#ffe79f" stop-opacity=".36"/>
+        <stop offset="48%" stop-color="#fffef2" stop-opacity=".96"/>
+        <stop offset="52%" stop-color="#fffef2" stop-opacity="1"/>
+        <stop offset="75%" stop-color="#ffe79f" stop-opacity=".36"/>
+        <stop offset="100%" stop-color="#fff0b0" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="pa-flare-streak-soft" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#fff6cf" stop-opacity="0"/>
+        <stop offset="50%" stop-color="#fff6cf" stop-opacity=".52"/>
+        <stop offset="100%" stop-color="#fff6cf" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
     <path class="pa-depth" d="M8 36H94V18L136 50 94 82V64H8Z"/>
     <path class="pa-face" d="M8 36H94V18L136 50 94 82V64H8Z"/>
     ${bloomMarkup}
@@ -101,18 +125,18 @@
     state.armed=false;state.lastFired=now;state.animation?.cancel();
     const bloom=2+Math.random();
     const frames=[
-      {opacity:0,transform:'scale(.72) rotate(-8deg)',offset:0},
-      {opacity:.50,transform:`scale(${(bloom*.84).toFixed(2)}) rotate(-3deg)`,offset:.20},
-      {opacity:.84,transform:`scale(${bloom.toFixed(2)}) rotate(5deg)`,offset:.42},
-      {opacity:.76,transform:`scale(${(bloom*.96).toFixed(2)}) rotate(9deg)`,offset:.58},
-      {opacity:.38,transform:`scale(${(bloom*.80).toFixed(2)}) rotate(5deg)`,offset:.76},
-      {opacity:0,transform:`scale(${(bloom*.60).toFixed(2)}) rotate(1deg)`,offset:1}
+      {opacity:0,transform:'scale(.72) rotate(-18deg)',offset:0},
+      {opacity:.52,transform:`scale(${(bloom*.84).toFixed(2)}) rotate(-9deg)`,offset:.20},
+      {opacity:.90,transform:`scale(${bloom.toFixed(2)}) rotate(4deg)`,offset:.42},
+      {opacity:.82,transform:`scale(${(bloom*.96).toFixed(2)}) rotate(19deg)`,offset:.58},
+      {opacity:.40,transform:`scale(${(bloom*.80).toFixed(2)}) rotate(10deg)`,offset:.76},
+      {opacity:0,transform:`scale(${(bloom*.60).toFixed(2)}) rotate(2deg)`,offset:1}
     ];
     if(state.node.animate){
       state.animation=state.node.animate(frames,{duration:680,easing:'cubic-bezier(.22,.62,.30,1)',fill:'both'});
       state.animation.onfinish=()=>{state.animation=null;};
     }else{
-      state.node.style.opacity='.80';state.node.style.transform=`scale(${bloom.toFixed(2)}) rotate(5deg)`;
+      state.node.style.opacity='.84';state.node.style.transform=`scale(${bloom.toFixed(2)}) rotate(4deg)`;
       setTimeout(()=>{state.node.style.opacity='0';state.node.style.transform='scale(.72) rotate(0deg)';},190);
     }
   };
