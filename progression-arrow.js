@@ -297,7 +297,7 @@
 (()=>{
   if(document.querySelector('script[data-carousel-edge-fx]'))return;
   const script=document.createElement('script');
-  script.src='carousel-edge-fx.js?v=edge-1';
+  script.src='carousel-edge-fx.js?v=edge-2';
   script.dataset.carouselEdgeFx='true';
   script.defer=true;
   document.head.appendChild(script);
