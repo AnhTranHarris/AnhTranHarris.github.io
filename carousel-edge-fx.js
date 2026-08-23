@@ -104,8 +104,28 @@
     .carousel-edge-corner-flare::after{
       content:"";position:absolute;left:9px;right:9px;top:7px;bottom:7px;border-radius:50%;border:1px solid rgba(255,232,150,.15);transform:rotate(-28deg);
     }
+
+    /* Step 7: strongest light belongs to the front card; visible side faces retain a quiet echo. */
+    .barrel.edge-motion .page.edge-fx-primary::before{opacity:var(--edge-strength,.56)!important;}
+    .barrel.edge-motion .page:not(.edge-fx-primary)::before{opacity:calc(var(--edge-strength,.56) * .28)!important;filter:drop-shadow(0 0 2px rgba(216,184,106,.12))!important;}
+    @media(min-width:901px){
+      .barrel.edge-motion .page:not(.edge-fx-primary){
+        box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important;
+      }
+      .desktop-edge-fallback .barrel.edge-motion .page:not(.edge-fx-primary)::before{opacity:.22!important;}
+    }
   `;
   document.head.appendChild(style);
+
+  const syncPrimaryPage=()=>{
+    const activeIndex=Math.max(0,dots.findIndex(dot=>dot.classList.contains('on')));
+    pages.forEach((page,index)=>page.classList.toggle('edge-fx-primary',index===activeIndex));
+  };
+  syncPrimaryPage();
+  if('MutationObserver'in window&&dots.length){
+    const primaryObserver=new MutationObserver(syncPrimaryPage);
+    dots.forEach(dot=>primaryObserver.observe(dot,{attributes:true,attributeFilter:['class']}));
+  }
 
   const flare=document.createElement('span');
   flare.className='carousel-edge-corner-flare';
