@@ -54,6 +54,31 @@
       .desktop-performance-reduced .page::before{
         filter:drop-shadow(0 0 2px rgba(255,247,207,.52)) drop-shadow(0 0 4px rgba(216,184,106,.16))!important;
       }
+      .desktop-edge-fallback .page::before{
+        padding:0!important;
+        border:2px solid rgba(255,226,126,.72)!important;
+        background:none!important;
+        box-shadow:0 0 5px rgba(216,184,106,.18)!important;
+        -webkit-mask:none!important;
+        mask:none!important;
+        filter:none!important;
+      }
+    }
+
+    /* Step 5: Full Effects must win over the browser's CSS reduced-motion media query. */
+    html[data-effects="full"].edge-tracer-supported .page::before,
+    html[data-effects="full"].desktop-edge-standard .page::before,
+    html[data-effects="full"].desktop-edge-webkit .page::before{
+      border:0!important;
+      -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;
+      -webkit-mask-composite:xor!important;
+      mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;
+      mask-composite:exclude!important;
+    }
+    html[data-effects="full"].edge-tracer-supported .page::before{padding:2px!important;}
+    @media(min-width:901px){
+      html[data-effects="full"].desktop-edge-standard .page::before,
+      html[data-effects="full"].desktop-edge-webkit .page::before{padding:10px!important;}
     }
   `;
   document.head.appendChild(style);
