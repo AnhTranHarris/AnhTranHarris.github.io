@@ -56,7 +56,7 @@
     }
     @media(min-width:901px){
       .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}
-      .desktop-performance-reduced .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.07)!important}
+      .desktop-performance-reduced .barrel.edge-motion .page{box-shadow:0 28px 65px rgba(0,0,0,.46),0 5px 16px rgba(255,215,112,.28)!important}
       .desktop-edge-standard .page::before{-webkit-mask:none!important;-webkit-mask-composite:initial!important;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;mask-composite:exclude!important}
       .desktop-edge-webkit .page::before{mask:none!important;mask-composite:initial!important;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0)!important;-webkit-mask-composite:xor!important}
       .desktop-edge-standard .barrel.edge-motion .page::before,.desktop-edge-webkit .barrel.edge-motion .page::before{opacity:min(1,calc(var(--edge-strength,.56) * 1.45))!important}
@@ -71,12 +71,13 @@
   <div class="spotlight spotlight-small" data-spotlight="small" aria-hidden="true"></div>
   <div class="wash" aria-hidden="true"></div>
   <div class="shell">
-    <header class="topbar"><div class="brand">Harris / Portfolio</div></header>
+    <header class="topbar"><div class="brand">ANH “HARRIS” TRAN</div></header>
     <main class="main">
       <section class="intro">
-        <div class="eyebrow">AI · Technical Communication · Problem Solving</div>
-        <h1>Build.<br><span>Explore.</span><br>Improve.</h1>
-        <p>I build AI-enabled workflows, technical documentation, and practical knowledge systems that help teams turn complex information into clear, reliable, and usable work. My focus spans AI operations, AI enablement, technical communication, workflow optimization, documentation strategy, and quality-focused implementation.</p>
+        <div class="eyebrow">APPLIED AI · TECHNICAL COMMUNICATION · OPERATIONS</div>
+        <h1>Build.<br><span>Test.</span><br>Document.<br>Improve.</h1>
+        <p>This is a living portfolio where continued education becomes applied work. I’m building on a foundation in operations, information integrity, and documentation while developing practical skills in AI and technical communication—turning what I learn into experiments, workflows, documentation, and projects you can inspect.</p>
+        <div class="progression-cta"><span>Explore the progression, turn the wheel</span><span data-progression-arrow aria-hidden="true"></span></div>
         <div class="swipe-guide" aria-label="Carousel navigation"><span class="carousel-guide-arrow" role="button" tabindex="0" data-dir="-1" aria-label="Previous portfolio card">←</span><span>Swipe left or right below</span><span class="carousel-guide-arrow" role="button" tabindex="0" data-dir="1" aria-label="Next portfolio card">→</span></div>
       </section>
       <section class="stage" aria-label="Portfolio areas">
@@ -112,6 +113,7 @@
         try{
           await loadScript('motion-policy.js?v=handoff-1');
           await loadScript('carousel-touch.js?v=handoff-1');
+          await loadScript('progression-arrow.js?v=cta-1');
           await loadScript('resume-viewer.js?v=handoff-1');
           root.dataset.portfolioState='ready';
         }catch(error){
