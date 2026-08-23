@@ -70,6 +70,31 @@
         animation-play-state:running!important;
       }
 
+      /* Static bevel crown: a narrow highlight through the middle of the 10px metal rim. */
+      html[data-effects="full"] .carousel-edge-frame::after{
+        content:"";
+        position:absolute;
+        inset:4px;
+        pointer-events:none;
+        border-radius:calc(7px - 2px);
+        padding:1px;
+        background:conic-gradient(
+          from var(--metal-angle,315deg),
+          color-mix(in srgb,var(--champ-hi,#D7CAA7) 82%,white 18%) 0deg,
+          color-mix(in srgb,var(--champ-body,#A99A78) 88%,white 12%) 78deg,
+          color-mix(in srgb,var(--champ-hi,#D7CAA7) 84%,white 16%) 168deg,
+          color-mix(in srgb,var(--gold-hi,#FFD66B) 78%,white 22%) 244deg,
+          color-mix(in srgb,var(--gold-body,#D6A63A) 84%,white 16%) 316deg,
+          color-mix(in srgb,var(--champ-hi,#D7CAA7) 82%,white 18%) 360deg
+        );
+        -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+        -webkit-mask-composite:xor;
+        mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+        mask-composite:exclude;
+        opacity:.62;
+        box-shadow:0 0 2px rgba(245,233,198,.18);
+      }
+
       html[data-effects="full"] .resume-fx.active{display:block!important}
       html[data-effects="full"] .resume-source-dissolve{
         opacity:0!important;transition:opacity 1700ms cubic-bezier(.3,.05,.5,1)!important
