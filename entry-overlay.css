@@ -15,6 +15,10 @@
   isolation:isolate;
   contain:strict;
   background:#fff;
+  animation:entry-overlay-failsafe-hide 90ms linear 7s forwards;
+}
+@keyframes entry-overlay-failsafe-hide{
+  to{opacity:0;visibility:hidden}
 }
 #portfolio-entry-overlay .entry-teal-layer,
 #portfolio-entry-overlay .entry-mask-canvas,
