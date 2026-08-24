@@ -42,6 +42,13 @@
     root.dataset.carouselEdgeFx = 'loading';
   }
 
+  if (!document.querySelector('script[data-carousel-accessibility]')) {
+    const carouselAccessibility = document.createElement('script');
+    carouselAccessibility.src = 'carousel-accessibility.js?v=a11y-1';
+    carouselAccessibility.dataset.carouselAccessibility = 'true';
+    document.head.appendChild(carouselAccessibility);
+  }
+
   const installFullEffectsOverrides = () => {
     if (document.getElementById('portfolio-full-effects-overrides')) return;
     const style = document.createElement('style');
