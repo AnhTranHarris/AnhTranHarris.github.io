@@ -34,7 +34,12 @@
     carouselFx.src = 'carousel-edge-fx.js?v=edge-17';
     carouselFx.dataset.carouselEdgeFx = 'true';
     carouselFx.async = false;
+    root.dataset.carouselEdgeFx = 'loading';
+    carouselFx.addEventListener('load', () => { root.dataset.carouselEdgeFx = 'ready'; }, { once: true });
+    carouselFx.addEventListener('error', () => { root.dataset.carouselEdgeFx = 'failed'; }, { once: true });
     document.head.appendChild(carouselFx);
+  } else if (!root.dataset.carouselEdgeFx) {
+    root.dataset.carouselEdgeFx = 'loading';
   }
 
   const installFullEffectsOverrides = () => {
@@ -45,12 +50,12 @@
       html[data-effects="full"] .spotlight{will-change:transform,opacity}
       html[data-effects="full"] .barrel{will-change:auto}
 
-      html[data-effects="full"] .page::before,
-      html[data-effects="full"] .barrel.edge-motion .page::before,
-      html[data-effects="full"].edge-tracer-supported .barrel.edge-motion .page::before,
-      html[data-effects="full"].desktop-edge-standard .barrel.edge-motion .page::before,
-      html[data-effects="full"].desktop-edge-webkit .barrel.edge-motion .page::before,
-      html[data-effects="full"].desktop-edge-fallback .barrel.edge-motion .page::before{
+      html[data-effects="full"][data-carousel-edge-fx="ready"] .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"] .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].edge-tracer-supported .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].desktop-edge-standard .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].desktop-edge-webkit .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].desktop-edge-fallback .barrel.edge-motion .page::before{
         opacity:0!important;
         background:none!important;
         border:0!important;
