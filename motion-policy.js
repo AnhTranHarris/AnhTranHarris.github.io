@@ -29,18 +29,24 @@
     };
   }
 
-  if (!document.querySelector('script[data-carousel-edge-fx]')) {
-    const carouselFx = document.createElement('script');
+  const verifyCarouselFx = () => {
+    const pages = document.querySelectorAll('#barrel .page').length;
+    const frames = document.querySelectorAll('#barrel .carousel-edge-frame').length;
+    const initialized = pages > 0 && frames === pages && !!document.getElementById('carousel-edge-fx-style');
+    root.dataset.carouselEdgeFx = initialized ? 'ready' : 'failed';
+  };
+
+  let carouselFx = document.querySelector('script[data-carousel-edge-fx]');
+  if (!carouselFx) {
+    carouselFx = document.createElement('script');
     carouselFx.src = 'carousel-edge-fx.js?v=edge-17';
     carouselFx.dataset.carouselEdgeFx = 'true';
     carouselFx.async = false;
-    root.dataset.carouselEdgeFx = 'loading';
-    carouselFx.addEventListener('load', () => { root.dataset.carouselEdgeFx = 'ready'; }, { once: true });
-    carouselFx.addEventListener('error', () => { root.dataset.carouselEdgeFx = 'failed'; }, { once: true });
     document.head.appendChild(carouselFx);
-  } else if (!root.dataset.carouselEdgeFx) {
-    root.dataset.carouselEdgeFx = 'loading';
   }
+  if (!root.dataset.carouselEdgeFx) root.dataset.carouselEdgeFx = 'loading';
+  carouselFx.addEventListener('load', verifyCarouselFx, { once: true });
+  carouselFx.addEventListener('error', () => { root.dataset.carouselEdgeFx = 'failed'; }, { once: true });
 
   if (!document.querySelector('script[data-carousel-accessibility]')) {
     const carouselAccessibility = document.createElement('script');
