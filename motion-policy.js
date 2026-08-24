@@ -68,6 +68,13 @@
     document.head.appendChild(resumeAccessibility);
   }
 
+  if (!document.querySelector('script[data-startup-recovery]')) {
+    const startupRecovery = document.createElement('script');
+    startupRecovery.src = 'startup-recovery.js?v=recovery-1';
+    startupRecovery.dataset.startupRecovery = 'true';
+    document.head.appendChild(startupRecovery);
+  }
+
   const installFullEffectsOverrides = () => {
     if (document.getElementById('portfolio-full-effects-overrides')) return;
     const style = document.createElement('style');
