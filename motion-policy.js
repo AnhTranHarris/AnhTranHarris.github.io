@@ -29,11 +29,17 @@
     };
   }
 
+  const clearPartialCarouselFx = () => {
+    document.getElementById('carousel-edge-fx-style')?.remove();
+    document.querySelectorAll('.carousel-edge-frame,.carousel-edge-rail,.carousel-edge-corner-probe,.carousel-edge-corner-flare').forEach(node=>node.remove());
+    root.dataset.carouselEdgeFx = 'failed';
+  };
   const verifyCarouselFx = () => {
     const pages = document.querySelectorAll('#barrel .page').length;
     const frames = document.querySelectorAll('#barrel .carousel-edge-frame').length;
     const initialized = pages > 0 && frames === pages && !!document.getElementById('carousel-edge-fx-style');
-    root.dataset.carouselEdgeFx = initialized ? 'ready' : 'failed';
+    if (initialized) root.dataset.carouselEdgeFx = 'ready';
+    else clearPartialCarouselFx();
   };
 
   let carouselFx = document.querySelector('script[data-carousel-edge-fx]');
@@ -46,7 +52,7 @@
   }
   if (!root.dataset.carouselEdgeFx) root.dataset.carouselEdgeFx = 'loading';
   carouselFx.addEventListener('load', verifyCarouselFx, { once: true });
-  carouselFx.addEventListener('error', () => { root.dataset.carouselEdgeFx = 'failed'; }, { once: true });
+  carouselFx.addEventListener('error', clearPartialCarouselFx, { once: true });
 
   if (!document.querySelector('script[data-carousel-accessibility]')) {
     const carouselAccessibility = document.createElement('script');
