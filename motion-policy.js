@@ -49,6 +49,13 @@
     document.head.appendChild(carouselAccessibility);
   }
 
+  if (!document.querySelector('script[data-resume-accessibility-guard]')) {
+    const resumeAccessibility = document.createElement('script');
+    resumeAccessibility.src = 'resume-accessibility-guard.js?v=a11y-2';
+    resumeAccessibility.dataset.resumeAccessibilityGuard = 'true';
+    document.head.appendChild(resumeAccessibility);
+  }
+
   const installFullEffectsOverrides = () => {
     if (document.getElementById('portfolio-full-effects-overrides')) return;
     const style = document.createElement('style');
