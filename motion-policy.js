@@ -29,12 +29,43 @@
     };
   }
 
-  if (!document.querySelector('script[data-carousel-edge-fx]')) {
-    const carouselFx = document.createElement('script');
+  const clearPartialCarouselFx = () => {
+    document.getElementById('carousel-edge-fx-style')?.remove();
+    document.querySelectorAll('.carousel-edge-frame,.carousel-edge-rail,.carousel-edge-corner-probe,.carousel-edge-corner-flare').forEach(node=>node.remove());
+    root.dataset.carouselEdgeFx = 'failed';
+  };
+  const verifyCarouselFx = () => {
+    const pages = document.querySelectorAll('#barrel .page').length;
+    const frames = document.querySelectorAll('#barrel .carousel-edge-frame').length;
+    const initialized = pages > 0 && frames === pages && !!document.getElementById('carousel-edge-fx-style');
+    if (initialized) root.dataset.carouselEdgeFx = 'ready';
+    else clearPartialCarouselFx();
+  };
+
+  let carouselFx = document.querySelector('script[data-carousel-edge-fx]');
+  if (!carouselFx) {
+    carouselFx = document.createElement('script');
     carouselFx.src = 'carousel-edge-fx.js?v=edge-17';
     carouselFx.dataset.carouselEdgeFx = 'true';
     carouselFx.async = false;
     document.head.appendChild(carouselFx);
+  }
+  if (!root.dataset.carouselEdgeFx) root.dataset.carouselEdgeFx = 'loading';
+  carouselFx.addEventListener('load', verifyCarouselFx, { once: true });
+  carouselFx.addEventListener('error', clearPartialCarouselFx, { once: true });
+
+  if (!document.querySelector('script[data-carousel-accessibility]')) {
+    const carouselAccessibility = document.createElement('script');
+    carouselAccessibility.src = 'carousel-accessibility.js?v=a11y-1';
+    carouselAccessibility.dataset.carouselAccessibility = 'true';
+    document.head.appendChild(carouselAccessibility);
+  }
+
+  if (!document.querySelector('script[data-resume-accessibility-guard]')) {
+    const resumeAccessibility = document.createElement('script');
+    resumeAccessibility.src = 'resume-accessibility-guard.js?v=a11y-2';
+    resumeAccessibility.dataset.resumeAccessibilityGuard = 'true';
+    document.head.appendChild(resumeAccessibility);
   }
 
   const installFullEffectsOverrides = () => {
@@ -44,13 +75,17 @@
     style.textContent = `
       html[data-effects="full"] .spotlight{will-change:transform,opacity}
       html[data-effects="full"] .barrel{will-change:auto}
+      html[data-effects="full"] .carousel-edge-frame,
+      html[data-effects="full"] .carousel-edge-rail{will-change:auto!important}
+      html[data-effects="full"] .barrel.edge-motion .carousel-edge-frame{will-change:filter!important}
+      html[data-effects="full"] .barrel.edge-motion .carousel-edge-rail{will-change:transform,opacity,filter!important}
 
-      html[data-effects="full"] .page::before,
-      html[data-effects="full"] .barrel.edge-motion .page::before,
-      html[data-effects="full"].edge-tracer-supported .barrel.edge-motion .page::before,
-      html[data-effects="full"].desktop-edge-standard .barrel.edge-motion .page::before,
-      html[data-effects="full"].desktop-edge-webkit .barrel.edge-motion .page::before,
-      html[data-effects="full"].desktop-edge-fallback .barrel.edge-motion .page::before{
+      html[data-effects="full"][data-carousel-edge-fx="ready"] .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"] .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].edge-tracer-supported .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].desktop-edge-standard .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].desktop-edge-webkit .barrel.edge-motion .page::before,
+      html[data-effects="full"][data-carousel-edge-fx="ready"].desktop-edge-fallback .barrel.edge-motion .page::before{
         opacity:0!important;
         background:none!important;
         border:0!important;
