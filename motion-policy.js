@@ -63,6 +63,10 @@
     style.textContent = `
       html[data-effects="full"] .spotlight{will-change:transform,opacity}
       html[data-effects="full"] .barrel{will-change:auto}
+      html[data-effects="full"] .carousel-edge-frame,
+      html[data-effects="full"] .carousel-edge-rail{will-change:auto!important}
+      html[data-effects="full"] .barrel.edge-motion .carousel-edge-frame{will-change:filter!important}
+      html[data-effects="full"] .barrel.edge-motion .carousel-edge-rail{will-change:transform,opacity,filter!important}
 
       html[data-effects="full"][data-carousel-edge-fx="ready"] .page::before,
       html[data-effects="full"][data-carousel-edge-fx="ready"] .barrel.edge-motion .page::before,
